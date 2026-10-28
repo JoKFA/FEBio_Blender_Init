@@ -1,0 +1,17 @@
+schema_version = "1.0.0"
+
+id = "asrp_blender"
+version = "0.0.1"
+name = "ASRP"
+tagline = "Drive FEBio soft-tissue simulations from Blender"
+maintainer = "JoKFA <felixwang1222@gmail.com>"
+type = "add-on"
+
+blender_version_min = "4.2.0"
+
+# Blender add-ons link against bpy, so they must be GPL-compatible.
+# The solver core runs as a separate process and can be licensed separately.
+license = ["SPDX:GPL-3.0-or-later"]
+
+[permissions]
+files = "Read and write simulation inputs and results in the project folder"

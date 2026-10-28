@@ -1,0 +1,20 @@
+# Python / uv
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+dist/
+build/
+
+# Lab assets, Ziva reference output and solver runs: never committed
+# (the lab's asset may be a licensed commercial model; the paper is under review)
+data/
+runs/
+refs/
+
+# FEBio outputs written next to inputs during ad-hoc runs
+*.xplt
+*.log
+
+# Blender
+*.blend1
