@@ -28,23 +28,44 @@ class Check:
     detail: str
 
 
-def find_tool(name: str, env_var: str, exe_names: list[str], candidates: list[str]) -> Check:
+@dataclass
+class Located:
+    path: Path | None
+    how: str  # where the path came from, or why there is none
+    misconfigured: bool = False
+
+
+def locate(env_var: str, exe_names: list[str], candidates: list[str]) -> Located:
     override = os.environ.get(env_var)
     if override:
         # A set-but-wrong override is an error, not a reason to fall back:
         # falling back would run a different binary than the user asked for.
         if Path(override).is_file():
-            return Check(name, "ok", f"{override} (from {env_var})")
-        return Check(name, "error", f"{env_var}={override} is not a file")
+            return Located(Path(override), env_var)
+        return Located(None, f"{env_var}={override} is not a file", misconfigured=True)
     for exe in exe_names:
         hit = shutil.which(exe)
         if hit:
-            return Check(name, "ok", f"{hit} (from PATH)")
+            return Located(Path(hit), "PATH")
     for pattern in candidates:
         matches = sorted(glob.glob(pattern))
         if matches:
-            return Check(name, "ok", f"{matches[-1]} (default install location)")
-    return Check(name, "warn", f"not found; install it or set {env_var}")
+            return Located(Path(matches[-1]), "default install location")
+    return Located(None, f"not found; install it or set {env_var}")
+
+
+def find_tool(name: str, env_var: str, exe_names: list[str], candidates: list[str]) -> Check:
+    found = locate(env_var, exe_names, candidates)
+    if found.path:
+        return Check(name, "ok", f"{found.path} (from {found.how})")
+    return Check(name, "error" if found.misconfigured else "warn", found.how)
+
+
+def febio_exe() -> Path:
+    found = locate("ASRP_FEBIO", ["febio4"], FEBIO_CANDIDATES)
+    if found.path is None:
+        raise FileNotFoundError(f"FEBio {found.how}")
+    return found.path
 
 
 def check_ascii_path(path: Path) -> Check:

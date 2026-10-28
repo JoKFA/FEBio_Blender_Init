@@ -12,6 +12,9 @@ data/
 runs/
 refs/
 
+# Installers and binaries (the FEBio EULA forbids redistributing them)
+*.exe
+
 # FEBio outputs written next to inputs during ad-hoc runs
 *.xplt
 *.log

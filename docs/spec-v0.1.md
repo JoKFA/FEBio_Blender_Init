@@ -42,7 +42,7 @@ Blender add-on：加载资产、看 landmark、选轨迹、Run、回放
 |---|---|---|---|
 | A1 | 本机 Blender 5.2.1 LTS，内置 Python 3.13.13 | ✅ 已验证 | `blender --version`；`tools/check_blender_addon.py` 输出 |
 | A2 | Blender 能以子进程调用 uv venv 里的核心并取回 JSON | ✅ 已验证 | `check_blender_addon.py` 通过；坏路径时 exit=1 |
-| A3 | FEBio 4.x 能在本机跑动力学分析（重力 + 刚体 + 规定运动） | ❓ 未验证 | 未安装；GitHub v4.13 release 无二进制，需在 febio.org 注册下载。Spike S1 |
+| A3 | FEBio 4.x 能在本机跑动力学分析（重力 + 刚体 + 规定运动） | ✅ 已验证 | FEBio 4.13.0（Pardiso）。`spikes/s1_dynamic_jaw.py`：72 节点 × 46 帧 0.34 s；下颌节点与规定铰链转动误差 4e-9 mm；`tests/test_febio.py` 每次 verify 都重跑 |
 | A4 | FEBio 不认非 ASCII 路径 | ❓ 未验证 | 已规避：仓库放在 `E:\Codebase\asrp`；`asrp doctor` 会报警 |
 | A5 | landmark 在 Ziva 里怎么驱动组织（硬约束顶点，还是关节 + 有刚度的 attachment） | ❓ 未知 | 问实验室（Q1）。决定 FEBio 用规定位移还是弹簧/刚体连接 |
 | A6 | 解析梯度版优化不需要物理在环，Ziva 只用于正向回放 | ❓ 未验证 | 问实验室（Q2）。若需要在环，外部进程的 FEBio 会成为瓶颈 |
@@ -53,10 +53,13 @@ Blender add-on：加载资产、看 landmark、选轨迹、Run、回放
 | A11 | Ziva 材料和 attachment 刚度可映射到 FEBio 等价设置 | ❓ 未验证 | 需要实验室场景里的参数（Q4），Spike S3 标定 |
 | A12 | 能在 Ziva 许可到期前拿到参考轨迹的输出 | ❓ 未验证 | 问实验室（Q5） |
 | A13 | 资产可用于本项目，且不能公开 | ❓ 未验证 | 论文头模来自 CGTrader 商业资产；`data/` 已 gitignore（Q6） |
+| A14 | FEBio `const` 体力的符号与手册方程一致 | ❌ 不成立 | 悬挂块 A/B：z=-9810 时自由端 +0.202 mm（向上），z=+9810 时 -0.205 mm。重力要反号写入；S1 的平均下垂检查守住这一点 |
+| A15 | FEBio 默认时间积分与 Ziva 行为接近 | ⚠️ 待比较 | 默认 Newmark β=0.25、γ=0.5（rhoi=-2），无数值阻尼；S1 保持段仍有约 ±0.04 mm 振荡。组织轴向周期约 14 ms，短于 30 fps 帧间隔，单帧采样会混叠。需要 Ziva 的子步和阻尼设置（Q4） |
+| A16 | 官方 FEBio 二进制可用于本项目 | ✅ 已验证 | 随安装附带的 `FEBio_EULA_4.pdf`：单机安装，可内部或个人使用和修改；未经另签许可不得出租、分发或转授权；未写非商业限制。启动时会向犹他大学服务器发送匿名 UUID |
 
 ## Spike 顺序
 
-1. **S1 FEBio 本机可用**：装 FEBio Studio；由 `asrp_core` 生成一个最小 `.feb`（四面体块 + 刚体 + 规定旋转 + 重力，动力学），命令行求解，解析逐帧位移。验证 A3。
+1. ✅ **S1 FEBio 本机可用**（2026-10-27）：生成最小 `.feb`（四面体组织柱 + 刚体下颌，`center_of_mass` 设在铰链上实现绕关节转动 + 重力，动力学 30 fps），命令行求解，解析逐帧位置。验证 A3，发现 A14、A15。
 2. **S2 资产四面体化**：对实验室嘴唇网格做四面体化，记录失败点。验证 A10。
 3. **S3 landmark 驱动**：按 Q1 的答案实现驱动方式，用参考轨迹跑一段，和 Ziva 对比。验证 A5、A11。
 

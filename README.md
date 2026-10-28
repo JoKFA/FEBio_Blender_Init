@@ -27,3 +27,11 @@ Lab assets, Ziva reference output and solver runs go in `data/` and `runs/`; bot
 uv run pytest -q
 "C:/Program Files/Blender Foundation/Blender 5.2/blender.exe" --background --factory-startup --python tools/check_blender_addon.py
 ```
+
+## Spikes
+
+`spikes/` holds throwaway experiments that settle one assumption each; results are recorded in the spec's assumption ledger.
+
+```bash
+uv run python spikes/s1_dynamic_jaw.py   # FEBio dynamics + rigid hinge + gravity on this machine
+```
