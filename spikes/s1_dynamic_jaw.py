@@ -20,7 +20,7 @@ import math
 import sys
 from pathlib import Path
 
-from asrp_core import febio
+from asrp_core import febio, playback
 from asrp_core.doctor import febio_exe
 
 FPS = 30
@@ -231,7 +231,12 @@ def run_and_check(out: Path) -> dict:
     assert settle_mean < -0.01, f"tissue did not sag under gravity (mean uz={settle_mean:+.4f})"
     assert uz[FRAMES] < settle_mean - 0.5, "tissue was not pulled down by the opening jaw"
 
+    bundle = playback.write_bundle(
+        out, nodes, {"tissue": model["tissue"], "jaw": model["jaw"]}, hist.values, FPS, result.feb
+    )
+
     return {
+        "bundle": bundle,
         "seconds": result.seconds,
         "frames": len(hist.times),
         "nodes": len(nodes),
@@ -255,4 +260,5 @@ if __name__ == "__main__":
     for f in range(0, r["frames"], 3):
         tag = " <- settle ends" if f == r["settle_frame"] else " <- jaw fully open" if f == r["open_frame"] else ""
         print(f"  frame {f:2d}: {r['mid_uz'][f]:+8.3f}{tag}")
+    print(f"playback bundle: {r['bundle']}")
     print("S1 CHECKS PASSED")

@@ -26,6 +26,20 @@ Lab assets, Ziva reference output and solver runs go in `data/` and `runs/`; bot
 ```bash
 uv run pytest -q
 "C:/Program Files/Blender Foundation/Blender 5.2/blender.exe" --background --factory-startup --python tools/check_blender_addon.py
+"C:/Program Files/Blender Foundation/Blender 5.2/blender.exe" --background --factory-startup --python tools/check_playback.py
+```
+
+`check_playback.py` runs S1 through real FEBio, loads the result with the add-on, and compares Blender's evaluated mesh with the FEBio log frame by frame.
+
+## Playing a result in Blender
+
+A solved run is a folder with `playback.json` (surface mesh, mm) and `playback.pc2` (per-frame positions).
+In Blender: sidebar > ASRP > Load Result, pick the folder, press play. The object is scaled 0.001 so mm data shows in metres.
+
+To render a few frames from the side:
+
+```bash
+"C:/Program Files/Blender Foundation/Blender 5.2/blender.exe" --background --factory-startup --python tools/render_playback.py -- runs/s1_dynamic_jaw runs/s1_dynamic_jaw/render 0 15 30 45
 ```
 
 ## Spikes
