@@ -11,6 +11,7 @@ build/
 data/
 runs/
 refs/
+assets/
 
 # Installers and binaries (the FEBio EULA forbids redistributing them)
 *.exe

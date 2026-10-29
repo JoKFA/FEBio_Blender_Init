@@ -61,3 +61,25 @@ def test_s1_dynamic_jaw_runs_in_real_febio(tmp_path):
     assert result["frames"] == FRAMES + 1
     assert result["jaw_error"] < 1e-6
     assert result["settle_mean"] < 0
+
+
+def test_s1_repeats_within_tolerance(tmp_path):
+    """Reproducibility standard (docs ADR-15): same input -> positions within 1e-9 mm, identical playback cache.
+
+    The raw FEBio log is not compared: it contains timestamps.
+    """
+    try:
+        febio_exe()
+    except FileNotFoundError:
+        pytest.skip("FEBio not installed")
+    import math
+
+    from s1_dynamic_jaw import run_and_check
+
+    runs = [run_and_check(tmp_path / name) for name in ("a", "b")]
+    a, b = (febio.read_node_data(tmp_path / name / "s1.log", "positions") for name in ("a", "b"))
+
+    assert a.times == b.times and len(a.values) == runs[0]["frames"]
+    worst = max(math.dist(fa[n], fb[n]) for fa, fb in zip(a.values, b.values) for n in fa)
+    assert worst <= 1e-9
+    assert (tmp_path / "a" / "playback.pc2").read_bytes() == (tmp_path / "b" / "playback.pc2").read_bytes()

@@ -4,9 +4,9 @@ Replace Ziva (the physics backend under the lab's facial controller) with FEBio,
 
 - `src/asrp_core/`: solver core. Runs in its own process with its own venv; no `bpy`.
 - `blender_addon/asrp_blender/`: thin Blender add-on. UI only; calls the core as a subprocess.
-- `docs/`: spec, decisions, open questions for the lab.
+- `docs/`: the project's design documents (Chinese). They are the single source of truth for scope, design, standards and tasks.
 
-Scope and acceptance: [docs/spec-v0.1.md](docs/spec-v0.1.md).
+**Start here: [docs/README.md](docs/README.md).**
 
 ## Setup (Windows)
 
@@ -19,17 +19,15 @@ uv run asrp doctor
 FEBio binaries need a free registration at febio.org (GitHub releases are source only).
 Override tool locations with `ASRP_FEBIO` / `ASRP_BLENDER`.
 
-Lab assets, Ziva reference output and solver runs go in `data/` and `runs/`; both are git-ignored.
+The lab's Maya scene goes in `assets/`; lab exports, Ziva reference output and derived data go in `data/`; solver runs go in `runs/`. All three are git-ignored and must never be committed.
 
-## Checks
+## Checks (definition of done)
 
 ```bash
-uv run pytest -q
-"C:/Program Files/Blender Foundation/Blender 5.2/blender.exe" --background --factory-startup --python tools/check_blender_addon.py
-"C:/Program Files/Blender Foundation/Blender 5.2/blender.exe" --background --factory-startup --python tools/check_playback.py
+uv run python tools/verify.py
 ```
 
-`check_playback.py` runs S1 through real FEBio, loads the result with the add-on, and compares Blender's evaluated mesh with the FEBio log frame by frame.
+Runs the tests, `asrp doctor`, the Blender add-on round trip (`tools/check_blender_addon.py`) and the playback check (`tools/check_playback.py`, which runs S1 through real FEBio, loads the result with the add-on, and compares Blender's evaluated mesh with the FEBio log frame by frame). Blender is located like `asrp doctor` does (`ASRP_BLENDER`, PATH, default install).
 
 ## Playing a result in Blender
 
@@ -44,7 +42,16 @@ To render a few frames from the side:
 
 ## Spikes
 
-`spikes/` holds throwaway experiments that settle one assumption each; results are recorded in the spec's assumption ledger.
+`spikes/` holds throwaway experiments that settle one assumption each; results are recorded in the assumption ledger (docs/11-risks-and-questions.md).
+
+## Asset analysis (not product code)
+
+```bash
+uv run python tools/mb_inventory.py "assets/<scene>.mb" data/asset_inventory.json
+uv run python tools/asset_report.py data/asset_inventory.json
+```
+
+Reads the lab's Maya binary scene without Maya: nodes, attributes, connections, keyframes. Mesh geometry is not decoded (see docs/03-asset.md).
 
 ```bash
 uv run python spikes/s1_dynamic_jaw.py   # FEBio dynamics + rigid hinge + gravity on this machine
