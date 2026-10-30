@@ -13,6 +13,10 @@ runs/
 refs/
 assets/
 
+# The built briefing page embeds lab meshes
+tools/briefing/*.html
+!tools/briefing/template.html
+
 # Installers and binaries (the FEBio EULA forbids redistributing them)
 *.exe
 
