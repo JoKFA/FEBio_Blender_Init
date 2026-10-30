@@ -22,4 +22,4 @@ packages = ["src/asrp_core"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["spikes"]
+pythonpath = ["spikes", "tools"]
