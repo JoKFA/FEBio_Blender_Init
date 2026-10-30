@@ -146,7 +146,7 @@ uv run python tools/mb_inventory.py "assets/v36 dev_proxy_jaw_oor V3 more aggres
 uv run python tools/asset_report.py data/asset_inventory.json
 ```
 
-第一条命令把整个场景读成一份清单，约 40 MB，存在被忽略的 `data/` 目录；第二条打印本文用到的全部事实。两个工具都只用于分析，不是产品代码，也不需要安装 Maya。
+第一条命令把整个场景读成一份清单，约 40 MB，存在 `data/` 目录，太大而且能重新生成，所以不提交；第二条打印本文用到的全部事实。两个工具都只用于分析，不是产品代码，也不需要安装 Maya。
 
 ## 10. 单位和坐标轴（导入时必须处理）
 
@@ -161,8 +161,9 @@ uv run python tools/asset_report.py data/asset_inventory.json
 
 ## 11. 资产使用规则
 
-- 资产只放在 `assets/`（原始文件）和 `data/`（导出和派生数据），这两个目录都被 git 忽略；
-- 不上传到任何网盘、聊天软件或公开仓库，除非实验室书面同意；
+- 实验室的原始 `.mb` 只放在 `assets/`，**绝不提交**；
+- 导出和派生的文件放在 `data/`。`data/lab_export/`、`data/preview/`、`data/briefing/` 提交到私有仓库，其余不提交（ADR-19）。这些文件含有完整的网格和权重，等于资产的另一种格式；
+- 除了这个私有仓库，不发到任何网盘、聊天软件或公开位置，除非实验室书面同意；
 - 文档里可以引用节点名和数字，不能把网格、贴图或渲染截图贴到公开场合；
 - 论文还在审稿，内容和图表不对外引用。
 

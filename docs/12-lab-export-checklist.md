@@ -37,7 +37,7 @@ uv run python tools/check_lab_export.py data/lab_export "assets/w64 from v36 pro
 
 **核对的范围**：网格的顶点、顺序和面都核对过。权重和关节没有和 `.mb` 比较，目前只有 Maya 自检，T-09 和 Ziva 的精确对比才是它们的独立检查。
 
-| 输出（都在被 git 忽略的 `data/lab_export/`） | 内容 |
+| 输出（都在 `data/lab_export/`，已提交到私有仓库，ADR-19） | 内容 |
 |---|---|
 | `mesh_<网格名>.obj` | 五个网格的静止形状。**坐标已经是场景坐标**，导入时不能再套变换（ADR-18） |
 | `context_skin_cloth_copy_v5_pull_back.obj` | 皮肤的静止形状，只用来显示嘴唇在脸上的位置，不参与计算 |
@@ -73,7 +73,7 @@ uv run python tools/check_lab_export.py data/lab_export "assets/w64 from v36 pro
    - 如果研究员看过以后确认某个问题不影响数据，比如 zCache 已经清空，把问题里的一个词写进 `SETTINGS` 的 `accepted`（如 `["zCache"]`）再运行。它会以"人工确认"的形式留在报告里。
 8. 再拷走第 5 项的运动原始文件，并记下：场景文件名和版本、Maya 和 Ziva 的版本。如果这个场景和 `v36 dev_proxy_jaw_oor V3` 不是同一个，问清楚区别。
 
-收到以后放进 `data/lab_export/`，不外传。
+收到以后放进 `data/lab_export/`，不发到仓库以外的地方。
 
 ### 2. Ziva 的完整设置 □
 

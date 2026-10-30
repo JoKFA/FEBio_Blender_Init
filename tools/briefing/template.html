@@ -285,7 +285,7 @@ pre { margin: 0; overflow-x: auto; }
 </style>
 </head>
 <body>
-<div class="notice">内部资料：含实验室网格和未发表论文的数字。只在项目成员之间看，不上传网盘、聊天软件或任何公开位置。</div>
+<div class="notice">内部资料：含实验室网格和未发表论文的数字。只放在私有仓库里，在项目成员之间看，不发到网盘、聊天软件或任何公开位置。</div>
 <div class="shell">
 <aside class="rail">
   <div class="brand">ASRP<small>技术导览 · 2026-10-30</small></div>
@@ -707,7 +707,7 @@ pre { margin: 0; overflow-x: auto; }
       <li>找项目负责人开通私有仓库 <code>JoKFA/FEBio_Blender_Init</code> 的权限，克隆到<strong>纯英文路径</strong>。</li>
       <li>装好 <code>uv</code>、Blender 5.2、FEBio 4.13（要在 febio.org 免费注册），然后运行 <code>uv sync</code> 和 <code>uv run asrp doctor</code>，它会告诉你缺什么。</li>
       <li>运行 <code>uv run python tools/verify.py</code>，看到 <code>verify PASSED</code> 就说明环境好了。</li>
-      <li>实验室数据不在仓库里（<code>assets/</code>、<code>data/</code> 都不提交）。T-02、T-03、T-04、T-06 要用的话，找项目负责人按实验室认可的方式拿。T-05、T-07、T-15 不需要它。</li>
+      <li>导出的网格、权重和 Blender 预览都在仓库的 <code>data/</code> 里，克隆下来就能用。实验室的原始 <code>.mb</code> 不进仓库：T-03 和导出核对工具要用它，找项目负责人拿。</li>
       <li>读 <code>docs/README.md</code> 里开发者要读的文档，领一张任务卡。每次只做一张，完成的定义是 <code>verify</code> 全部通过，走合并请求，不直接推送到 <code>main</code>。</li>
     </ol>
   </div>
