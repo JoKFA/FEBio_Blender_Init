@@ -1,15 +1,17 @@
-# 12 实验室导出清单
+# 12 导出清单
 
-这份清单可以直接发给实验室。它列出原型需要、但从 `.mb` 文件里读不出来的东西，每一项都写了**为什么需要**和**怎么在 Maya 里导出**。所有操作都在实验室现有的 Maya 2023 + Ziva 环境里完成。
+这份清单列出原型需要、但 `.mb` 文件里直接读不出来的东西。实验室反馈 Ziva 机器大约 4 个人轮流用，而且大部分内容用普通 Maya 就能做（ADR-18），所以清单分成两部分：
 
-> **优先级**：
-> - **第 1 项（网格）最先给**：没有它，我们跑不了第一次完整的计算；
-> - **第 4 项（Ziva 参考结果）必须在 Ziva 许可到期前完成**，过期就再也做不出来了。它**不用等任何决定**，用你们平时研究用的场景直接导出即可；
-> - 其余各项可以分批给。
+| 项 | 内容 | 在哪里做 | 状态 |
+|---|---|---|---|
+| 1 | 五个网格的静止形状 | 本机普通 Maya | ✅ 2026-10-30 完成 |
+| 3 | landmark 的蒙皮权重 | 本机普通 Maya | ✅ 2026-10-30 完成 |
+| 2 | Ziva 的完整设置（包括默认值） | **Ziva 机器** | ⏳ |
+| 4 | Ziva 参考结果 | **Ziva 机器** | ⏳ 许可到期前必须完成 |
+| 5 | 这条运动本身 | **Ziva 机器**（运动文件在实验室网络盘上） | ⏳ |
+| 6 | 几个简短的问题 | 直接问实验室 | ⏳ |
 
-> **关于脚本**：下面的 Python 脚本是按 Maya 的标准命令写的，**我们没有 Maya 环境，还没实际运行过**。如果报错，请把报错信息发给我们，或者按文字说明手动操作。
-
-导出的文件请打包，通过实验室认可的方式发送。我们收到后放在不进代码仓库的 `data/lab_export/` 目录，不外传。
+**这样安排的结果：Ziva 机器只需要约一次**，一次把第 2、4、5 项做完。
 
 | 本清单 | 对应 [11](11-risks-and-questions.md) 里的编号 |
 |---|---|
@@ -18,141 +20,92 @@
 | 第 3 项 | D7 |
 | 第 4 项 | D3 |
 | 第 5 项 | D2 |
-| 第 6 项 | Q1、Q2、Q3、Q5–Q9、D4 |
+| 第 6 项 | Q1、Q2、Q3、Q5–Q10、D4 |
 
 ---
 
-## 1. 五个网格的静止形状 □
+## 第一部分：已经在本机完成的
 
-- **需要**：`middleres_OrbicularisOris`（嘴唇）、`middleres_Jaw`、`middleres_skull`、`middleres_TeethUp`、`middleres_TeethDown`。
-- **为什么**：`.mb` 文件里网格的"面"（哪些点连成面）是不公开的编码，我们读不出来，所以需要开放格式的网格来建计算模型。
-- **注意**：直接选中网格导出，导出的是**已经被 Ziva 和 landmark 变形过的形状**，不对。我们需要的是**静止形状**，也就是每个网格名字以 `ShapeOrig` 结尾的那份中间网格，它是 Ziva 和蒙皮的输入。
-- **怎么导**：在 Script Editor 的 Python 标签里运行：
+输入是实验室提供的非 Ziva 版场景 `w64 from v36 proxy delete done non ziva.mb`。它删掉了全部 Ziva 节点，其余内容和原来的场景一样，普通 Maya 就能打开（[03](03-asset.md) 第 12 节）。
 
-```python
-import json, os
-import maya.cmds as cmds
-
-OUT = r"D:\asrp_export"   # 改成你们的导出目录
-MESHES = ["middleres_OrbicularisOris", "middleres_Jaw", "middleres_skull",
-          "middleres_TeethUp", "middleres_TeethDown"]
-
-cmds.loadPlugin("objExport", quiet=True)   # OBJ 导出插件
-if not os.path.isdir(OUT):
-    os.makedirs(OUT)
-report = {}
-for name in MESHES:
-    orig = name + "ShapeOrig"                         # 静止形状
-    rest = cmds.createNode("transform", name=name + "_REST")
-    shape = cmds.createNode("mesh", name=name + "_RESTShape", parent=rest)
-    cmds.connectAttr(orig + ".outMesh", shape + ".inMesh")
-    world = cmds.xform(name, query=True, matrix=True, worldSpace=True)
-    cmds.xform(rest, matrix=world, worldSpace=True)   # 放到和原网格相同的位置
-    cmds.select(rest, replace=True)
-    cmds.file(os.path.join(OUT, "mesh_%s.obj" % name), force=True, exportSelected=True,
-              type="OBJexport", options="groups=0;ptgroups=0;materials=0;smoothing=0;normals=0")
-    report[name] = {"vertices": cmds.polyEvaluate(shape, vertex=True), "world_matrix": world}
-    cmds.delete(rest)
-with open(os.path.join(OUT, "mesh_report.json"), "w") as f:
-    json.dump(report, f, indent=2)
-print(report)
+```bash
+"C:\Program Files\Autodesk\Maya2027\bin\mayapy.exe" tools/maya_export.py "assets/w64 from v36 proxy delete done non ziva.mb" data/lab_export
+uv run python tools/check_lab_export.py data/lab_export "assets/w64 from v36 proxy delete done non ziva.mb"
 ```
 
-- **请核对**：脚本最后会打印每个网格的顶点数。我们从 `.mb` 文件里读到的是：嘴唇 10,240、下颌 7,426、颅骨 28,414、上牙 24,608、下牙 24,608。如果不一致，请告诉我们。
-- **输出**：5 个 `mesh_<网格名>.obj`，以及 `mesh_report.json`（顶点数和每个网格在场景里的位置矩阵）。
+第一条约 40 秒，导出下面的文件，并自己核对顶点数、下颌尺寸 155.92、权重之和、控制点名单和蒙皮矩阵。第二条不经过 Maya，直接从 `.mb` 读顶点，和导出的文件逐点比较，并检查网格是否封闭；加 `--self-test` 会故意弄坏数据，确认这些检查真的会失败。
 
-## 2. Ziva 的完整设置 □
+**核对的范围**：网格的顶点、顺序和面都核对过。权重和关节没有和 `.mb` 比较，目前只有 Maya 自检，T-09 和 Ziva 的精确对比才是它们的独立检查。
+
+| 输出（都在被 git 忽略的 `data/lab_export/`） | 内容 |
+|---|---|
+| `mesh_<网格名>.obj` | 五个网格的静止形状。**坐标已经是场景坐标**，导入时不能再套变换（ADR-18） |
+| `context_skin_cloth_copy_v5_pull_back.obj` | 皮肤的静止形状，只用来显示嘴唇在脸上的位置，不参与计算 |
+| `mesh_report.json` | 每个网格的顶点数、面数、尺寸和位置矩阵，以及下颌铰链的位置和朝向 |
+| `skin_skinCluster7.json` | 300 个 landmark 对 10,240 个嘴唇顶点的权重，以及蒙皮公式要用的矩阵 |
+| `joints.json` | `jaw01` 和 300 个 landmark 的静止位置 |
+
+---
+
+## 第二部分：约一次 Ziva 机器
+
+**谁去**：项目负责人，再约一位熟悉 Facial Expression Automator 的研究员。**预留**：一小时，这是估计，还没实测。脚本运行时会打印还剩多少分钟。
+
+> **脚本的验证情况**：`tools/rehearse_ziva_export.py` 在本机普通 Maya 上排练过，用一条假运动和一个带关键帧的变形器代替 Ziva：一次写出两个 Alembic 并读回 10,240 个顶点，采样器量到的位移和文件逐帧相同，临时网格删除干净，`skinCluster7` 没被改动；没加载运动、没有 Ziva、帧范围不对、没有解算、解算中途停住、没有从静止形状开始，都能报错。**但凡是要 Ziva 插件才能跑的部分，都还没运行过**（A-28）。如果报错，把报错信息记下来，按每项下面的文字说明手动操作。
+
+### 去之前
+
+- □ 用 U 盘或实验室认可的方式带上 `tools/ziva_machine_export.py`；
+- □ 问清楚 Ziva 许可哪天到期（第 6 项问题 6）；
+- □ 和研究员定好用哪条运动，建议"中性 → AA"，下颌动作明显（P-03）。
+
+### 在 Ziva 机器上
+
+1. 打开**平时研究用的场景**，加载这条运动。
+2. 按平时的做法清空 Ziva 的缓存，并确认：跳回第 0 帧时 Ziva 会重新开始（播到第 5 帧再跳回第 0 帧，嘴唇应该回到初始形状）。
+3. 打开 Script Editor 的 Python 标签，粘贴 `tools/ziva_machine_export.py` 的全部内容。
+4. 修改开头 `SETTINGS` 里的 `out`（导出目录）和 `motion`（运动的简称，不要有空格）。帧范围默认取时间轴，必须从第 0 帧开始。**先把 `last` 设成 30 试跑一次**，确认脚本在这台机器上走得通、一帧要多久，再把 `last` 改回 `None` 跑完整运动。
+5. 运行。脚本先做检查：场景、嘴唇网格、运动、Ziva 求解器的起始帧。**这一步不解算，有问题马上就知道。**通过以后解算一次，同时写出第 2、4、5 项，并打印还剩多少分钟。如果估计的时间超过约好的时段，停下来和研究员商量。
+6. 让研究员看一眼：嘴唇的动作是不是平时的样子。
+7. 看最后一行：
+   - `ZIVA SESSION PASSED`：把 `out` 文件夹整个拷走。这一行表示物理形状确实跟着下颌动了、中途没有停住、从静止形状开始、没有发散，说明 Ziva 真的解算过。再看一眼 `notes`：如果提示几乎没有重力下垂，或者 zBuilder 没导出来，请研究员确认，zBuilder 按第 2 项的手动做法补上，不用重新解算；
+   - `ZIVA SESSION FAILED`：看上面 `problems` 里写了什么，能修的现场修好再跑一次。**没通过之前不要离开。**
+   - 如果研究员看过以后确认某个问题不影响数据，比如 zCache 已经清空，把问题里的一个词写进 `SETTINGS` 的 `accepted`（如 `["zCache"]`）再运行。它会以"人工确认"的形式留在报告里。
+8. 再拷走第 5 项的运动原始文件，并记下：场景文件名和版本、Maya 和 Ziva 的版本。如果这个场景和 `v36 dev_proxy_jaw_oor V3` 不是同一个，问清楚区别。
+
+收到以后放进 `data/lab_export/`，不外传。
+
+### 2. Ziva 的完整设置 □
 
 - **需要**：所有 Ziva 设置的**全部属性值**，包括没改过的默认值。
 - **为什么**：`.mb` 只存了改过的值。文件里所有材料都没有存数值，说明很可能都是默认值，但默认值是多少，文件里没有。
-- **怎么导**（两步都请做）：
-  1. **属性清单**：运行下面的脚本，把每个 Ziva 设置的每个属性都写进一个文件，这样默认值也一定会包括在内：
-
-```python
-import json, os
-import maya.cmds as cmds
-
-OUT = r"D:\asrp_export"
-TYPES = ["zSolverTransform", "zSolver", "zTissue", "zBone", "zTet", "zMaterial",
-         "zAttachment", "zEmbedder", "zFiber", "zCloth"]
-if not os.path.isdir(OUT):
-    os.makedirs(OUT)
-dump = {}
-for t in TYPES:
-    try:
-        nodes = cmds.ls(type=t) or []
-    except RuntimeError:
-        nodes = []
-    for node in nodes:
-        values = {}
-        for attr in cmds.listAttr(node, scalar=True) or []:
-            plug = node + "." + attr
-            try:
-                values[attr] = cmds.getAttr(plug)
-                if cmds.getAttr(plug, type=True) == "enum":   # e.g. attachment mode: also keep the label
-                    values[attr + "__label"] = cmds.getAttr(plug, asString=True)
-            except Exception as exc:
-                values[attr] = "unreadable: %s" % exc
-        dump[node] = {"type": t, "attributes": values}
-with open(os.path.join(OUT, "ziva_attributes.json"), "w") as f:
-    json.dump(dump, f, indent=1, default=str)
-print(len(dump), "Ziva nodes written")
-```
-
-  2. **zBuilder 导出**：用 Ziva 自带的 zBuilder 把整套设置存成文件，大致如下（以你们 Ziva 版本的文档为准）：
-
-```python
-import zBuilder.builders.ziva as zva
-z = zva.Ziva()
-z.retrieve_from_scene()
-z.write(r"D:\asrp_export\ziva_setup.zBuilder")
-```
-
+- **输出**：`ziva_attributes.json`（每个节点的每个属性）、`ziva_setup.zBuilder`（Ziva 自己的格式）。
 - **另外请截图**：`zSolver1` 和 `zMaterial1` 的属性面板（Attribute Editor），方便核对。
+- **手动做法**：zBuilder 部分用 `zBuilder.builders.ziva` 的 `Ziva()`、`retrieve_from_scene()`、`write()`，以你们 Ziva 版本的文档为准。
 
-## 3. landmark 的蒙皮权重 □
+### 4. Ziva 参考结果（许可到期前必须完成） □
 
-- **需要**：`skinCluster7`（300 个 `oor_` 关节带动嘴唇）的全部权重。
-- **为什么**：最终的嘴唇形状 = 物理结果 + landmark 变形，这一层要用这些权重。
-- **怎么导**：
+- **需要**：一条运动下，嘴唇网格**每一帧**的形状，两份：
+  - **4a 最终形状**：`ziva_<运动名>_final.abc`；
+  - **4b 只有物理**：landmark 变形之前的形状，`ziva_<运动名>_physics.abc`。脚本从 `skinCluster7` 的输入取这个形状，和 4a 来自同一次解算。
+- **为什么**：我们会把它和 FEBio 的结果在 Blender 里并排播放，请研究员评审新结果能不能用于继续研究。我们不要求和 Ziva 逐点一致，所以它不是"标准答案"，而是"以前的样子"。分成两份，可以把物理部分和 landmark 部分分开看；landmark 那一层用的是同一个公式，还能精确核对。
+- **手动做法**：选中嘴唇网格，`Cache > Alembic Cache > Export Selection to Alembic`，帧范围从第 0 帧到运动结束（包括第 0 到 14 帧的重力沉降），勾选 **World Space**，导出 4a。再把 `skinCluster7` 的 `envelope` 设为 0，清空缓存，用完全相同的帧范围导出 4b，这会多解算一次。做完把 `envelope` 改回 1。
 
-```python
-import os
-import maya.cmds as cmds
-OUT = r"D:\asrp_export"
-if not os.path.isdir(OUT):
-    os.makedirs(OUT)
-cmds.deformerWeights("skinCluster7_weights.xml", export=True, deformer="skinCluster7", path=OUT)
-```
+### 5. 这条运动本身 □
 
-  也可以在菜单里操作：选中嘴唇网格，`Deform > Export Weights`。
-
-## 4. Ziva 参考结果（许可到期前必须完成，不用等任何决定） □
-
-- **需要**：选一条运动（建议"中性 → AA"，下颌动作明显），导出嘴唇网格**每一帧**的形状，**导两次**：
-  - **4a 最终形状**：正常播放后导出 `middleres_OrbicularisOris`；
-  - **4b 只有物理**：把 `skinCluster7` 的 `envelope` 设为 0，也就是关掉 landmark 变形，再重新算一遍并导出。
-- **为什么**：我们会把它和 FEBio 的结果在 Blender 里并排播放，请你们的研究员评审新结果能不能用于继续研究。我们不要求和 Ziva 逐点一致，所以它不是"标准答案"，而是"以前的样子"。分两次导出，可以把物理部分和 landmark 部分分开看；landmark 那一层用的是同一个公式，还能精确核对。
-- **怎么导**：
-  1. 打开你们**平时研究用的场景**，加载这条运动；
-  2. **每次导出前先清空 Ziva 的缓存，从第 0 帧开始按顺序播放到最后一帧**（Ziva 只能一帧一帧往前算）；
-  3. 选中嘴唇网格，`Cache > Alembic Cache > Export Selection to Alembic`，帧范围**从第 0 帧到运动结束**（包括第 0 到 14 帧的重力沉降），勾选 **World Space**；
-  4. 4a 和 4b 用**完全相同的帧范围**。
-- **文件名**：`ziva_<运动名>_final.abc`、`ziva_<运动名>_physics.abc`。
-- **请一并告诉我们**：用的场景文件名和版本、Maya 和 Ziva 的版本。如果用的场景和这次给我们的 `v36 dev_proxy_jaw_oor V3` 不是同一个，请说明区别。
-
-## 5. 这条运动本身 □
-
-- **需要**：第 4 项用到的那条运动的原始数据，也就是 Facial Expression Automator 从网络盘读进来的那份文件，以及一句话说明它的格式。
+- **需要**：
+  - 第 4 项用到的那条运动的**原始文件**，也就是 Facial Expression Automator 从网络盘读进来的那份，以及一句话说明它的格式；
+  - `motion_<运动名>.json`：播放时 `jaw01` 和 300 个 landmark 每一帧的位置矩阵，脚本会自动导出。
 - **为什么**：我们要用同一条运动驱动 FEBio。
-- **另外请导出**：播放这条运动时，`jaw01` 和 300 个 `oor_` 关节每一帧的变换。用 FBX 导出这些关节（勾选 Bake Animation），或者导出 Alembic。
 
-## 6. 几个简短的问题 □
+---
 
-请直接回答，一两句话就行：
+## 第三部分：几个简短的问题
 
-1. **单位和尺寸**：论文附录 V 说 1 个单位约 0.962 毫米，我们核对过，下颌在场景坐标下的尺寸正好是论文里的 155.92。但这样换算下来，颅骨左右约 217 毫米，比一般成年人大 1.5 倍左右。请确认：(a) 1 个场景单位到底等于多少毫米；(b) 模型是不是有意做得比真人大；(c) 骨骼和嘴唇网格都带 2.54 倍的缩放，这是从英寸换算过来的吗；(d) Ziva 求解器（`zSolver1`）的缩放 100 代表什么。
-2. **坐标轴**：场景是 Y 轴朝上吗？
+### 6. 请实验室直接回答，一两句话就行 □
+
+1. **单位和尺寸**：论文附录 V 说 1 个单位约 0.962 毫米，我们核对过，下颌在场景坐标下的尺寸正好是论文里的 155.92。但这样换算下来，颅骨左右约 217 毫米，比一般成年人大 1.5 倍左右。请确认：(a) 1 个场景单位到底等于多少毫米；(b) 模型是不是有意做得比真人大；(c) 骨骼和嘴唇网格都带 2.54 倍的缩放，这是从英寸换算过来的吗；(d) Ziva 求解器（`zSolver1`）的缩放 100 代表什么；(e) 论文说"下颌宽 155.92"，这个数在模型里是前后方向，左右方向是 196.8，论文量的是哪个方向。
+2. ~~**坐标轴**：场景是 Y 轴朝上吗？~~ ✅ 已经从场景里确认：Y 轴朝上，脸朝 -Z 方向。
 3. **landmark**：landmark 只是在 Ziva 算完之后做蒙皮变形，不参与物理计算，对吗？
 4. **参与计算的组织**：这个代理场景里，Ziva 实际在计算哪些组织？网格被删掉的那些组织还在算吗？
 5. **原型范围**：[11](11-risks-and-questions.md) 的 P-01 里，你们倾向哪个方案？方案 A 的"按区域挂到骨头上"你们能接受吗？
@@ -160,3 +113,4 @@ cmds.deformerWeights("skinCluster7_weights.xml", export=True, deformer="skinClus
 7. **评审重点**：我们不打算用"和 Ziva 差几毫米"当合格线，而是请研究员把两边结果并排看，回答几个问题：嘴唇跟着下颌动得自然吗？有没有抖动、鼓包、塌陷？重力下垂可信吗？叠加 landmark 以后表情还认得出来吗？和 Ziva 差别大的地方能接受吗？你们觉得还要看什么？
 8. **使用许可**：这份资产可以用于本项目吗？有没有使用限制？
 9. **控制器怎么用物理**：控制器优化的时候，是每试一次都要让 Ziva 算一遍，还是先把物理算好、只优化 landmark？这决定了新的物理计算要多快才够用。
+10. **最终形状**：你们看的最终嘴唇是 `middleres_OrbicularisOris`，还是 `middleres_OrbicularisOris_RENDER`？我们的参考结果导的是前者。

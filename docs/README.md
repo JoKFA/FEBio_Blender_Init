@@ -7,7 +7,7 @@
 | 你是谁 | 按顺序读 |
 |---|---|
 | 第一次接触项目的任何人 | [01 项目一页纸](01-overview.md) → [术语表](glossary.md) |
-| 实验室成员 | 01 → [02 需求](02-requirements.md) → [03 资产说明](03-asset.md) → [11 风险与待决问题](11-risks-and-questions.md) → [12 实验室导出清单](12-lab-export-checklist.md) |
+| 实验室成员 | 01 → [02 需求](02-requirements.md) → [03 资产说明](03-asset.md) → [11 风险与待决问题](11-risks-and-questions.md) → [12 导出清单](12-lab-export-checklist.md) |
 | 开发者 | 01 → 02 → 03 → [04 系统设计](04-architecture.md) → [05 Ziva 到 FEBio 的对应](05-ziva-to-febio.md) → [08 开发规范](08-engineering-standards.md) → [09 路线图与任务](09-roadmap-and-tasks.md) 里分给你的任务卡 |
 | 审查者 | 08 开发规范 → [07 验证与验收](07-validation.md) → 被审查任务的任务卡 |
 
@@ -26,11 +26,13 @@
 | 09 | [路线图与任务](09-roadmap-and-tasks.md) | 分几步走、每一步的任务卡、谁能先开始 |
 | 10 | [决策记录](10-decisions.md) | 做过哪些关键决定、为什么、放弃了什么 |
 | 11 | [风险与待决问题](11-risks-and-questions.md) | 还没定的事、要问实验室的事、可能出问题的地方 |
-| 12 | [实验室导出清单](12-lab-export-checklist.md) | 要请实验室在 Maya 里导出什么、怎么导（可以直接发给实验室） |
+| 12 | [导出清单](12-lab-export-checklist.md) | 哪些数据已经从 Maya 导出、哪些要在 Ziva 机器上做、怎么做 |
 | — | [术语表](glossary.md) | 文档里出现的专业词是什么意思 |
 | — | [templates/](templates/) | 任务卡和合并请求的模板 |
 
 旧文档 `spec-v0.1.md`、`lab-questions.md` 的内容已经并入上面这套文档，只保留跳转说明。
+
+给新成员的可交互讲解页由 `tools/briefing/build.py` 生成。它内嵌实验室网格，所以构建脚本拒绝写进仓库，只能写到 `data/` 或仓库以外，不提交、不上传。
 
 ## 文档怎么维护
 
