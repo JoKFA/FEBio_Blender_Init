@@ -6,16 +6,23 @@ __pycache__/
 dist/
 build/
 
-# Lab assets, Ziva reference output and solver runs: never committed
-# (the lab's asset may be a licensed commercial model; the paper is under review)
-data/
+# The lab's original scenes, the paper and the video: never committed, wherever they land
+# (the asset may be a licensed commercial model; the paper is under review)
+assets/
+*.mb
+*.ma
+*.pdf
+*.mp4
+
+# Solver runs and large analysis output that can be regenerated
 runs/
 refs/
-assets/
 
-# The built briefing page embeds lab meshes
-tools/briefing/*.html
-!tools/briefing/template.html
+# Derived data the team shares is committed on purpose, because the repo is private (docs ADR-19)
+data/*
+!data/lab_export/
+!data/preview/
+!data/briefing/
 
 # Installers and binaries (the FEBio EULA forbids redistributing them)
 *.exe

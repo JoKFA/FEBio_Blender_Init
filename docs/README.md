@@ -32,7 +32,7 @@
 
 旧文档 `spec-v0.1.md`、`lab-questions.md` 的内容已经并入上面这套文档，只保留跳转说明。
 
-给新成员的可交互讲解页由 `tools/briefing/build.py` 生成。它内嵌实验室网格，所以构建脚本拒绝写进仓库，只能写到 `data/` 或仓库以外，不提交、不上传。
+给新成员的可交互讲解页在 `data/briefing/asrp-briefing.html`，双击就能打开，由 `tools/briefing/build.py` 生成。它内嵌实验室网格，只放在私有仓库里，不发到仓库以外的地方（ADR-19）。
 
 ## 文档怎么维护
 

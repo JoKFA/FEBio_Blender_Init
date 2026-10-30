@@ -3,8 +3,9 @@
     uv run python tools/briefing/build.py <out.html>
 
 Inlines template.html, app.js, the exported meshes, landmark weights and Blender renders, so the
-result opens with no server and no network. The OUTPUT CONTAINS LAB MESHES: never commit it and
-never upload it (docs/03 section 11). This folder holds only the page source, no lab data.
+result opens with no server and no network. The output contains lab meshes: it belongs in
+data/briefing/, which goes to the private repo, and nowhere else (docs ADR-19). This folder holds
+only the page source, no lab data. Rebuilding needs the .mb analysis output, which is not in git.
 
 Needs: data/lab_export (tools/maya_export.py), data/asset_inventory.json (tools/mb_inventory.py on
 the full v36 scene, for the attachment weights), data/preview (tools/blender_import_preview.py).
@@ -170,7 +171,7 @@ def main(out):
 
     target = Path(out).resolve()
     if target.is_relative_to(REPO) and not target.is_relative_to(REPO / "data"):
-        sys.exit(f"refusing to write lab meshes into the repo: {target}. Use data/ or a folder outside it.")
+        sys.exit(f"this page embeds lab meshes and belongs in data/briefing/, not {target}")
     target.write_text(page, encoding="utf-8", newline="\n")
     print(f"{target.stat().st_size / 1e6:.1f} MB -> {target}")
 

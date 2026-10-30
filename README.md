@@ -19,7 +19,7 @@ uv run asrp doctor
 FEBio binaries need a free registration at febio.org (GitHub releases are source only).
 Override tool locations with `ASRP_FEBIO` / `ASRP_BLENDER`.
 
-The lab's Maya scene goes in `assets/`; lab exports, Ziva reference output and derived data go in `data/`; solver runs go in `runs/`. All three are git-ignored and must never be committed.
+The lab's Maya scene goes in `assets/` and solver runs in `runs/`: both are git-ignored and must never be committed. Exports and derived data go in `data/`; `data/lab_export/`, `data/preview/` and `data/briefing/` are committed because this repo is private (docs ADR-19). The lab's `.mb` files, paper and video are never committed.
 
 ## Checks (definition of done)
 
