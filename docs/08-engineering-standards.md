@@ -73,7 +73,7 @@ asrp/
    uv run python tools/verify.py
    ```
 
-   它会依次运行全部测试、`asrp doctor`、Blender 插件检查和回放检查，任何一步失败就停下并报错。它用和 `asrp doctor` 一样的方法找 Blender，所以在任何装好环境的电脑上都能跑。`.claude/verify.json` 也是调用这条命令，Claude 会话结束时会自动运行它。
+   它会依次运行全部测试、`asrp doctor`、Blender 官方的插件 manifest 校验、Blender 插件检查和回放检查，任何一步失败就停下并报错。它用和 `asrp doctor` 一样的方法找 Blender，所以在任何装好环境的电脑上都能跑。`.claude/verify.json` 也是调用这条命令，Claude 会话结束时会自动运行它。
 
 ## 7. 什么叫"完成"
 

@@ -23,4 +23,4 @@ Don't change the design in code: if the docs are wrong, stop and report; docs ch
 - FEBio binaries come from febio.org (registration required). Set `ASRP_FEBIO` to `febio4.exe` if doctor can't find it.
 
 ## Verify
-Definition of done: `uv run python tools/verify.py` (tests, `asrp doctor`, add-on round trip, playback check). `.claude/verify.json` calls the same command.
+Definition of done: `uv run python tools/verify.py` (tests, `asrp doctor`, add-on manifest, add-on round trip, playback check). `.claude/verify.json` calls the same command.
