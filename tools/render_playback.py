@@ -1,6 +1,6 @@
 """Render a few frames of a playback bundle from the side, for a quick visual check.
 
-    blender --background --factory-startup --python tools/render_playback.py -- <bundle_dir> <out_dir> [frames...]
+    blender --background --factory-startup --python-exit-code 1 --python tools/render_playback.py -- <bundle_dir> <out_dir> [frames...]
 
 Adds a hinge-axis marker and a skull plate for context (S1 geometry); writes frame_XX.png.
 """

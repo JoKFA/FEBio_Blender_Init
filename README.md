@@ -54,10 +54,10 @@ uv run python spikes/s1_dynamic_jaw.py
 
 In Blender: delete the default cube (the result is 3.5 cm tall and sits inside it), then sidebar (N) > ASRP > Load Result, pick the run folder, View > Frame Selected (numpad `.`), press play. The object is scaled 0.001 so mm data shows in metres.
 
-To render a few frames from the side (the camera and context props fit S1's geometry, so this works for S1 only):
+To render a few frames from the side (the camera and context props fit S1's geometry, so this works for S1 only). In PowerShell, put `&` in front of the quoted path:
 
 ```bash
-"C:/Program Files/Blender Foundation/Blender 5.2/blender.exe" --background --factory-startup --python tools/render_playback.py -- runs/s1_dynamic_jaw runs/s1_dynamic_jaw/render 0 15 30 45
+"C:/Program Files/Blender Foundation/Blender 5.2/blender.exe" --background --factory-startup --python-exit-code 1 --python tools/render_playback.py -- runs/s1_dynamic_jaw runs/s1_dynamic_jaw/render 0 15 30 45
 ```
 
 ## Spikes
@@ -66,7 +66,7 @@ To render a few frames from the side (the camera and context props fit S1's geom
 
 ## Lab asset (not product code)
 
-Migration tools, run once per scene (docs ADR-18): the product needs neither Maya nor Ziva. The results in `data/lab_export/` and `data/preview/` are committed, so these are only needed when the scene changes. `data/briefing/asrp-briefing.html` is the newcomer's guide to all of this: open it locally, because GitHub doesn't run HTML.
+Migration tools, run once per scene (docs ADR-18): the product needs neither Maya nor Ziva. The results in `data/lab_export/` and `data/preview/` are committed, so these are only needed when the scene changes. `data/briefing/asrp-briefing.html` is the newcomer's guide to all of this: open it locally, because GitHub doesn't run HTML. In PowerShell, put `&` in front of the commands below that start with a quoted path.
 
 Read the scene without Maya: nodes, attributes, connections, keyframes. This step doesn't decode mesh geometry (see docs/03-asset.md). The report needs the Ziva scene (v36): the non-Ziva copy has no Ziva nodes to report on.
 
