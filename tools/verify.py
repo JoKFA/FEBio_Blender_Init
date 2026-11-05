@@ -2,9 +2,12 @@
 
     uv run python tools/verify.py
 
-Runs, in order: the test suite, `asrp doctor`, the Blender add-on round trip, and the
-FEBio -> Blender playback check. Blender is found the same way `asrp doctor` finds it
-($ASRP_BLENDER, PATH, default install location), so nothing is tied to one machine.
+Runs, in order: the test suite, `asrp doctor`, Blender's own validation of the add-on
+manifest, the Blender add-on round trip, and the FEBio -> Blender playback check. The two
+Blender scripts load the add-on from source, which skips packaging, so only the manifest
+step would notice an add-on that cannot be built. Blender is found the same way
+`asrp doctor` finds it ($ASRP_BLENDER, PATH, default install location), so nothing is tied
+to one machine.
 Writes nothing into the repo. Exits non-zero on the first failure.
 """
 
@@ -32,6 +35,8 @@ def main() -> None:
     blender = locate("ASRP_BLENDER", ["blender"], BLENDER_CANDIDATES)
     if blender.path is None:
         sys.exit(f"verify FAILED: Blender {blender.how}")
+    step("add-on manifest", [str(blender.path), "--factory-startup", "--command", "extension", "validate",
+                             str(REPO / "blender_addon" / "asrp_blender")])
     for check in ("check_blender_addon.py", "check_playback.py"):
         step(check, [str(blender.path), "--background", "--factory-startup", "--python-exit-code", "1",
                      "--python", str(REPO / "tools" / check)])
