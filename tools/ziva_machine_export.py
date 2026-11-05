@@ -4,12 +4,21 @@ Migration tool, not product code (docs ADR-18). Steps are in docs/12-lab-export-
 Before running: open the scene the researchers really use, load one motion, edit SETTINGS below.
 
 Writes into OUT:
-    ziva_attributes.json       every attribute of every Ziva node, defaults included  (item 2)
+    ziva_attributes.json       every scalar attribute of every Ziva node, defaults included  (item 2)
+    ziva_maps.json             every weight map (weightList) and connection of every Ziva node (item 2)
     ziva_setup.zBuilder        the same setup in Ziva's own format                    (item 2)
+    ziva_meshes/<zGeo>.obj     the mesh Ziva keeps for each body, scene coordinates   (item 7)
+    ziva_meshes.json           which body each mesh belongs to, and how it was placed (item 7)
     ziva_<motion>_final.abc    lip shape per frame, landmarks on                      (item 4a)
     ziva_<motion>_physics.abc  lip shape per frame, before the landmark layer         (item 4b)
     motion_<motion>.json       world matrix per frame of jaw01 and the 300 landmarks  (item 5)
     session_report.json        versions, frame range, measurements, and every check
+
+Items 2 and 7 need no solve. The weight maps get their own file because listAttr(scalar=True)
+cannot read them: on plain Maya it records a deformer's weightList as "unreadable". The meshes
+come from each zGeo's input mesh, which Ziva keeps even after the Maya mesh was deleted; that is
+the only copy of the six muscles around the lips (docs/12 item 7). Trouble in either is a note,
+not a failure: it must not cost the reference solve.
 
 Both Alembic files come from ONE solve: a temporary mesh taps the shape going into skinCluster7,
 so the two are guaranteed to be the same simulation and skinCluster7 is never touched. The
@@ -54,6 +63,10 @@ MIN_MOVEMENT = 0.01  # scene units; real motion is far bigger, numerical noise f
 MIN_JAW_DEGREES = 1.0
 MAX_MOVEMENT = 300.0  # scene units; the head is about 300 long, so beyond this the solve diverged
 MAX_REST_OFFSET = 1.0  # a leftover from a previous solve is far bigger than this, noise far smaller
+BODY_TYPES = ("zTissue", "zBone", "zCloth")
+GEO_MESH, GEO_MATRIX, GEO_OUT = "iNMh", "iNMx", "oGo"  # zGeo plugs, short names as stored in the .mb
+MESH_MATCH = 1e-3  # scene units; a mesh read in the wrong space is off by far more
+IDENTITY = [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0]
 
 
 def ls_type(node_type):
@@ -77,6 +90,39 @@ def rotation_between(a, b):
 def largest_move(a, b):
     """Largest distance between matching points."""
     return max(math.dist(p, q) for p, q in zip(a, b))
+
+
+def apply_matrix(points, m):
+    """Maya's row-vector convention: p' = p * M, with M a flat 4x4 list."""
+    return [(x * m[0] + y * m[4] + z * m[8] + m[12],
+             x * m[1] + y * m[5] + z * m[9] + m[13],
+             x * m[2] + y * m[6] + z * m[10] + m[14]) for x, y, z in points]
+
+
+def placing_matrix(data_matrix, input_matrix):
+    """The matrix that takes a zGeo's mesh points to the scene, and its name.
+
+    Mesh data that arrives through a worldMesh plug (a bone) carries its own world matrix; checked
+    on plain Maya. A stored copy (a tissue) is in object space and placed by the zGeo's iNMx.
+    """
+    if any(abs(a - b) > 1e-12 for a, b in zip(data_matrix, IDENTITY)):
+        return list(data_matrix), "mesh data matrix"
+    if input_matrix is not None:
+        return list(input_matrix), GEO_MATRIX
+    return list(IDENTITY), "none"
+
+
+def mesh_mismatch(geo, mesh, off):
+    """A note when an exported mesh does not sit on the scene mesh it was copied from."""
+    if off is None or off <= MESH_MATCH:
+        return None
+    return ("IMPORTANT: the mesh of %s is %.4f away from %s in the scene: ziva_meshes may be in the "
+            "wrong place, tell the developers (docs/12 item 7)" % (geo, off, mesh))
+
+
+def file_name(node):
+    """A node name that is safe as a file name (namespaces and paths use : and |)."""
+    return "".join(c if c.isalnum() or c in "_-" else "_" for c in node)
 
 
 def check_motion(stats):
@@ -267,10 +313,10 @@ def export_alembic(jobs, first, last, sampler):
     cmds.AbcExport(jobArg=args)
 
 
-def dump_ziva_attributes(path):
+def dump_ziva_attributes(path, types=ZIVA_TYPES):
     """Item 2. Reads every attribute, so defaults are included; the .mb only stores changed ones."""
     dump = {}
-    for node_type in ZIVA_TYPES:
+    for node_type in types:
         for node in ls_type(node_type):
             values = {}
             for attr in cmds.listAttr(node, scalar=True) or []:
@@ -300,13 +346,162 @@ def dump_zbuilder(path):
         return "zBuilder export failed: %s" % exc
 
 
+def depend_node(name):
+    sel = om.MSelectionList()
+    sel.add(name)
+    return sel.getDependNode(0)
+
+
+def weight_maps(node):
+    """Every weightList entry of a node, sparse as stored: {index: default, indices, values}.
+
+    Vertices that are not listed take the default. Short names wl/w are how the .mb stores
+    zAttachment weights, and Maya's own deformers use the same ones.
+    """
+    fn = om.MFnDependencyNode(depend_node(node))
+    if not (fn.hasAttribute("wl") and fn.hasAttribute("w")):
+        return {}
+    weights_attr = fn.attribute("w")
+    default = om.MFnNumericAttribute(weights_attr).default
+    weight_list = fn.findPlug("wl", False)
+    maps = {}
+    for p in range(weight_list.evaluateNumElements()):
+        element = weight_list.elementByPhysicalIndex(p)
+        weights = element.child(weights_attr)
+        indices, values = [], []
+        for q in range(weights.evaluateNumElements()):
+            plug = weights.elementByPhysicalIndex(q)
+            indices.append(plug.logicalIndex())
+            values.append(plug.asDouble())
+        maps[str(element.logicalIndex())] = {"default": default, "indices": indices, "values": values}
+    return maps
+
+
+def connections(node):
+    """Every connection of a node as [source plug, destination plug] pairs."""
+    pairs = {}
+    for incoming in (True, False):
+        flat = cmds.listConnections(node, source=incoming, destination=not incoming, connections=True,
+                                    plugs=True) or []
+        own, other = flat[0::2], flat[1::2]
+        pairs["in" if incoming else "out"] = [[o, n] if incoming else [n, o] for n, o in zip(own, other)]
+    return pairs
+
+
+def dump_ziva_maps(path, types=ZIVA_TYPES):
+    """Item 2, second half: the weight maps and wiring that ziva_attributes.json cannot hold."""
+    dump, count = {}, 0
+    for node_type in types:
+        for node in ls_type(node_type):
+            maps = weight_maps(node)
+            count += len(maps)
+            dump[node] = {"type": node_type, "connections": connections(node), "weight_maps": maps}
+    with open(path, "w") as f:
+        json.dump(dump, f, separators=(",", ":"))
+    return count
+
+
+def source_node(plug):
+    found = cmds.listConnections(plug, source=True, destination=False) or []
+    return found[0] if found else None
+
+
+def mesh_from_plug(node, attr):
+    """Object-space points, polygons and the data's own matrix of a mesh-typed plug.
+
+    Works on stored data whose source mesh was deleted, even after the file is reopened.
+    """
+    data = om.MFnDependencyNode(depend_node(node)).findPlug(attr, False).asMObject()
+    fn = om.MFnMesh(data)
+    counts, connects = fn.getVertices()
+    points = [tuple(p)[:3] for p in fn.getPoints(om.MSpace.kObject)]
+    return points, list(counts), list(connects), list(om.MFnGeometryData(data).matrix)
+
+
+def rest_points(name):
+    """World rest shape of a scene mesh: its ShapeOrig, or the shape itself if nothing deforms it."""
+    if not name or not cmds.objExists(name):
+        return None
+    if cmds.nodeType(name) != "transform":
+        name = (cmds.listRelatives(name, parent=True, fullPath=True) or [None])[0]
+        if name is None:
+            return None
+    shapes = cmds.listRelatives(name, shapes=True, fullPath=True, type="mesh") or []
+    undriven = [s for s in shapes if not source_node(s + ".inMesh")]
+    origs = [s for s in undriven if cmds.getAttr(s + ".intermediateObject")]
+    pick = origs or [s for s in undriven if not cmds.getAttr(s + ".intermediateObject")]
+    if len(pick) != 1:
+        return None
+    sel = om.MSelectionList()
+    sel.add(pick[0])
+    return [tuple(p)[:3] for p in om.MFnMesh(sel.getDagPath(0)).getPoints(om.MSpace.kWorld)]
+
+
+def write_obj(path, title, points, counts, connects):
+    """Same convention as tools/maya_export.py: scene coordinates, Maya vertex order and polygons."""
+    with open(path, "w", newline="\n") as f:
+        f.write("# %s, scene coordinates, Maya vertex order\n" % title)
+        for p in points:
+            f.write("v %.9f %.9f %.9f\n" % p)
+        at = 0
+        for n in counts:
+            f.write("f " + " ".join(str(i + 1) for i in connects[at:at + n]) + "\n")
+            at += n
+
+
+def export_ziva_meshes(folder, path, geos=None, first=0):
+    """Item 7. Returns (meshes written, notes). Reads at frame `first`, so bones are at rest."""
+    geos = ls_type("zGeo") if geos is None else geos
+    cmds.currentTime(first, update=False)
+    os.makedirs(folder, exist_ok=True)
+    entries, notes = {}, []
+    for geo in geos:
+        try:
+            points, counts, connects, data_matrix = mesh_from_plug(geo, GEO_MESH)
+            def plug_of(attr):
+                return geo + "." + attr if cmds.attributeQuery(attr, node=geo, exists=True) else None
+
+            matrix_plug, out_plug = plug_of(GEO_MATRIX), plug_of(GEO_OUT)
+            input_matrix = cmds.getAttr(matrix_plug) if matrix_plug else None
+            matrix, rule = placing_matrix(data_matrix, input_matrix)
+            world = apply_matrix(points, matrix)
+            mesh_source = source_node(geo + "." + GEO_MESH)
+            matrix_source = source_node(matrix_plug) if matrix_plug else None
+            mesh = mesh_source or matrix_source
+            targets = cmds.listConnections(out_plug, source=False, destination=True) or [] if out_plug else []
+            bodies = [n for n in targets if cmds.nodeType(n) in BODY_TYPES]
+            body = bodies[0] if bodies else None
+            obj = file_name(geo) + ".obj"
+            write_obj(os.path.join(folder, obj), "%s (%s) mesh kept by Ziva" % (geo, body), world, counts, connects)
+            rest = rest_points(mesh)
+            off = largest_move(world, rest) if rest and len(rest) == len(world) else None
+            note = mesh_mismatch(geo, mesh, off)
+            if note:
+                notes.append(note)
+            entries[geo] = {
+                "file": obj, "body": body, "body_type": cmds.nodeType(body) if body else None,
+                "scene_mesh": mesh, "mesh_copy_stored": mesh_source is None,
+                "matrix_connected": matrix_source is not None,
+                "vertices": len(world), "faces": len(counts), "placed_by": rule, "matrix": matrix,
+                "bbox_min": [min(p[i] for p in world) for i in range(3)],
+                "bbox_max": [max(p[i] for p in world) for i in range(3)],
+                "off_from_scene_mesh": off,
+            }
+        except Exception as exc:
+            notes.append("IMPORTANT: %s mesh not exported (%s): tell the developers (docs/12 item 7)" % (geo, exc))
+    with open(path, "w") as f:
+        json.dump({"frame": first, "geos": entries}, f, indent=1)
+    return len(entries), notes
+
+
 def size(path):
     return os.path.getsize(path) if os.path.isfile(path) else 0
 
 
 def run(settings=SETTINGS):
     started = time.time()
-    out, motion = settings["out"], settings["motion"]
+    # AbcExport resolves a relative path against Maya's project folder, so make it absolute.
+    out, motion = os.path.abspath(settings["out"]), settings["motion"]
     try:
         os.makedirs(out, exist_ok=True)
     except OSError:
@@ -314,7 +509,9 @@ def run(settings=SETTINGS):
         print("Cannot write to %s, using %s" % (settings["out"], out))
     paths = {
         "attributes": os.path.join(out, "ziva_attributes.json"),
+        "maps": os.path.join(out, "ziva_maps.json"),
         "zbuilder": os.path.join(out, "ziva_setup.zBuilder"),
+        "meshes": os.path.join(out, "ziva_meshes.json"),
         "final": os.path.join(out, "ziva_%s_final.abc" % motion),
         "physics": os.path.join(out, "ziva_%s_physics.abc" % motion),
         "motion": os.path.join(out, "motion_%s.json" % motion),
@@ -335,9 +532,25 @@ def run(settings=SETTINGS):
         if not problems:
             print("Preflight passed. Solving frames %d to %d..." % (first, last))
             report["ziva_nodes"] = dump_ziva_attributes(paths["attributes"])
+            # Items 2 and 7 without a solve. Trouble here is a note: it must not cost the solve.
+            try:
+                report["ziva_maps"] = dump_ziva_maps(paths["maps"])
+            except Exception as exc:
+                report["ziva_maps"] = 0
+                notes.append("IMPORTANT: weight maps not exported (%s): tell the developers (docs/12 item 2)" % exc)
+            try:
+                report["ziva_meshes"], more = export_ziva_meshes(os.path.join(out, "ziva_meshes"),
+                                                                 paths["meshes"], first=first)
+                notes += more
+            except Exception as exc:
+                report["ziva_meshes"] = 0
+                notes.append("IMPORTANT: meshes not exported (%s): tell the developers (docs/12 item 7)" % exc)
             if settings["require_simulation"]:
                 if report["ziva_nodes"] == 0:
                     problems.append("no Ziva nodes found")
+                for key, item in (("ziva_maps", 2), ("ziva_meshes", 7)):
+                    if report[key] == 0:
+                        notes.append("IMPORTANT: %s is 0: check docs/12 item %d" % (key, item))
                 error = dump_zbuilder(paths["zbuilder"])
                 if error:  # the attribute dump holds the same values, so this needs no second solve
                     notes.append(error + ". Do the zBuilder step by hand (docs/12)")

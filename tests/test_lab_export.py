@@ -1,7 +1,9 @@
 import math
 
 from check_lab_export import apply_matrix, health_problem, mesh_health, parse_obj, worst_distance
-from ziva_machine_export import check_motion, check_simulation, rotation_between, split_accepted
+from ziva_machine_export import IDENTITY, check_motion, check_simulation, file_name, mesh_mismatch, placing_matrix
+from ziva_machine_export import apply_matrix as ziva_apply_matrix
+from ziva_machine_export import rotation_between, split_accepted
 
 QUADS = [(0, 1, 2, 3), (4, 7, 6, 5), (0, 4, 5, 1), (1, 5, 6, 2), (2, 6, 7, 3), (3, 7, 4, 0)]  # closed box
 SCALE_2_MOVE_Z = [2, 0, 0, 0, 0, 2, 0, 0, 0, 0, 2, 0, 0, 0, 10, 1]
@@ -115,3 +117,30 @@ def test_rotation_between_measures_a_turn_about_z():
     c, s = math.cos(math.radians(10)), math.sin(math.radians(10))
     b = [c, s, 0, 0, -s, c, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
     assert abs(rotation_between(a, b) - 10) < 1e-9
+
+
+def test_ziva_meshes_use_the_lab_export_matrix_convention():
+    points = [(1, 2, 3), (4, 5, 6)]
+    assert ziva_apply_matrix(points, SCALE_2_MOVE_Z) == apply_matrix(points, SCALE_2_MOVE_Z)
+
+
+def test_worldmesh_data_is_placed_by_its_own_matrix():
+    assert placing_matrix(SCALE_2_MOVE_Z, IDENTITY) == (SCALE_2_MOVE_Z, "mesh data matrix")
+
+
+def test_stored_copy_is_placed_by_the_zgeo_matrix():
+    assert placing_matrix(IDENTITY, SCALE_2_MOVE_Z) == (SCALE_2_MOVE_Z, "iNMx")
+
+
+def test_copy_with_no_matrix_says_so():
+    assert placing_matrix(IDENTITY, None) == (IDENTITY, "none")
+
+
+def test_mesh_off_its_scene_mesh_is_a_note():
+    assert "zGeo1" in mesh_mismatch("zGeo1", "lips", 0.5)
+    assert mesh_mismatch("zGeo1", "lips", 1e-6) is None
+    assert mesh_mismatch("zGeo15", None, None) is None
+
+
+def test_node_names_become_safe_file_names():
+    assert file_name("ns:zGeo|1") == "ns_zGeo_1"

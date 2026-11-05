@@ -121,6 +121,7 @@
   - 反向试验可以重复运行：`tools/check_lab_export.py --self-test`。调换两个嘴唇顶点，差别 62.35；真的多套一次变换，下颌 z 尺寸变成 372.16；删掉一半嘴唇的面，出现 128 条开口的边。三种都失败；
   - `tools/rehearse_ziva_export.py` 在普通 Maya 上排练 Ziva 脚本，结果写在 `data/ziva_rehearsal/rehearsal_report.json`。
 - **放弃了**：全部请实验室操作；继续破解 `.mb` 的网格编码。
+- **更新（2026-11-03）**：第 4 条的 Ziva 机器清单加两项，都不需要解算：每个 Ziva 节点的逐顶点权重表和连线（`ziva_maps.json`），以及 Ziva 给每个物体存的网格（`ziva_meshes/`，[12](12-lab-export-checklist.md) 第 7 项）。原因：属性清单只收单值属性，读不出权重表（在普通 Maya 上实测）；6 块肌肉的网格只剩 Ziva 存的副本，离开 Ziva 就读不出面。
 - **注意**：教育版只能用于学习和研究，不能商用；**绝不在教育版 Maya 里保存实验室的 `.mb`**，否则文件会被打上教育版标记。脚本只读不存。
 
 ### ADR-19 私有仓库可以存放派生数据 ✅ 2026-10-30
