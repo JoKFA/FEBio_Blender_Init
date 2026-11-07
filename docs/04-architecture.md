@@ -49,7 +49,7 @@
 | 环境检查 `asrp_core/doctor.py` | 找到 FEBio、Blender，检查路径和 Python 版本 | — | ✅ 已有 |
 | 资产导入 `asrp_core/asset/` | 把从 Maya 导出的网格和 Ziva 设置读进来，换算单位和坐标轴，生成场景描述 | 解析 .mb 的网格几何 | 待开发 |
 | 场景描述 `asrp_core/scene.py` | 定义场景描述文件的格式，提供校验（缺什么、单位对不对） | 求解 | 待开发 |
-| 四面体化 `asrp_core/tetmesh.py` | 把嘴唇的表面网格变成计算用的四面体网格，报告网格质量（为什么需要，见 [13](13-explanations.md) E-02） | — | 待开发 |
+| 四面体化 `asrp_core/tetmesh.py` | 把嘴唇的表面网格变成计算用的四面体网格，报告网格质量（为什么需要，见 [13](13-explanations.md) E-02） | 嵌入显示网格 | ✅ 已有（T-04，ADR-20） |
 | FEBio 适配 `asrp_core/febio.py` | 把场景描述翻译成 FEBio 输入文件，调用 FEBio，读回结果 | 决定材料参数（参数从场景描述里来） | 部分已有：调用和读结果 |
 | landmark 变形层 `asrp_core/skinning.py` | 用蒙皮权重把 landmark 的运动叠加到物理结果上 | — | 待开发 |
 | 回放包 `asrp_core/playback.py` | 把结果打包成 Blender 能直接播放的格式 | — | ✅ 已有 |

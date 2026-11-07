@@ -9,7 +9,10 @@ description = "Solver core for driving FEBio from Blender as a replacement physi
 readme = "README.md"
 requires-python = ">=3.13"
 authors = [{ name = "JoKFA", email = "felixwang1222@gmail.com" }]
-dependencies = []
+dependencies = [
+    "numpy>=2",
+    "pytetwild>=0.2.3,<0.3",
+]
 
 [project.scripts]
 asrp = "asrp_core.cli:main"
