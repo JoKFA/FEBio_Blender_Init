@@ -13,7 +13,7 @@ asrp/
   spikes/               一次性试验代码（不是产品代码，不要在上面继续开发）
   docs/                 设计文档（本目录）
   assets/  runs/        实验室原始场景、运行结果 —— 被 git 忽略
-  data/                 导出和派生数据 —— lab_export、preview、briefing 提交，其余忽略（ADR-19）
+  data/                 导出和派生数据 —— lab_export、preview、briefing、tetmesh 提交，其余忽略（ADR-19）
 ```
 
 逐个文件夹、主要文件的说明见 [README](README.md) 的"仓库目录"。新功能放进哪个目录，以 [04 系统设计](04-architecture.md) 第 3 节为准。拿不准时先问，不要自己新建顶层目录。
@@ -45,7 +45,7 @@ asrp/
 
 - 第一行用一句话说明**为什么**改，而不是只说改了什么。
 - 正文写清楚背景、做法和证据（关键的测试或运行输出）。
-- 写明任务编号，比如 `T-06`。
+- 写明任务编号，比如 `T-06a`。
 - 用自己的名字和邮箱提交。**不在提交信息里加 AI 署名**（项目负责人的要求）。
 - 不提交密码、密钥、个人数据、实验室的原始场景文件、论文或运行结果。
 
@@ -120,7 +120,8 @@ asrp/
 
 ## 10. 数据和安全
 
-- 实验室的原始场景文件（`assets/`）、论文、演示视频和运行结果（`runs/`）**永远不进 git**。`data/` 里的 `lab_export/`、`preview/`、`briefing/` 提交到私有仓库，其余不提交（ADR-19）。这些都不发到仓库以外的地方。
+- 实验室的原始场景文件（`assets/`）、论文、演示视频、实验室的控制器源码和运行结果（`runs/`）**永远不进 git**。`data/` 里的 `lab_export/`、`preview/`、`briefing/`、`tetmesh/` 提交到私有仓库，其余不提交（ADR-19）。这些都不发到仓库以外的地方。实验室源码只读，用 `git show` 查，不运行（ADR-28）。
+- **被哈希的文件按字节检出**：`data/` 和 `tests/fixtures/` 下的文件由 sha256 识别（`scene.json`、`data/tetmesh/lips.json` 和 S1 示例都记着哈希）。Git for Windows 默认 `core.autocrlf=true`，会在检出时改换行符，哈希就全对不上。仓库根目录的 `.gitattributes` 把这两个目录设成 `-text`，检出的字节等于仓库里的字节，不管各人怎么设。往这两个目录加新的文本文件时不用另外处理；要在别的目录放被哈希的文件，先把目录加进 `.gitattributes`。证明：用 `git clone --config core.autocrlf=true` 克隆，跑 `tests/test_scene.py`、`test_asset.py`、`test_tetmesh.py`、`test_trajectory.py`：没有 `.gitattributes` 时 14 个失败，有了以后全部通过（2026-11-10）。
 - 实验室的论文还在审稿，不对外引用其中的内容和图表。
 - FEBio 的安装包和程序文件不能放进仓库，也不能转发（许可规定）。每个人自己去官网下载。
 - FEBio 启动时会向犹他大学发送一个匿名编号，用于统计使用情况（许可协议里写明了）。除此之外，软件不联网。

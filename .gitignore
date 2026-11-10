@@ -23,6 +23,7 @@ data/*
 !data/lab_export/
 !data/preview/
 !data/briefing/
+!data/tetmesh/
 
 # Installers and binaries (the FEBio EULA forbids redistributing them)
 *.exe

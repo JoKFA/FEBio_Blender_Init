@@ -18,9 +18,14 @@ import time
 from pathlib import Path
 
 sys.dont_write_bytecode = True
+# The scene -> mm, Z up conversion lives in one place, asrp_core.asset.coords (T-02); Blender's own
+# Python has numpy, which is all it needs.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 import bpy  # noqa: E402
 from mathutils import Matrix, Vector  # noqa: E402
+
+from asrp_core.asset import coords  # noqa: E402
 
 args = sys.argv[sys.argv.index("--") + 1 :]
 export, out = Path(args[0]).resolve(), Path(args[1]).resolve()
@@ -40,9 +45,8 @@ JAW_PARTS = ("jaw", "teeth_lower")
 
 
 def to_mm_zup(p):
-    """Scene coordinates (Maya, Y up, face looking down -Z) -> mm, Z up, face looking down +Y."""
-    x, y, z = (c * MM_PER_UNIT for c in p)
-    return (x, -z, y)
+    """One point, scene coordinates (Maya, Y up, face looking down -Z) -> mm, Z up, face +Y."""
+    return tuple(coords.to_mm_zup([p], MM_PER_UNIT)[0].tolist())
 
 
 def read_obj(path):
@@ -77,7 +81,7 @@ assert report["obj_coordinates"] == "scene", "this tool expects OBJ files in sce
 objects, expected = {}, {}
 for name, (filename, colour, alpha) in LOOKS.items():
     vertices, faces = read_obj(export / filename)
-    expected[name] = [to_mm_zup(p) for p in vertices]
+    expected[name] = [tuple(v) for v in coords.to_mm_zup(vertices, MM_PER_UNIT).tolist()]
     mesh = bpy.data.meshes.new(name)
     mesh.from_pydata(expected[name], [], faces)
     mesh.polygons.foreach_set("use_smooth", [True] * len(mesh.polygons))

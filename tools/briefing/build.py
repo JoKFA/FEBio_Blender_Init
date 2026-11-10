@@ -19,6 +19,8 @@ from array import array
 from collections import defaultdict
 from pathlib import Path
 
+from asrp_core.asset import coords
+
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
 EXPORT = REPO / "data" / "lab_export"
@@ -44,23 +46,10 @@ def b64(values, typecode):
     return base64.b64encode(a.tobytes()).decode()
 
 
-def to_mm_zup(p):
-    x, y, z = (c * MM_PER_UNIT for c in p)
-    return x, -z, y
-
-
 def read_mesh(path):
-    """Positions in mm, Z up, and triangles (quads fanned), the same conversion as the preview tool."""
-    positions, triangles = [], []
-    with open(path) as f:
-        for line in f:
-            if line.startswith("v "):
-                positions.extend(to_mm_zup(float(c) for c in line.split()[1:4]))
-            elif line.startswith("f "):
-                face = [int(c) - 1 for c in line.split()[1:]]
-                for i in range(1, len(face) - 1):
-                    triangles += [face[0], face[i], face[i + 1]]
-    return positions, triangles
+    """Positions in mm, Z up, and triangles (quads fanned), through asrp_core.asset.coords."""
+    vertices, faces = coords.read_obj(path)
+    return coords.to_mm_zup(vertices, MM_PER_UNIT).ravel().tolist(), coords.triangulate(faces).ravel().tolist()
 
 
 def lip_attachments(inventory):
@@ -101,7 +90,7 @@ def lip_attachments(inventory):
 def landmark_data():
     joints = json.loads((EXPORT / "joints.json").read_text())
     names = [f"oor_{i:02d}" for i in range(1, 301)]
-    positions = [c for n in names for c in to_mm_zup(joints[n]["world_position"])]
+    positions = coords.to_mm_zup([joints[n]["world_position"] for n in names], MM_PER_UNIT).ravel().tolist()
 
     skin = json.loads((EXPORT / "skin_skinCluster7.json").read_text())
     by_name = {n: i for i, n in enumerate(names)}
@@ -138,7 +127,7 @@ def main(out):
     for name, filename in MESHES.items():
         positions, triangles = read_mesh(EXPORT / filename)
         data["meshes"][name] = {"p": b64(positions, "f"), "i": b64(triangles, "H")}
-    data["hinge"] = list(to_mm_zup(report["jaw_hinge"]["world_position"]))
+    data["hinge"] = coords.to_mm_zup([report["jaw_hinge"]["world_position"]], MM_PER_UNIT)[0].tolist()
     data["jawWorld"] = report["meshes"]["middleres_Jaw"]["world_matrix"]
     data["landmarks"] = landmark_data()
 

@@ -19,7 +19,22 @@ uv run asrp doctor
 FEBio binaries need a free registration at febio.org (GitHub releases are source only).
 Override tool locations with `ASRP_FEBIO` / `ASRP_BLENDER`.
 
-The lab's Maya scene goes in `assets/` and solver runs in `runs/`: both are git-ignored and must never be committed. Exports and derived data go in `data/`; `data/lab_export/`, `data/preview/` and `data/briefing/` are committed because this repo is private (docs ADR-19). The lab's `.mb` files, paper and video are never committed.
+The lab's Maya scene goes in `assets/` and solver runs in `runs/`: both are git-ignored and must never be committed. Exports and derived data go in `data/`; `data/lab_export/`, `data/preview/`, `data/briefing/` and `data/tetmesh/` are committed because this repo is private (docs ADR-19). The lab's `.mb` files, paper and video are never committed.
+
+## Scene files
+
+A scene is `scene.json` (what to solve) plus `trajectory.json` (how the drivers move); formats in `src/asrp_core/scene.py` and `src/asrp_core/trajectory.py`, contents in docs/04 section 5. Check them before a run; errors fail, warnings do not:
+
+```bash
+uv run asrp check tests/fixtures/s1/scene.json tests/fixtures/s1/trajectory.json
+```
+
+Turn the lab export into a scene (into an empty folder; the report lands next to scene.json):
+
+```bash
+uv run asrp import-asset data/lab_export runs/lab_scene
+uv run asrp check runs/lab_scene/scene.json
+```
 
 ## Checks (definition of done)
 
