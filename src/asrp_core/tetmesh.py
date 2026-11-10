@@ -600,6 +600,14 @@ def load(path: Path, surface: Path | None = None) -> tuple[TetMesh, dict]:
     the caller that both the mesh and its source are as they were.
     """
     data = json.loads(Path(path).read_text(encoding="utf-8"))
+    # A list or null is valid JSON too; without this, .get() below raises AttributeError and
+    # `asrp check` dies with a traceback instead of reporting the file.
+    if not isinstance(data, dict):
+        raise ValueError(
+            f"{path} is not an {FORMAT} v{FORMAT_VERSION} file (its top level is a "
+            f"{type(data).__name__}, not an object); restore it from git or regenerate it with "
+            "tools/build_tetmesh.py"
+        )
     if data.get("format") != FORMAT or data.get("format_version") != FORMAT_VERSION:
         raise ValueError(
             f"{path} is not an {FORMAT} v{FORMAT_VERSION} file (format {data.get('format')!r}, "

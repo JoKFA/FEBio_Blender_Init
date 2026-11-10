@@ -260,6 +260,15 @@ def test_an_edited_tet_mesh_is_an_error_that_says_regenerate(tmp_path):
     assert "has been changed since it was written" in msg and "regenerate it with tools/build_tetmesh.py" in msg
 
 
+@pytest.mark.parametrize("text", ["[]", "null"])
+def test_a_tet_mesh_file_that_is_not_a_json_object_is_reported_not_raised(tmp_path, text):
+    folder = copy_s1(tmp_path)
+    (folder / "tissue_tet.json").write_text(text)
+    report, msg = errors_of(folder / "scene.json")
+    assert not report.ok
+    assert "is not an asrp-tetmesh v1 file" in msg and "regenerate it with tools/build_tetmesh.py" in msg
+
+
 def test_a_tet_mesh_made_from_another_surface_is_an_error(tmp_path):
     folder = copy_s1(tmp_path)
     path = edit_scene(folder, lambda d: d["soft_tissues"][0]["source_obj"].update(sha256="0" * 64))

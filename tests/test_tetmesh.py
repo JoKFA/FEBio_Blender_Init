@@ -354,6 +354,14 @@ def test_load_refuses_another_format_version(tmp_path):
         tetmesh.load(path)
 
 
+@pytest.mark.parametrize("text", ["[]", "null", "3", '"lips"'])
+def test_load_refuses_json_that_is_not_an_object(tmp_path, text):
+    path = tmp_path / "m.json"
+    path.write_text(text)
+    with pytest.raises(ValueError, match="not an asrp-tetmesh v1"):
+        tetmesh.load(path)
+
+
 @pytest.mark.parametrize(
     "field", ["units", "up_axis", "mm_per_scene_unit", "source", "content_sha256", "nodes", "tets"]
 )
