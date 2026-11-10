@@ -30,7 +30,7 @@ FEBio 是一个专门为生物力学开发、经过同行评审的开源有限�
 - 逐项、逐点复刻 Ziva 的行为。两者的算法不同，Ziva 的参数很可能也只是默认值，对齐它的意义不大。
 - 任何医学结论。
 
-## 现在做到哪了（2026-11-09）
+## 现在做到哪了（2026-11-10）
 
 | 已完成 | 证据 |
 |---|---|
@@ -43,8 +43,9 @@ FEBio 是一个专门为生物力学开发、经过同行评审的开源有限�
 | Ziva 机器要跑的脚本已经准备好，并在普通 Maya 上排练过（需要 Ziva 的部分只能到现场验证） | [12](12-lab-export-checklist.md) 第二部分，`tools/ziva_machine_export.py`、`tools/rehearse_ziva_export.py` |
 | 任何电脑都能运行的自动检查 | `uv run python tools/verify.py` |
 | 对照实验室论文做了一次需求审计：论文里每种用法对物理层意味着什么，第一阶段覆盖多少；并定了 7 个新决定 | [02](02-requirements.md) 第 4 节的对照表、[10](10-decisions.md) ADR-21 到 ADR-27、[13](13-explanations.md) E-04 |
+| 场景描述和运动的格式定稿，`asrp check` 能查出场景和运动里的错误（T-05） | `uv run asrp check tests/fixtures/s1/scene.json tests/fixtures/s1/trajectory.json`，[09](09-roadmap-and-tasks.md) T-05 |
 
-还没开始写正式功能代码。下一步按 [09 路线图与任务](09-roadmap-and-tasks.md) 分工开发。
+正式功能代码从 T-05 开始。下一步按 [09 路线图与任务](09-roadmap-and-tasks.md) 分工开发。
 
 ## 谁参与、各自负责什么
 

@@ -1,0 +1,239 @@
+{
+  "format_version": "asrp-scene/1",
+  "origin": {
+    "asset": "spike S1 (spikes/s1_dynamic_jaw.py)",
+    "export": "none: built in code",
+    "tool": "tests/fixtures/s1/build.py",
+    "notes": "S1's skull is a set of fixed nodes; here it is a fixed bone whose mesh is the top face"
+  },
+  "units": {
+    "system": "mm-N-MPa-s",
+    "mm_per_scene_unit": {
+      "value": 1.0,
+      "source": "ours",
+      "note": "S1 is built in mm"
+    },
+    "physics_length_scale": {
+      "value": 1.0,
+      "source": "ours"
+    },
+    "axes_from_source": "none: S1 is built in mm, Z up"
+  },
+  "soft_tissues": [
+    {
+      "name": "tissue",
+      "mesh": {
+        "path": "tissue.obj",
+        "sha256": "7a88c92d2e27af12ea737aa6603278792b4667b444e756e177bae6c8921f6ee3"
+      },
+      "source_obj": {
+        "file": "tissue.obj",
+        "sha256": "7a88c92d2e27af12ea737aa6603278792b4667b444e756e177bae6c8921f6ee3"
+      },
+      "tet_mesh": {
+        "path": "tissue_tet.json",
+        "content_sha256": "55e30fcd7526f091f326460fb4a15c1dc300b09080f0dab4fe6f1d35904994c7"
+      },
+      "material": {
+        "model": "neo-Hookean",
+        "E_mpa": {
+          "value": 0.02,
+          "source": "ours",
+          "note": "20 kPa, placeholder as in S1"
+        },
+        "nu": {
+          "value": 0.45,
+          "source": "ours"
+        },
+        "density_t_per_mm3": {
+          "value": 1.06e-09,
+          "source": "ours",
+          "note": "1060 kg/m3"
+        }
+      }
+    }
+  ],
+  "bones": [
+    {
+      "name": "skull",
+      "mesh": {
+        "path": "skull.obj",
+        "sha256": "eeb7b9a8386721044b24dc3ceafca55f7c29bc3599b6ff2f0f326af25b9e4b19"
+      },
+      "source_obj": {
+        "file": "skull.obj",
+        "sha256": "eeb7b9a8386721044b24dc3ceafca55f7c29bc3599b6ff2f0f326af25b9e4b19"
+      },
+      "mass_t": {
+        "value": null,
+        "source": "ours",
+        "note": "S1 has fixed nodes, no skull body"
+      },
+      "motion": "fixed"
+    },
+    {
+      "name": "jaw",
+      "mesh": {
+        "path": "jaw.obj",
+        "sha256": "65dd665823fd263ee964799198282e63ac7ff602d45047ee0251a8c102180692"
+      },
+      "source_obj": {
+        "file": "jaw.obj",
+        "sha256": "65dd665823fd263ee964799198282e63ac7ff602d45047ee0251a8c102180692"
+      },
+      "mass_t": {
+        "value": 9.5e-07,
+        "source": "ours",
+        "note": "S1's jaw density 1.9e-9 t/mm3 times the block's volume"
+      },
+      "motion": "prescribed",
+      "driver": "jaw_hinge"
+    }
+  ],
+  "drivers": [
+    {
+      "name": "jaw_hinge",
+      "hinge": {
+        "pivot_mm": [
+          5.0,
+          -30.0,
+          0.0
+        ],
+        "axis": [
+          1.0,
+          0.0,
+          0.0
+        ],
+        "source": "ours",
+        "note": "S1's hinge: x axis through PIVOT"
+      }
+    }
+  ],
+  "attachments": [
+    {
+      "name": "tissue_on_jaw",
+      "from": "tissue",
+      "to": "jaw",
+      "kind": "hard",
+      "stiffness": {
+        "value": null,
+        "source": "ours",
+        "note": "S1 shares these nodes"
+      },
+      "weights": [
+        [
+          0,
+          1.0
+        ],
+        [
+          1,
+          1.0
+        ],
+        [
+          2,
+          1.0
+        ],
+        [
+          3,
+          1.0
+        ],
+        [
+          4,
+          1.0
+        ],
+        [
+          5,
+          1.0
+        ],
+        [
+          6,
+          1.0
+        ],
+        [
+          7,
+          1.0
+        ],
+        [
+          8,
+          1.0
+        ]
+      ]
+    },
+    {
+      "name": "tissue_on_skull",
+      "from": "tissue",
+      "to": "skull",
+      "kind": "hard",
+      "stiffness": {
+        "value": null,
+        "source": "ours",
+        "note": "S1 fixes these nodes"
+      },
+      "weights": [
+        [
+          49,
+          1.0
+        ],
+        [
+          50,
+          1.0
+        ],
+        [
+          51,
+          1.0
+        ],
+        [
+          52,
+          1.0
+        ],
+        [
+          53,
+          1.0
+        ],
+        [
+          54,
+          1.0
+        ],
+        [
+          55,
+          1.0
+        ],
+        [
+          56,
+          1.0
+        ],
+        [
+          57,
+          1.0
+        ]
+      ]
+    }
+  ],
+  "landmarks": null,
+  "solver": {
+    "analysis": "dynamic",
+    "fps": {
+      "value": 30,
+      "source": "ours"
+    },
+    "substeps_per_frame": {
+      "value": 1,
+      "source": "ours",
+      "note": "S1: one FEBio time step per frame"
+    },
+    "damping": {
+      "value": 0.0,
+      "source": "ours",
+      "note": "FEBio's default: no damping (docs/05 pit 2)"
+    },
+    "gravity_mm_per_s2": {
+      "value": [
+        0.0,
+        0.0,
+        -9810.0
+      ],
+      "source": "ours",
+      "note": "physical direction; the FEBio writer flips the sign (ADR-10)"
+    }
+  }
+}

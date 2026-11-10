@@ -52,14 +52,18 @@ asrp/
 │
 ├─ src/
 │  ├─ asrp_core/              核心程序，不能 import bpy
-│  │  ├─ cli.py               命令行 asrp（现在只有 doctor）
+│  │  ├─ cli.py               命令行 asrp（doctor、check）
 │  │  ├─ doctor.py            找 FEBio、Blender，查路径
 │  │  ├─ febio.py             调用 FEBio、读日志
-│  │  └─ playback.py          回放包（表面网格 + PC2 点缓存）
-│                             待开发：scene.py、asset/、tetmesh.py、run.py、skinning.py、compare.py……
+│  │  ├─ playback.py          回放包（表面网格 + PC2 点缓存）
+│  │  ├─ tetmesh.py           四面体网格的检查和读写（ADR-20）
+│  │  ├─ scene.py             场景描述 scene.json 的格式和校验（asrp check）
+│  │  └─ trajectory.py        运动 trajectory.json 的格式、铰链运动生成
+│                             待开发：asset/、run.py、skinning.py、compare.py……
 │
 ├─ blender_addon/asrp_blender/  Blender 插件，只管界面，不用第三方库
 ├─ tests/                     自动测试（pytest）
+│  └─ fixtures/s1/            S1 写成的示例 scene.json、trajectory.json，由同目录的 build.py 生成
 ├─ spikes/                    一次性试验，不是产品代码
 │  └─ s1_dynamic_jaw.py       S1：FEBio 动力学、刚体铰链、重力方向
 │
