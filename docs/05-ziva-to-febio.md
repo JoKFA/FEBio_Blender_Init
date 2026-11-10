@@ -11,13 +11,13 @@
 | Ziva 里的东西 | 它是什么 | 新系统里的表达 | 状态 |
 |---|---|---|---|
 | **zTissue**（软组织） | 会变形的体积，比如嘴唇肌肉 | 四面体网格 + 弹性材料，交给 FEBio 计算 | 🔶 |
-| **zTet**（四面体设置） | 规定四面体网格多粗（`tetSz`） | 我们自己做四面体化，尺寸按 `tetSz` 换算成毫米。`.mb` 里没有存 Ziva 的四面体网格，见 [13](13-explanations.md) E-02 | ✅ T-04：用 fTetWild（`src/asrp_core/tetmesh.py`，ADR-20）。嘴唇网格自身穿插，TetGen 拒绝切，fTetWild 能切；三档尺寸都没有坏四面体，最小二面角 11°–16°（`uv run python spikes/s2_tetmesh.py`） |
+| **zTet**（四面体设置） | 规定四面体网格多粗（`tetSz`） | 我们自己做四面体化，尺寸按 `tetSz` 换算成毫米。`.mb` 里没有存 Ziva 的四面体网格，见 [13](13-explanations.md) E-02 | ✅ T-04：用 fTetWild（`src/asrp_core/tetmesh.py`，ADR-20）。嘴唇网格自身穿插，TetGen 拒绝切，fTetWild 能切，但每次结果不同，所以**网格只生成一次，提交在 `data/tetmesh/lips.json`**，之后一律用 `tetmesh.load` 读（校验哈希）。包络 0.12 mm、边长 25.4 mm：6,747 个计算点、26,721 个四面体，最小二面角 10.4°；上下唇分开的宽度是表面的 99%，左右差 0；单连通、边界流形，亏格 3（表面的 1 加两侧嘴角各一个小孔，坑 13）。FEBio 重力沉降通过。生成 `uv run python tools/build_tetmesh.py`，比较表 `uv run python spikes/s2_tetmesh.py`，FEBio `uv run python spikes/s2_lips_febio.py smoke`；初版的问题见 [13](13-explanations.md) E-03 |
 | **zMaterial**（材料） | 材料类型、杨氏模量、泊松比、密度 | FEBio 里的同类材料（比如 neo-Hookean），参数换算单位 | ❓ 文件里没存数值，很可能全是默认值；默认值本身待实验室的属性清单（Q4） |
 | **zBone**（骨头） | 不变形、只跟着动的物体 | FEBio 的刚体 | ✅ S1 已验证 |
 | 下颌跟着 `jaw01` 关节转 | 骨头由关节带动 | 让下颌这个刚体绕关节所在的点转动，每帧给定转角 | ✅ S1 已验证，误差 4×10⁻⁹ mm |
 | 颅骨固定 | 骨头不动 | 刚体所有方向固定 | 🔶 S1 用的是"把一组计算点固定住"，还没试过"固定一个刚体"，T-07 顺带验证 |
 | **zAttachment**（粘连） | 把一样东西的一部分顶点"粘"在另一样东西上，每个顶点有权重 | 见第 3 节 | ❓ 需要试验 S3（T-07） |
-| **zEmbedder**（嵌入） | 精细的显示网格跟着粗的计算网格动 | 每个显示顶点记住自己在哪个四面体里、离四个角各有多近（重心坐标），算完后按比例插值 | 🔶 原计划就是这样。T-04 实测：四面体网格的边界允许偏离表面，嘴唇的 10,240 个顶点只有约 28% 落在四面体里，其余在外面最远 1.0–1.75 mm，要按最近的边界四面体外推 |
+| **zEmbedder**（嵌入） | 精细的显示网格跟着粗的计算网格动 | 每个显示顶点记住自己在哪个四面体里、离四个角各有多近（重心坐标），算完后按比例插值 | 🔶 原计划就是这样。T-04 实测（`data/tetmesh/lips.json`）：嘴唇的 10,240 个顶点有 65% 落在四面体外，但 95% 的顶点离四面体不到 0.07 mm；最远 0.93 mm，在正中嘴缝最深处的折痕。在外面的要按最近的边界四面体外推 |
 | landmark 蒙皮（skinCluster7） | 300 个关节按权重带动嘴唇顶点 | **不进 FEBio**，在物理结果之后用同样的蒙皮公式叠加（见 [04](04-architecture.md) 第 2 节） | 🔶 等 Q1 确认 |
 | **碰撞** | Ziva 的碰撞处理 | 不做。实验室在 Ziva 里关掉了 | ✅ 资产确认 |
 | **zFiber**（肌肉纤维） | 主动收缩 | 原型不用。嘴唇上没有纤维 | ✅ 资产确认（`tools/asset_report.py` 的纤维表） |
@@ -73,9 +73,13 @@ Ziva 的粘连是"软"的：被粘的顶点会被一个像弹簧一样的力拉�
 | 坑 6 | **Maya 默认 Y 轴朝上，Blender 和我们的计算用 Z 轴朝上** | 导入时统一转换一次，写进检查报告 | 待导入时验证（T-02） |
 | 坑 7 | **网格带着自己的变换**：骨骼和嘴唇都被放大 2.54 倍并旋转过，场景里其他物体的放大倍数还不一样。直接用网格坐标，尺寸和方向都会错 | `tools/maya_export.py` 导出时已经套好变换，OBJ 是场景坐标。**导入时不能再套一次**，只换单位、转坐标轴（[03](03-asset.md) 第 10 节，ADR-18） | `tools/asset_report.py` 打印的变换；下颌场景尺寸 155.92 与论文吻合 |
 | 坑 8 | **FEBio 的日志里有时间戳**，同样的输入跑两次，日志文件也不一样 | 判断"结果是否相同"时，比较解析出的坐标，不比较日志文件 | 实测见 11 的 A-24 |
-| 坑 9 | **嘴唇网格自己穿过自己**：266 个三角形（共 20,480 个），大部分在两侧嘴角内侧，上唇和下唇的内侧面在那里折叠、互相压进去；正中附近还有几处小褶皱。TetGen（包括 FEBio Studio 里的）遇到会直接停止 | 用 fTetWild：它取表面围出的实心区域，重叠的地方当作一块（ADR-20） | FEBio Studio 报 "A self-intersection was detected"；`pymeshlab` 的自相交检测数出 266 个面（T-04）；`tests/test_tetmesh.py` 的 `test_real_lip_mesh_despite_self_intersection` |
-| 坑 10 | **fTetWild 切多细主要看"包络"，不看边长**：包络（边界允许偏离表面的距离）默认只有约 0.13 mm，它会为了贴住每一处细节切得很细，边长设 5 mm 和 50.8 mm 都得到约 6,500 个节点 | 包络取边长的 1/20（`tetmesh.ENVELOPE_PER_EDGE`），尺寸设置才起作用 | `spikes/s2_tetmesh.py` 的说明和输出 |
+| 坑 9 | **嘴唇网格自己穿过自己**：266 个三角形（共 20,480 个），大部分在两侧嘴角内侧，上唇和下唇的内侧面在那里折叠、互相压进去；正中附近还有几处小褶皱。TetGen（包括 FEBio Studio 里的）遇到会直接停止 | 用 fTetWild：它取表面围出的实心区域，互相穿过的那段当作一块（ADR-20）。按 x 切片看：上下唇在 \|x\| 26.0–29.25 mm 互相穿过，29.4–30.9 mm 又分开一小段（坑 13，[13](13-explanations.md) E-03） | FEBio Studio 报 "A self-intersection was detected"；`pymeshlab` 的自相交检测数出 266 个面（T-04）；`tetmesh.surface_slice_state` 逐片判断穿过；`tests/test_tetmesh.py` 的 `test_crossing_pieces_are_not_apart`、`test_saved_lip_mesh_is_intact_and_passes_the_checks` |
+| 坑 10 | **fTetWild 切多细、上下唇会不会粘住，看的是"包络"，不看边长**：包络是边界允许偏离表面的距离，默认约 0.12 mm（对角线的千分之一）。嘴缝比两倍包络窄的地方，上下唇会被焊住，或者只连着一条边、一个点（非流形）。初版把包络绑到边长（边长/20，25.4 mm 时 1.27 mm），21 次里 18 次有非流形，分开宽度在表面的 83%–118% 之间乱跳，左右差最多 9 mm | 包络固定 0.12 mm；包络这么紧时边长几乎不起作用（25.4 和 12.7 mm 得到一样的网格）。约 6,700 个节点对 FEBio 不算多（ADR-20） | `uv run python spikes/s2_tetmesh.py` 的比较表；`tests/test_tetmesh.py` 的分离和流形测试 |
 | 坑 11 | **fTetWild 输出的四面体全是反向的**（有向体积为负），FEBio 要正向；而且它会往**当前目录**写一个 `__tracked_surface.stl` | 逐个检查方向、反的就交换两个角；在临时目录里调用它 | `tests/test_tetmesh.py` 的 `test_cube_is_filled_with_positive_tets`、`test_nothing_is_left_in_the_working_directory` |
+| 坑 12 | **fTetWild 每次结果都不一样**：同一台机器、同样输入，即使 `num_threads=1`、关掉简化或优化，节点数和哈希每次都变（25.4 mm / 1.27 mm 单线程连跑三次：360、333、328 个节点）。在运行时重新生成，就违反 R-06 | 网格只用 `tools/build_tetmesh.py` 显式生成一次，写成 `data/tetmesh/lips.json` 并提交；之后一律 `tetmesh.load`，它校验内容哈希，`tetmesh.check_source` 校验源表面没变（ADR-20） | `tests/test_tetmesh.py` 的 `test_save_and_load_round_trip_bit_for_bit`、`test_load_refuses_an_edited_mesh`、`test_check_source_notices_a_new_surface` |
+| 坑 13 | **自身穿插的表面，"表面的亏格"不等于它围出的实体的亏格**：嘴唇表面是亏格 1 的环，但两侧嘴角的上下唇先互相穿过，再往外又分开一小段（约 1.6 mm 长、0.17–0.29 mm 宽）。这两小段前后贯通，是实体上的两个小孔，所以忠实的四面体网格亏格是 3 | 期望亏格 = 表面亏格 + "穿过之后又分开"的段数（`tetmesh.check`）；只是焊住（没有穿过）的不算 | `test_a_crossing_that_opens_again_is_a_pocket`、`test_a_weld_is_not_a_pocket`、`test_check_wants_the_pocket_kept`；[13](13-explanations.md) E-03 |
+| 坑 14 | **fTetWild 偶尔直接崩溃**：进程退出码 139，没有任何报错。包络 1.5 mm 时遇到过，大批量重复运行时也遇到过一次 | 只在 `tools/build_tetmesh.py` 里生成，崩了就重跑；产品运行时不调用 fTetWild（坑 12） | T-04 比较时两次（退出码 139） |
+| 坑 15 | **FEBio 的 `load_controller` 编号必须从 1 连续往上**，跳号就报 `invalid value for attribute "id"`；用 must points 控制输出时，日志里**没有第 0 帧**，只有第 1 到 N 帧 | 编号连续生成；检查帧数时数 1..N | `spikes/s2_lips_febio.py`；`tests/test_tetmesh.py` 的 `test_saved_lip_mesh_settles_under_gravity_in_real_febio` |
 
 ## 6. 这份文档什么时候要更新
 

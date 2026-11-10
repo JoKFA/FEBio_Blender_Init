@@ -80,6 +80,7 @@ asrp/
 │  │                          （提交 e24ff1b，原在 src/resources/）。只作参考，见 12 第一部分
 │  ├─ preview/           ✅   Blender 预览图和 asset_preview.blend
 │  ├─ briefing/          ✅   新成员讲解页 asrp-briefing.html
+│  ├─ tetmesh/           ✅   嘴唇四面体网格 lips.json，由 tools/build_tetmesh.py 生成一次（ADR-20）
 │  ├─ asset_inventory*.json  🚫  .mb 的完整清单，约 40 MB，能重新生成
 │  └─ ziva_rehearsal/    🚫   排练的输出
 │

@@ -13,7 +13,7 @@ asrp/
   spikes/               一次性试验代码（不是产品代码，不要在上面继续开发）
   docs/                 设计文档（本目录）
   assets/  runs/        实验室原始场景、运行结果 —— 被 git 忽略
-  data/                 导出和派生数据 —— lab_export、preview、briefing 提交，其余忽略（ADR-19）
+  data/                 导出和派生数据 —— lab_export、preview、briefing、tetmesh 提交，其余忽略（ADR-19）
 ```
 
 逐个文件夹、主要文件的说明见 [README](README.md) 的"仓库目录"。新功能放进哪个目录，以 [04 系统设计](04-architecture.md) 第 3 节为准。拿不准时先问，不要自己新建顶层目录。

@@ -98,7 +98,7 @@ M0 基础 ✅ ──► M1 原料就绪 ──► M2 物理段 ──► M3 land
 ---
 
 ### T-04 嘴唇四面体化试验（S2） ✅
-- **结果**（2026-11-06）：选定 fTetWild（ADR-20）。嘴唇网格自身穿插（05 坑 9），TetGen 不能用；三档尺寸的数字见 ADR-20，`uv run python spikes/s2_tetmesh.py` 可重跑。新问题：嘴角重叠部分是否和 Ziva 一样合成一块（11 的 Q11）。
+- **结果**（2026-11-06 初版，2026-11-09 复核定稿）：选定 fTetWild（ADR-20）。嘴唇网格自身穿插（05 坑 9），TetGen 不能用。fTetWild 每次结果不同（坑 12），所以网格用 `uv run python tools/build_tetmesh.py` 生成一次，提交在 `data/tetmesh/lips.json`，之后只读这个文件。定稿参数：包络 0.12 mm、边长 25.4 mm，6,747 个计算点；比较表见 ADR-20（`uv run python spikes/s2_tetmesh.py` 可重跑）；FEBio 重力沉降 `uv run python spikes/s2_lips_febio.py smoke` 通过。初版的问题、下颌张开压力测试（给 T-06/T-07）见 [13](13-explanations.md) E-03。新问题：嘴角重叠部分和两个小孔是否和 Ziva 一致（11 的 Q11）。
 - **目标**：确认能把嘴唇表面网格变成质量合格的四面体网格，并选定工具。
 - **为什么**：Ziva 自己做四面体化，我们得自己做。实验室的网格在静止状态下可能有互相穿插，有些工具遇到这种网格会直接失败（A-10）。为什么绕不过去、这一步是怎么来的，见 [13](13-explanations.md) E-02。
 - **按照**：[05](05-ziva-to-febio.md) 第 1 节 zTet 一行。
@@ -109,7 +109,7 @@ M0 基础 ✅ ──► M1 原料就绪 ──► M2 物理段 ──► M3 land
 - **注意**：`tetSz` 26.37 是场景坐标下的尺寸，而嘴唇最薄的方向只有约 45.8，厚度方向大约只有两层四面体，可能太粗。试验时要看这对结果的影响。
 - **不做**：生成 FEBio 输入。
 - **依赖**：无。
-- **改动范围**：`src/asrp_core/tetmesh.py`、`spikes/`、`pyproject.toml`（新增依赖）。
+- **改动范围**：`src/asrp_core/tetmesh.py`、`tools/build_tetmesh.py`、`data/tetmesh/`、`spikes/`、`tests/`、`pyproject.toml`（新增依赖）。
 - **规模**：中。
 
 ---
