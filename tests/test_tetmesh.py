@@ -264,6 +264,18 @@ def test_check_fails_two_pieces_and_inverted_tets():
     assert any("inverted" in f for f in tetmesh.check(inverted, *surface_of(two)).failures)
 
 
+def test_check_reports_an_exactly_flat_tet_instead_of_raising():
+    # All four corners in one plane: its edge matrix cannot be inverted, which used to stop
+    # check() with LinAlgError before it could say the mesh is bad.
+    block = voxels({(0, 0, 0)})
+    flat = block.tets[:1].copy()
+    flat[0, 3] = flat[0, 2]  # repeat a corner: zero volume, exactly
+    mesh = TetMesh(block.nodes, np.vstack([block.tets, flat]))
+    assert signed_volumes(mesh.nodes, mesh.tets)[-1] == 0
+    report = tetmesh.check(mesh, *surface_of(block))
+    assert any("inverted or flat" in f for f in report.failures)
+
+
 def test_outside_distances():
     cube = voxels({(0, 0, 0)})
     d = tetmesh.outside_distances(cube, np.array([(0.5, 0.5, 0.5), (0.5, 0.5, 2.0), (1.0, 1.0, 1.0)]))

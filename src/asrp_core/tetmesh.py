@@ -450,10 +450,17 @@ def distance_to_triangles(points, tri) -> np.ndarray:
     return best
 
 
+# Far below the smallest tet a mesh may have (MIN_TET_VOLUME_MM3); only tells flat from solid.
+FLAT_TET_VOLUME_MM3 = 1e-12
+
+
 def outside_distances(mesh: TetMesh, points) -> np.ndarray:
     """How far each point is outside the tet mesh: 0 inside, else distance to its boundary."""
     points = np.asarray(points, dtype=float)
-    inside = inside_any_tet(mesh.nodes, mesh.tets, points)
+    # A flat tet encloses nothing, and its edge matrix cannot be inverted: leave it out, so a bad
+    # mesh still gets measured and check() can report it instead of stopping on LinAlgError.
+    solid = mesh.tets[np.abs(signed_volumes(mesh.nodes, mesh.tets)) > FLAT_TET_VOLUME_MM3]
+    inside = inside_any_tet(mesh.nodes, solid, points) if len(solid) else np.zeros(len(points), dtype=bool)
     out = np.zeros(len(points))
     if (~inside).any():
         out[~inside] = distance_to_triangles(points[~inside], mesh.nodes[boundary_faces(mesh.tets)])
