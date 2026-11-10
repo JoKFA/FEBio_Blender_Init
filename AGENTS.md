@@ -14,7 +14,9 @@ Don't change the design in code: if the docs are wrong, stop and report; docs ch
 - Units are mm–N–MPa–s everywhere; convert at the boundary and record the factor.
 
 ## Data
-- The lab's Maya scene goes in `assets/` and solver runs in `runs/` (both git-ignored, never commit them). Exports and derived data go in `data/`; only `data/lab_export/`, `data/preview/` and `data/briefing/` are committed, because the repo is private (ADR-19). The lab's `.mb` files, paper and video are never committed; the asset may be a licensed commercial model.
+- The lab's Maya scene goes in `assets/` and solver runs in `runs/` (both git-ignored, never commit them). Exports and derived data go in `data/`; only `data/lab_export/`, `data/preview/`, `data/briefing/` and `data/tetmesh/` are committed, because the repo is private (ADR-19). The lab's `.mb` files, paper and video are never committed; the asset may be a licensed commercial model.
+- The lab's controller source repo is read-only reference (read with `git show`), never copied into this repo (ADR-28).
+- `data/tetmesh/lips.json` is generated only by `tools/build_tetmesh.py` and read through `asrp_core.tetmesh.load`; never regenerate it at run time (ADR-20). `data/` and `tests/fixtures/` are checked out byte for byte (`.gitattributes`).
 - The lab paper and demo video are confidential (paper under review). They stay in E:\Codebase\3D模拟, outside the repo. Don't quote them in commits or anywhere public.
 
 ## Environment
