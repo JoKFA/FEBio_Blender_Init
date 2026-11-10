@@ -212,6 +212,9 @@ def main(path):
             for a in attachments:
                 if a[2] == body and a[1] not in seen:
                     print("  into " + line(*a))
+                    for c in attachments:  # where a muscle pulling on the chain is itself held
+                        if typ(a[1]) == "zTissue" and c[1] == a[1] and typ(c[2]) == "zBone":
+                            print("    and " + line(*c))
 
     print("\n## skin clusters (joint-driven deformation)")
     for sc in by_type("skinCluster"):
