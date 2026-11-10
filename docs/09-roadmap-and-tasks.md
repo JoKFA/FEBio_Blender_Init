@@ -391,7 +391,7 @@ M0 基础 ✅ ──► M1 原料就绪 ✅ ──► M2 物理段 ──► 【
 ---
 
 ### T-19 扩展 Ziva 机器导出脚本 ✅
-- **结果**（2026-11-10）：`tools/ziva_machine_export.py` 支持 [12](12-lab-export-checklist.md) 第 2、4、5、7、8、9 项，分预检、静态资料、短跑、正式导出、同帧诊断、总收货六步，每次运行落在独立文件夹里。普通 Maya 上的排练通过：`mayapy tools/rehearse_ziva_export.py data/lab_export <输出目录>` 打印 `REHEARSAL PASSED: 26 checks, 0 failures`；`tests/test_ziva_capture.py` 11 个测试通过。Ziva 插件部分只能到现场验证（A-28）。
+- **结果**（2026-11-10）：`tools/ziva_machine_export.py` 支持 [12](12-lab-export-checklist.md) 第 2、4、5、7、8、9 项，分预检、静态资料、短跑、正式导出、同帧诊断、总收货六步，每次运行落在独立文件夹里。普通 Maya 上的排练通过：`mayapy tools/rehearse_ziva_export.py data/lab_export <输出目录>` 打印 `REHEARSAL PASSED: 37 checks, 0 failures`（含一条只给骨头网格打关键帧、关节不动的甩头）；`tests/test_ziva_capture.py` 12 个测试通过。Ziva 插件部分只能到现场验证（A-28）。
 - **本次实施规格（2026-11-10，用户要求完整现场取数流程，含修改脚本）**：
   - 目标：一个可携带的 Maya Python 3 脚本，支持预检、静态资料、短跑、全量导出、同帧求值诊断和独立收货检查；同一次 Maya 会话由研究员依次加载 2–3 条运动，每条单独运行、单独落盘，包含表情和甩头。
   - 非目标：修改实验室控制器、自动执行 pickle、自动修复或保存研究场景、实现 M2 求解器；没有真实 Ziva 环境时不宣称 Ziva 部分验证通过。

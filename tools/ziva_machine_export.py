@@ -212,6 +212,30 @@ def ziva_plugin():
     return None
 
 
+def bone_matrix_plugs(settings):
+    """Each Ziva bone's input matrix plug. The lab's head shake keys the bone MESH transforms
+    (docs/03 section 13), so the bones can travel while the jaw01 joint stays where it is."""
+    plugs = dict(settings.get("_rehearsal_bones") or {})
+    for bone in ls_type("zBone"):
+        geos = cmds.listConnections(bone + ".iGo", source=True, destination=False, type="zGeo") or []
+        if len(set(geos)) != 1:
+            raise ValueError("bone has no unique input zGeo: " + bone)
+        plugs[bone] = geos[0] + "." + GEO_MATRIX
+    return plugs
+
+
+def bone_travel(plugs, first, last):
+    """Largest translation of any bone input over the timeline. Reads the transform that feeds
+    each plug, so it costs no Ziva solve."""
+    worst = 0.0
+    for plug in plugs.values():
+        source = cmds.listConnections(plug, source=True, destination=False, plugs=True) or [plug]
+        rest = cmds.getAttr(source[0], time=first)
+        worst = max([worst] + [distance(rest[12:15], cmds.getAttr(source[0], time=f)[12:15])
+                               for f in range(first, last + 1)])
+    return worst
+
+
 def preflight(settings, first, last):
     """Everything that can be found out before spending a solve. Returns (problems, notes)."""
     problems, notes = [], []
@@ -239,8 +263,13 @@ def preflight(settings, first, last):
         turned = max(rotation_between(rest, m) for m in matrices)
         translated = max(distance(rest[12:15], m[12:15]) for m in matrices)
         if settings.get("kind", "expression") == "head_translation":
+            try:
+                translated = max(translated, bone_travel(bone_matrix_plugs(settings), first, last))
+            except Exception as exc:
+                problems.append("cannot read the bone inputs: %s" % exc)
             if translated < MIN_MOVEMENT:
-                problems.append("jaw has no translation on the timeline; load and key the head motion")
+                problems.append("neither the bones nor jaw01 translate on the timeline; load and key "
+                                "the head motion")
         elif turned < MIN_JAW_DEGREES:
             problems.append("jaw01 does not turn on the timeline (%.3f degrees): is the motion "
                             "loaded and keyed? A script-driven motion cannot be exported" % turned)
@@ -316,7 +345,7 @@ class Sampler:
         self.jaw = self.joints[0]
         self.bone_plugs = bone_plugs or {}
         self.frames, self.started = [], time.time()
-        self.physics0 = self.physics14 = self.joints0 = self.previous = None
+        self.physics0 = self.physics14 = self.joints0 = self.bones0 = self.previous = None
         self.rest = None
         self.rest = rest_points(final)
         self.stats = {
@@ -339,11 +368,12 @@ class Sampler:
         final = [tuple(p)[:3] for p in self.final.getPoints(om.MSpace.kWorld)]
         physics = [tuple(p)[:3] for p in self.physics.getPoints(om.MSpace.kWorld)]
         joints = {j: cmds.xform(j, query=True, matrix=True, worldSpace=True) for j in self.joints}
+        bones = {b: cmds.getAttr(plug) for b, plug in self.bone_plugs.items()}
         self.frames.append(joints)
         s = self.stats
         s["frames_sampled"] += 1
         if self.physics0 is None:
-            self.physics0, self.joints0 = physics, joints
+            self.physics0, self.joints0, self.bones0 = physics, joints, bones
             s["final_vs_physics_first_frame"] = largest_move(final, physics)
             if self.rest:
                 s["rest_offset"] = largest_move(physics, self.rest)
@@ -353,10 +383,11 @@ class Sampler:
         s["largest_move"] = max(s["largest_move"], moved)
         if frame > GRAVITY_SETTLE_FRAMES and self.previous:
             jaw_turned = (rotation_between(self.previous[1], joints[self.jaw]) > 1e-4 or
-                          distance(self.previous[1][12:15], joints[self.jaw][12:15]) > 1e-6)
+                          distance(self.previous[1][12:15], joints[self.jaw][12:15]) > 1e-6 or
+                          any(distance(self.previous[2][b][12:15], m[12:15]) > 1e-6 for b, m in bones.items()))
             if jaw_turned and largest_move(physics, self.previous[0]) < 1e-6:
                 s["frozen_frames"] += 1
-        self.previous = (physics, joints[self.jaw])
+        self.previous = (physics, joints[self.jaw], bones)
         if frame <= GRAVITY_SETTLE_FRAMES:
             s["gravity_sag"] = max(s["gravity_sag"], largest_move(physics, self.physics0))
         if frame == GRAVITY_SETTLE_FRAMES:
@@ -365,7 +396,9 @@ class Sampler:
             s["motion_move"] = max(s["motion_move"], largest_move(physics, self.physics14))
         s["final_vs_physics"] = max(s["final_vs_physics"], largest_move(final, physics))
         s["jaw_degrees"] = max(s["jaw_degrees"], rotation_between(self.joints0[self.jaw], joints[self.jaw]))
-        s["bone_translation"] = max(s["bone_translation"], distance(self.joints0[self.jaw][12:15], joints[self.jaw][12:15]))
+        # The bones themselves, not only jaw01: a head shake keyed on the bone meshes leaves the joint still.
+        s["bone_translation"] = max([s["bone_translation"], distance(self.joints0[self.jaw][12:15], joints[self.jaw][12:15])] +
+                                    [distance(self.bones0[b][12:15], m[12:15]) for b, m in bones.items()])
         for j in self.joints[1:]:
             s["landmark_travel"] = max(s["landmark_travel"], distance(self.joints0[j][12:15], joints[j][12:15]))
         done = s["frames_sampled"]
@@ -827,17 +860,23 @@ def seal_capture(folder):
     write_json(os.path.join(folder, "seal.json"), {"files": files})
 
 
+def check_seal(folder):
+    """Integrity only: every sealed file is present and unchanged. Returns the seal's file table."""
+    seal = read_json(os.path.join(folder, "seal.json"))["files"]
+    if not seal or "session_report.json" not in seal:
+        raise ValueError("missing manifest seal")
+    for name, meta in seal.items():
+        path = safe_child(folder, name)
+        if size(path) <= 0 or size(path) != meta["bytes"] or sha256(path) != meta["sha256"]:
+            raise ValueError("missing, empty, or changed file: " + name)
+    return seal
+
+
 def check_capture(folder, read_alembic=True):
     """Portable receiver check. A structural check alone is never a full Alembic readback."""
     result = {"problems": [], "alembic_verified": False, "streams_checked": 0, "max_error": 0.0}
     try:
-        seal = read_json(os.path.join(folder, "seal.json"))["files"]
-        if not seal or "session_report.json" not in seal:
-            raise ValueError("missing manifest seal")
-        for name, meta in seal.items():
-            path = safe_child(folder, name)
-            if size(path) <= 0 or size(path) != meta["bytes"] or sha256(path) != meta["sha256"]:
-                raise ValueError("missing, empty, or changed file: " + name)
+        seal = check_seal(folder)
         report = read_json(os.path.join(folder, "session_report.json"))
         result["problems"].extend(report.get("problems", []))
         streams = report.get("streams", [])
@@ -1052,12 +1091,7 @@ def run(settings=None):
                            {"id": "lips_physics", "node": physics, "role": "physics"}]
                 for entry in entries:
                     streams.append(dict(entry, node=make_output_tap(entry, temporary), role="body_physics"))
-                bone_plugs = {}
-                for bone in ls_type("zBone"):
-                    geos = cmds.listConnections(bone + ".iGo", source=True, destination=False, type="zGeo") or []
-                    if len(set(geos)) != 1:
-                        raise ValueError("bone has no unique input zGeo: " + bone)
-                    bone_plugs[bone] = geos[0] + "." + GEO_MATRIX
+                bone_plugs = bone_matrix_plugs(config)
                 # Include other tissue landmarks as well, while keeping jaw first for motion checks.
                 joints = names["joints"] + sorted(set(cmds.ls(type="joint", long=True) or []) - set(names["joints"]))
                 sampler = Sampler(names["lips"], physics, first, last, joints, bone_plugs)
@@ -1118,6 +1152,7 @@ def check_collection(folder):
         try:
             r = read_json(path)
             if r.get("stage") == "probe":
+                check_seal(capture_dir)  # a copied or edited diagnostic must not count; raises if so
                 probe = r.get("probe", {})
                 probe_ok |= (r.get("require_simulation") and not r.get("problems") and
                              probe.get("source_restored") and probe.get("channel_restored") and

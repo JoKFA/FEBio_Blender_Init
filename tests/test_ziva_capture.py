@@ -96,6 +96,21 @@ def test_receipt_rejects_altered_manifest_and_empty_collection(tmp_path):
     assert not receipt["complete"] and receipt["problems"]
 
 
+def test_collection_does_not_count_a_diagnostic_whose_files_are_missing_or_changed(tmp_path):
+    probe = tmp_path / "probe_1"
+    probe.mkdir()
+    good = {"stage": "probe", "require_simulation": True, "problems": [],
+            "probe": {"source_restored": True, "channel_restored": True, "time_after": 14, "baseline_repeat_error": 0.0}}
+    z.write_json(str(probe / "session_report.json"), good)
+    missing = "same-frame diagnostic with verified channel restoration missing"
+
+    assert missing in z.check_collection(str(tmp_path))["problems"]  # no seal at all
+    z.seal_capture(str(probe))
+    assert missing not in z.check_collection(str(tmp_path))["problems"]  # sealed and intact
+    z.write_json(str(probe / "session_report.json"), {**good, "notes": ["edited after capture"]})
+    assert missing in z.check_collection(str(tmp_path))["problems"]  # changed since it was sealed
+
+
 def test_manifest_file_cannot_escape_capture(tmp_path):
     with pytest.raises(ValueError):
         z.safe_child(str(tmp_path), "../outside")

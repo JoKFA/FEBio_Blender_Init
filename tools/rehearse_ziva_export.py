@@ -31,7 +31,7 @@ def main(export_dir, out):
         if not ok:
             failures.append(name)
 
-    def rig(kind, namespace="", mode="off"):
+    def rig(kind, namespace="", mode="off", keyed="head"):
         cmds.file(new=True, force=True)
         cmds.currentUnit(time="ntsc", linear="cm")
         cmds.evaluationManager(mode=mode)
@@ -63,9 +63,16 @@ def main(export_dir, out):
             value = cmds.getAttr(joints[99] + ".translateX")
             for frame, move in ((0, 0), (14, 0), (20, 3)):
                 cmds.setKeyframe(joints[99], attribute="translateX", time=frame, value=value + move)
-        else:
+        elif keyed == "head":
             for frame, move in ((0, 10), (14, 10), (20, 18)):
                 cmds.setKeyframe(head, attribute="translateX", time=frame, value=move)
+        bones = {}
+        if keyed == "bones":
+            # The lab's head shake keys the bone MESH transforms; jaw01 and the head stay still.
+            bone = cmds.polyCube(name=ns + "fake_bone_mesh")[0]
+            for frame, move in ((0, 0), (14, 0), (20, 5)):
+                cmds.setKeyframe(bone, attribute="translateX", time=frame, value=move)
+            bones = {"fake_bone": bone + ".worldMatrix[0]"}
         cube = cmds.polyCube(name=ns + "second_tissue")[0]
         cmds.parent(cube, head)
         cmds.playbackOptions(minTime=0, maxTime=20)
@@ -111,13 +118,19 @@ def main(export_dir, out):
             cmds.connectAttr(geos[1] + ".oGo", embedder + ".iGo[19]")
         finally:
             z.ls_type, cmds.listConnections = original_ls, original_connections
-        return entries, skin
+        return entries, skin, bones
 
     reports = []
-    for kind, namespace, mode in (("expression", "", "off"), ("head_translation", "lab", "parallel")):
-        entries, skin = rig(kind, namespace, mode)
+    for kind, namespace, mode, keyed in (("expression", "", "off", "head"), ("head_translation", "lab", "parallel", "head"),
+                                         ("head_translation", "", "off", "bones")):
+        entries, skin, bones = rig(kind, namespace, mode, keyed)
         config = {"out": out, "motion": kind, "kind": kind, "namespace": namespace, "first": 0,
-                  "last": 20, "stage": "export", "require_simulation": False, "_rehearsal_outputs": entries}
+                  "last": 20, "stage": "export", "require_simulation": False, "_rehearsal_outputs": entries,
+                  "_rehearsal_bones": bones}
+        if keyed == "bones":
+            blind = z.run({**config, "stage": "preflight", "_rehearsal_bones": {}})
+            expect("head shake keyed on bone meshes is invisible from jaw01 alone", bool(blind["problems"]), str(blind["problems"]))
+            kind = "bone-keyed head shake"
         before = cmds.getAttr(skin + ".envelope")
         report = z.run(config)
         reports.append(report)
@@ -127,6 +140,8 @@ def main(export_dir, out):
         expect(kind + " 21 frames", report["stats"].get("frames_sampled") == 21)
         expect(kind + " skin unchanged", cmds.getAttr(skin + ".envelope") == before)
         expect(kind + " temporary taps removed", not cmds.ls("asrp_*", type="transform"))
+        if kind == "bone-keyed head shake":
+            expect("bone-keyed head shake measured from the bone inputs", report["stats"].get("bone_translation", 0) > 4, str(report["stats"].get("bone_translation")))
         if kind == "head_translation":
             expect("translation without jaw rotation", report["stats"].get("bone_translation", 0) > 5 and report["stats"].get("jaw_degrees", 1) < .001)
         preflight = z.run({**config, "stage": "preflight"})
