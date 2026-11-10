@@ -1,0 +1,6 @@
+# Files under data/ and tests/fixtures/ are identified by the sha256 of their bytes
+# (scene.json, data/tetmesh/lips.json and the S1 fixtures record those hashes). Check them out
+# byte for byte on every machine, whatever core.autocrlf says: no line-ending conversion.
+# docs/08 section 10.
+data/** -text
+tests/fixtures/** -text
