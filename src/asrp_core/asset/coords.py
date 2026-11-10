@@ -7,7 +7,7 @@ own transform, ADR-18), so the import only scales and turns the axes, in that or
     scene (x, y, z) -> mm (x, y, z) * mm_per_scene_unit -> (x, -z, y)
 
 It is a rotation, not a mirror: left and right stay put and the face ends up looking down +Y.
-mm_per_scene_unit is a setting (provisionally 0.962, docs/11 Q3), never a constant here.
+mm_per_scene_unit is a setting (0.962 for the lab asset, ADR-31), never a constant here.
 
 Every tool that needs this conversion calls `to_mm_zup` (T-02): a second copy that drifts would
 put meshes and tet meshes in different places without any error.

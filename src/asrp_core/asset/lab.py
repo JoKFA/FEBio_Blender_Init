@@ -27,7 +27,7 @@ import numpy as np
 from asrp_core import __version__, scene
 from asrp_core.asset import coords
 
-DEFAULT_MM_PER_SCENE_UNIT = 0.962  # paper appendix V; provisional (docs/11 Q3), so a setting
+DEFAULT_MM_PER_SCENE_UNIT = 0.962  # paper appendix V, same as the lab controller (ADR-31); still a setting
 LIPS = "middleres_OrbicularisOris"
 JAW_DRIVER = "jaw01"
 # name in scene.json -> (Maya mesh name, motion, driver); docs/03 sections 3 and 4.
@@ -44,8 +44,9 @@ SOLVER_FPS = 30  # the lab's zSolver frame rate (docs/03 section 5)
 STILL_MISSING = [
     "Ziva attribute list (docs/12 item 2, Q4): material, solver substeps, damping and gravity are "
     "placeholders marked 'ours'; re-import when it arrives",
-    "Motion (D2): no lab trajectory; T-06 uses a stand-in hinge motion for driver jaw01",
-    "Units (Q3): mm_per_scene_unit and physics_length_scale k are provisional",
+    "Motion (D2): no lab trajectory; T-06a uses a stand-in hinge motion for driver jaw01",
+    "Physical scale (ADR-31): geometry is settled (0.962 mm per scene unit), the physical scale is "
+    "physics_length_scale k, written as 1.0 for now; T-06a sets the agreed real-person size, 0.67",
 ]
 
 
@@ -108,7 +109,7 @@ def import_asset(export: Path, out: Path, tet_mesh: Path,
     _need(tet_mesh)
     (out / "meshes").mkdir(parents=True, exist_ok=True)
     (out / "landmarks").mkdir(parents=True, exist_ok=True)
-    mm_note = ("paper appendix V's 0.962, provisional (docs/11 Q3)"
+    mm_note = ("paper appendix V's 0.962, also the lab controller's conversion (ADR-31)"
                if mm_per_scene_unit == DEFAULT_MM_PER_SCENE_UNIT else "set with --mm-per-scene-unit")
 
     meshes_report = []
@@ -205,7 +206,7 @@ def import_asset(export: Path, out: Path, tet_mesh: Path,
         },
         units=scene.Units(
             scene.Param(mm_per_scene_unit, "ours", mm_note),
-            ours(1.0, "ADR-22: k waits for the Ziva attribute list and Q3"),
+            ours(1.0, "ADR-31: real-person size is k = 0.67, which T-06a writes; 1.0 until then"),
             coords.AXES,
         ),
         soft_tissues=[tissue],

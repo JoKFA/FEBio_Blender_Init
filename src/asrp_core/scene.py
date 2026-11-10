@@ -387,7 +387,7 @@ def _units(data: dict) -> Units:
     if "mm_per_scene_unit" not in u:
         raise _Bad(
             "units.mm_per_scene_unit is missing: say how many mm one scene unit of the source asset is "
-            '(provisionally 0.962 for the lab asset, docs/11 Q3), e.g. {"value": 0.962, "source": "ours"}'
+            '(0.962 for the lab asset, same as the lab controller, ADR-31), e.g. {"value": 0.962, "source": "ours"}'
         )
     mm = _number_param(u, "mm_per_scene_unit", "units", positive=True)
     if "physics_length_scale" in u:
@@ -704,7 +704,7 @@ def _check_references(scene: Scene, base: Path, report: Report) -> None:
         if t.name not in attached:
             report.warnings.append(
                 f"soft tissue {t.name!r} has no attachment: nothing holds it, so under gravity it falls freely. "
-                "Fine for checking the import; add attachments before a real run (T-03, docs/11 P-01)"
+                "Fine for checking the import; add attachments before a real run (docs/05 section 3, T-03)"
             )
 
     if scene.landmarks is not None:

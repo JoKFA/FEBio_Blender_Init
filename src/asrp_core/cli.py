@@ -104,7 +104,7 @@ def main(argv: list[str] | None = None) -> int:
     imp.add_argument("export", help="the export folder from tools/maya_export.py")
     imp.add_argument("out", help="an empty or new folder for scene.json, meshes/ and the report")
     imp.add_argument("--mm-per-scene-unit", type=float, default=0.962,
-                     help="geometry scale, mm per scene unit (default 0.962, provisional, docs/11 Q3)")
+                     help="geometry scale, mm per scene unit (default 0.962, the lab controller's conversion, ADR-31)")
     imp.add_argument("--tetmesh", help="the lip tet mesh (default: <export>/../tetmesh/lips.json)")
     imp.set_defaults(func=cmd_import_asset)
 

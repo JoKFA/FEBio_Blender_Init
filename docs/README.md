@@ -8,7 +8,7 @@
 |---|---|
 | 第一次接触项目的任何人 | [01 项目一页纸](01-overview.md) → [术语表](glossary.md) |
 | 实验室成员 | 01 → [02 需求](02-requirements.md) → [03 资产说明](03-asset.md) → [11 风险与待决问题](11-risks-and-questions.md) → [12 导出清单](12-lab-export-checklist.md) |
-| 开发者 | 01 → 02 → 03 → [04 系统设计](04-architecture.md) → [05 Ziva 到 FEBio 的对应](05-ziva-to-febio.md) → [08 开发规范](08-engineering-standards.md) → [09 路线图与任务](09-roadmap-and-tasks.md) 里分给你的任务卡 |
+| 开发者 | 01 → 02 → 03 → [04 系统设计](04-architecture.md) → [05 Ziva 到 FEBio 的对应](05-ziva-to-febio.md) → [07 验证与验收](07-validation.md) → [08 开发规范](08-engineering-standards.md) → [10 决策记录](10-decisions.md) → [09 路线图与任务](09-roadmap-and-tasks.md) 里分给你的任务卡 |
 | 审查者 | 08 开发规范 → [07 验证与验收](07-validation.md) → 被审查任务的任务卡 |
 | 读的时候有疑问 | 先查 [13 设计解释](13-explanations.md) 的目录；没有的话问出来，答完补进 13 |
 
@@ -60,17 +60,22 @@ asrp/
 │  │  ├─ tetmesh.py           四面体网格的检查和读写（ADR-20）
 │  │  ├─ scene.py             场景描述 scene.json 的格式和校验（asrp check）
 │  │  ├─ trajectory.py        运动 trajectory.json 的格式、铰链运动生成
-│  │  └─ asset/               资产导入（asrp import-asset）；coords.py 是唯一的一份坐标换算
-│                             待开发：run.py、skinning.py、compare.py……
+│  │  └─ asset/               资产导入（asrp import-asset）
+│  │     ├─ lab.py            读实验室导出，写 scene.json 和检查报告
+│  │     └─ coords.py         唯一的一份坐标换算
+│  │                          待开发：run.py、skinning.py、compare.py……
 │
 ├─ blender_addon/asrp_blender/  Blender 插件，只管界面，不用第三方库
 ├─ tests/                     自动测试（pytest）
 │  └─ fixtures/s1/            S1 写成的示例 scene.json、trajectory.json，由同目录的 build.py 生成
 ├─ spikes/                    一次性试验，不是产品代码
-│  └─ s1_dynamic_jaw.py       S1：FEBio 动力学、刚体铰链、重力方向
+│  ├─ s1_dynamic_jaw.py       S1：FEBio 动力学、刚体铰链、重力方向
+│  ├─ s2_tetmesh.py           S2：四面体化工具和包络各档的比较表（ADR-20）
+│  └─ s2_lips_febio.py        S2：嘴唇四面体网格进 FEBio（重力沉降 smoke、下颌张开 jaw）
 │
 ├─ tools/                     迁移、检查、渲染工具，不是产品代码
 │  ├─ verify.py               "完成"的定义：测试 + doctor + 插件 + 回放检查
+│  ├─ build_tetmesh.py        生成嘴唇四面体网格 data/tetmesh/lips.json，只显式跑一次（ADR-20）
 │  ├─ check_blender_addon.py  check_playback.py  render_playback.py
 │  ├─ mb_inventory.py  asset_report.py     不开 Maya 读 .mb，打印 03 里的数字（含粘连权重的读法）
 │  ├─ maya_export.py  check_lab_export.py  本机 Maya 导出网格、权重、关节并逐点核对
@@ -81,7 +86,7 @@ asrp/
 │
 ├─ data/                      导出和派生数据（ADR-19）
 │  ├─ lab_export/        ✅   网格 OBJ、mesh_report.json、skin_skinCluster7.json、joints.json；
-│  │                          Ziva 机器上导出的文件收到后也放这里
+│  │                          Ziva 机器上导出的文件收到后也放这里；T-10 转换后的运动放 trajectories/
 │  │  └─ manual_maya_obj/     用 Maya 自带 OBJ 导出手动导的下巴、嘴唇、颅骨、两只眼睛和一个 .blend
 │  │                          （提交 e24ff1b，原在 src/resources/）。只作参考，见 12 第一部分
 │  ├─ preview/           ✅   Blender 预览图和 asset_preview.blend

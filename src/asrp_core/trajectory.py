@@ -10,7 +10,7 @@ Format `asrp-trajectory/1`, one JSON object:
       "drivers": {                    # keyed by driver name (a joint name for the lab asset,
         "jaw01": [[16 numbers], ...]  #   e.g. jaw01); scene.json says which bones follow which
       },
-      "landmarks": ...                # optional; its format is T-10's, it is passed through
+      "landmarks": ...                # optional; its format is docs/04 section 5.2, T-09 reads and checks it
     }
 
 Each transform is a 4x4 rigid transform in mm, Z up: the world transform of the driver relative
@@ -41,7 +41,7 @@ class Trajectory:
     frames: int
     drivers: dict[str, list[list[float]]]
     source: str = ""
-    landmarks: object = None  # T-10 defines it; kept as read
+    landmarks: object = None  # format in docs/04 section 5.2; T-09 adds reading and checks; kept as read
     extra: dict = field(default_factory=dict)  # unknown top-level keys, kept for the round trip
 
     def to_json(self) -> dict:
@@ -59,8 +59,8 @@ class Trajectory:
 
 def hinge_transforms(pivot_mm, axis, angles_rad) -> list[list[float]]:
     """One rigid transform per angle: a right-handed turn by that angle about `axis` through
-    `pivot_mm` (mm, Z up). Used to make a stand-in motion when there is no lab trajectory (T-06
-    first version, ADR-21) and to write the S1 example."""
+    `pivot_mm` (mm, Z up). Used to make a stand-in motion when there is no lab trajectory (T-06a,
+    ADR-21) and to write the S1 example."""
     ax = [float(a) for a in axis]
     norm = math.sqrt(sum(a * a for a in ax))
     if norm == 0:

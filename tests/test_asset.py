@@ -115,7 +115,7 @@ def test_the_scene_has_the_roles_of_docs_03(imported):
     assert np.allclose(jaw01.hinge.axis, [1, 0, 0], atol=1e-9)  # left-right
     raw = json.loads((out / "scene.json").read_text())
     assert raw["units"]["physics_length_scale"] == {"value": 1.0, "source": "ours",
-                                                    "note": "ADR-22: k waits for the Ziva attribute list and Q3"}
+                                                    "note": "ADR-31: real-person size is k = 0.67, which T-06a writes; 1.0 until then"}
     assert raw["units"]["mm_per_scene_unit"]["value"] == 0.962
     assert len(s.landmarks.names) == 300
     # Each OBJ is named with its sha256, as T-02 asks.
@@ -131,6 +131,15 @@ def test_the_scene_passes_the_check_with_only_the_missing_attachments_warning(im
     assert report.ok, report.errors
     assert len(report.warnings) == 1 and "soft tissue 'lips' has no attachment" in report.warnings[0]
     assert result.report["missing"][0] == report.warnings[0]
+
+
+@needs_export
+def test_the_report_calls_the_geometry_scale_settled_and_k_the_open_part(imported):
+    out, result = imported
+    text = " ".join(result.report["missing"]) + json.dumps(result.report["units"])
+    assert "provisional" not in text and "Q3" not in text
+    [units_line] = [m for m in result.report["missing"] if m.startswith("Physical scale")]
+    assert "ADR-31" in units_line and "0.67" in units_line
 
 
 @needs_export
