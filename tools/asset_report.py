@@ -44,6 +44,70 @@ def world_box_size(lo, hi, rot, scale):
     return [round(max(c[i] for c in corners) - min(c[i] for c in corners), 2) for i in range(3)]
 
 
+# Maya leaves out of the file every list element that equals the attribute's default, and an
+# element that is not in the file takes the default. For a zAttachment weight list the default is
+# taken to be 1.0: a strong inference, not yet confirmed. Evidence: all 21 weight lists stored
+# element by element hold only 0.0 (nobody stores thousands of zeros if 0 is the default), and the
+# 74 lip indices left out of zAttachment1 sit on the skull exactly as the 76 stored ones of
+# zAttachment2 sit on the jaw. To be confirmed by the `default` field of ziva_maps.json from the
+# Ziva machine (docs/12 item 2).
+ATTACHMENT_WEIGHT_DEFAULT = 1.0
+DEFAULT_NOTE = ("default 1.0 is a strong inference, to be confirmed by the 'default' field "
+                "in ziva_maps.json exported on the Ziva machine")
+
+
+def attachment_weights(attrs, vertex_count):
+    """Split an attachment's weight list into what the file stores and what takes the default.
+
+    Returns (stored, defaulted): `stored` maps vertex index -> stored weight; `defaulted` is the set
+    of source-vertex indices the file leaves out, which take ATTACHMENT_WEIGHT_DEFAULT. An
+    attachment with no weight list at all therefore holds every vertex of its source body.
+    """
+    stored = {}
+    for k, v in attrs.items():
+        m = re.match(r"wl\[0\]\.w\[(\d+)(?::(\d+))?\]$", k)
+        if m:
+            first, last = int(m.group(1)), int(m.group(2) or m.group(1))
+            stored.update(zip(range(first, last + 1), v if isinstance(v, list) else [v]))
+    defaulted = set(range(vertex_count)) - stored.keys()
+    return stored, defaulted
+
+
+def attached_vertices(attrs, vertex_count):
+    """(stored non-zero, defaulted) vertex index sets; their union is every vertex with weight > 0."""
+    stored, defaulted = attachment_weights(attrs, vertex_count)
+    nonzero = {i for i, w in stored.items() if isinstance(w, (int, float)) and w > 0}
+    return nonzero, (defaulted if ATTACHMENT_WEIGHT_DEFAULT > 0 else set())
+
+
+def read_attachments(inv):
+    """Every zAttachment as (name, source body, target body, stored non-zero, defaulted,
+    stored count, source vertex count), weights read by attached_vertices()."""
+    nodes = {n["name"]: n for n in inv["nodes"]}
+    src_of, dst_of = defaultdict(list), defaultdict(list)
+    for s, d in inv["connections"]:
+        src_of[d.split(".")[0]].append((s, d))
+        dst_of[s.split(".")[0]].append((s, d))
+    body_count = {}  # body -> vertex count of its zGeo
+    for g in (n for n in inv["nodes"] if n["type"] == "zGeo"):
+        for s, d in dst_of[g["name"]]:
+            if d.endswith(".iGo") and nodes.get(d.split(".")[0], {}).get("type") in ("zTissue", "zBone", "zCloth"):
+                body_count[d.split(".")[0]] = (g["attrs"].get("iNMh") or {}).get("vertex_count") or 0
+    geo_body = {s.split(".")[0]: d.split(".")[0] for s, d in inv["connections"]
+                if d.endswith(".iGo") and nodes.get(d.split(".")[0], {}).get("type") in ("zTissue", "zBone", "zCloth")
+                and nodes.get(s.split(".")[0], {}).get("type") == "zGeo"}
+    out = []
+    for a in (n for n in inv["nodes"] if n["type"] == "zAttachment"):
+        g1 = [s.split(".")[0] for s, d in src_of[a["name"]] if d.endswith(".iGo1")]
+        g2 = [s.split(".")[0] for s, d in src_of[a["name"]] if d.endswith(".iGo2")]
+        b1, b2 = (geo_body.get(g1[0]) if g1 else None), (geo_body.get(g2[0]) if g2 else None)
+        n = body_count.get(b1, 0)
+        stored, _ = attachment_weights(a["attrs"], n)
+        nonzero, defaulted = attached_vertices(a["attrs"], n)
+        out.append((a["name"], b1, b2, nonzero, defaulted, len(stored), n))
+    return out
+
+
 def main(path):
     inv = json.load(open(path, encoding="utf-8"))
     nodes = {n["name"]: n for n in inv["nodes"]}
@@ -107,27 +171,47 @@ def main(path):
         tissues = [s.split(".")[0] for t in tets for s, d in src_of[t] if d.endswith(".iGo")]
         print(f"{f['name']}: {tissues}")
 
+    attachments = read_attachments(inv)
+
+    def line(name, b1, b2, nonzero, defaulted, n_stored, n):
+        return (f"{name}: {b1} -> {b2}, source vertices {n}, stored {n_stored}; "
+                f"stored non-zero {len(nonzero)}, by default {len(defaulted)}, attached {len(nonzero | defaulted)}")
+
+    print("\n## attachment weights: how they are read")
+    print("(the weight list lives on the SOURCE body, i.e. the first one named; an element the file")
+    print(f" leaves out takes the default {ATTACHMENT_WEIGHT_DEFAULT}: {DEFAULT_NOTE})")
+    no_list = [a for a in attachments if a[5] == 0]
+    partly = [a for a in attachments if a[5] > 0 and a[4]]
+    print(f"attachments {len(attachments)}; with some indices left out (taken as default): {len(partly)}; "
+          f"with no weight list at all (whole source body attached): {len(no_list)}")
+
     print("\n## attachments touching the lip tissue (zTissue1)")
-    print("(the weight list lives on the SOURCE body, i.e. the first one named)")
-    lip_vertices = set()
-    for a in by_type("zAttachment"):
-        g1 = [s.split(".")[0] for s, d in src_of[a["name"]] if d.endswith(".iGo1")]
-        g2 = [s.split(".")[0] for s, d in src_of[a["name"]] if d.endswith(".iGo2")]
-        b1, b2 = (geo_body.get(g1[0]) if g1 else None), (geo_body.get(g2[0]) if g2 else None)
-        if "zTissue1" not in (b1, b2):
+    lip_stored, lip_default = set(), set()
+    for a in attachments:
+        if "zTissue1" not in (a[1], a[2]):
             continue
-        weights = {}
-        for k, v in a["attrs"].items():
-            m = re.match(r"wl\[0\]\.w\[(\d+)(?::(\d+))?\]$", k)
-            if m:
-                first, last = int(m.group(1)), int(m.group(2) or m.group(1))
-                weights.update(zip(range(first, last + 1), v if isinstance(v, list) else [v]))
-        nonzero = {i for i, w in weights.items() if isinstance(w, float) and w > 0}
-        if b1 == "zTissue1":
-            lip_vertices |= nonzero
-        owner = "lip" if b1 == "zTissue1" else b1
-        print(f"{a['name']}: {b1} -> {b2}, weight list {len(weights)} long (on {owner}), weight > 0: {len(nonzero)}")
-    print(f"distinct lip vertices with an attachment weight > 0 (lip as source): {len(lip_vertices)} of 10240")
+        if a[1] == "zTissue1":
+            lip_stored |= a[3]
+            lip_default |= a[4]
+        print(line(*a))
+    print(f"distinct lip vertices with an attachment weight > 0 (lip as source): {len(lip_stored | lip_default)} of 10240 "
+          f"(stored non-zero {len(lip_stored)}, by default {len(lip_default - lip_stored)})")
+
+    print("\n## chain outward from the lip (follow the source -> target direction until bones)")
+    frontier, seen = ["zTissue1"], {"zTissue1"}
+    while frontier:
+        body = frontier.pop(0)
+        for a in attachments:
+            if a[1] != body or a[1] == a[2]:
+                continue
+            print(line(*a))
+            if typ(a[2]) == "zTissue" and a[2] not in seen:
+                seen.add(a[2])
+                frontier.append(a[2])
+        if body != "zTissue1":
+            for a in attachments:
+                if a[2] == body and a[1] not in seen:
+                    print("  into " + line(*a))
 
     print("\n## skin clusters (joint-driven deformation)")
     for sc in by_type("skinCluster"):
