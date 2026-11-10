@@ -189,3 +189,10 @@ def test_asrp_import_asset_runs_end_to_end(tmp_path, capsys):
     assert "import PASSED: scene check 0 errors, 1 warnings" in text
     assert "missing    soft tissue 'lips' has no attachment" in text
     assert cli.main(["check", str(out / "scene.json")]) == 0
+
+
+@needs_export
+def test_the_scene_does_not_depend_on_where_it_was_written(imported, tmp_path):
+    out, _ = imported
+    lab.import_asset(EXPORT.resolve(), tmp_path / "elsewhere", TET.resolve())
+    assert (tmp_path / "elsewhere" / "scene.json").read_bytes() == (out / "scene.json").read_bytes()

@@ -57,14 +57,14 @@ M0 基础 ✅ ──► M1 原料就绪 ✅ ──► M2 物理段 ──► 【
 
 ### T-02 资产导入 ✅
 - **结果**（2026-11-10）：`asrp import-asset <导出文件夹> <输出文件夹> [--mm-per-scene-unit 0.962] [--tetmesh 路径]`，代码在 `src/asrp_core/asset/`；换算只在 `asset/coords.py` 的 `to_mm_zup` 里，`tools/build_tetmesh.py`、`tools/blender_import_preview.py`、`tools/briefing/build.py`、`spikes/s2_lips_febio.py` 都改成调用它。输出文件夹里有 `scene.json`、`meshes/`（五个网格，毫米、Z 轴朝上；`lips_tet.json` 是 `data/tetmesh/lips.json` 的原样拷贝）、`landmarks/`（`skin_skinCluster7.json` 的原样拷贝）和 `import_report.json`（换算系数、坐标轴、网格、每个参数的来源、"缺了什么"、场景检查结果）。`uv run asrp import-asset data/lab_export <输出文件夹>` 打印的尺寸和 [03](03-asset.md) 第 12 节的表一致，下颌前后 150.0 mm；`jaw01` 枢轴 (0.00, −121.71, −54.65) mm、转轴 (1, 0, 0)，带动下颌和下牙；结果 `import PASSED: scene check 0 errors, 1 warnings`。导入前 `uv run python tools/check_lab_export.py data/lab_export "assets/w64 from v36 proxy delete done non ziva.mb"` 输出 `LAB EXPORT CHECK PASSED`（5 个网格最大差 0.0000000）。
-- **目标**：`asrp import-asset <导出文件夹>`，把导出的文件变成我们的场景描述（`scene.json`）和一份检查报告。
+- **目标**：`asrp import-asset <导出文件夹> <输出文件夹>`，把导出的文件变成我们的场景描述（`scene.json`）和一份检查报告。
 - **为什么**：需求 R-01、R-02。
 - **按照**：[04](04-architecture.md) 第 5.1 节；[03](03-asset.md) 第 10 节（单位、坐标轴）；ADR-04、ADR-07、ADR-18。
 - **参考**：`tools/blender_import_preview.py` 已经在真实数据上走通了读取 OBJ、换算单位、转坐标轴、找下颌铰链这几步，可以照着做，但它是预览工具，不是产品模块。
 - **输入**：`data/lab_export/` 下的文件（[12](12-lab-export-checklist.md) 第一部分）；T-05 定好的格式。属性清单以后才有。
 - **没有属性清单时也要能导入**：Ziva 设置还没到时，对应参数的来源标成"我们定的"，检查报告里列出缺了什么；收到以后重新导入补上。这样 T-06 第一版不用等。
 - **输出**：`src/asrp_core/asset/` 下的导入模块；`scene.json`、`meshes/`（毫米、Z 轴朝上）、检查报告；测试。
-- **网格记录**：`scene.json` 给每个网格记录**原始 OBJ 的文件名和 sha256**。软组织条目引用 `data/tetmesh/` 下的四面体网格文件和它的内容哈希（规则见 T-05 卡）。网格、四面体网格、landmark 蒙皮权重都是被引用的文件，不内嵌（04 第 5.1 节）。
+- **网格记录**：`scene.json` 给每个网格记录**原始 OBJ 的文件名和 sha256**。软组织条目引用 `data/tetmesh/` 下的四面体网格文件和它的内容哈希（规则见 T-05 卡）：导入时把它原样拷进输出文件夹的 `meshes/`，场景引用这份拷贝，和 04 第 4 节运行文件夹的 `meshes/` 一致（待项目负责人确认）。网格、四面体网格、landmark 蒙皮权重都是被引用的文件，不内嵌（04 第 5.1 节）。
 - **还没有粘连数据**：Ziva 的粘连数据还没到（T-03、[12](12-lab-export-checklist.md) 第 2 项），所以生成的场景里软组织没有任何连接。这是"提醒"，不是错误，并且要写进检查报告的"缺了什么"。
 - **换算只有一份实现**："场景坐标 → 毫米、Z 轴朝上"（乘换算系数，再按 `(x, y, z) → (x, -z, y)` 转换）只在 `src/asrp_core/asset/` 里写一份。`tools/build_tetmesh.py` 和测试里现有的重复实现，由 T-02 改成调用它。
 - **验收**：

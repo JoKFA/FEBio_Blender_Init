@@ -191,11 +191,13 @@ def import_asset(export: Path, out: Path, tet_mesh: Path,
         f"still in scene units, Maya order (T-09 reads them)",
     )
 
-    tet_origin = tet_mesh.as_posix()
+    # Folder and file names plus hashes, not the paths as typed: the same export imported on
+    # another machine must give the same scene.json.
+    tet_origin = f"{tet_mesh.name} (content sha256 {tet_meta.get('content_sha256', '')})"
     model = scene.Scene(
         origin={
             "asset": report_json.get("scene", ""),
-            "export": f"{export.as_posix()}: tools/maya_export.py, Maya {report_json.get('maya', '?')}, "
+            "export": f"{export.resolve().name}: tools/maya_export.py, Maya {report_json.get('maya', '?')}, "
                       f"mesh_report.json sha256 {_sha256(export / 'mesh_report.json')}",
             "tool": f"asrp import-asset {__version__}",
             "notes": f"OBJ files are scene coordinates (ADR-18): scaled and turned, no world matrix applied. "

@@ -52,7 +52,7 @@ asrp/
 │
 ├─ src/
 │  ├─ asrp_core/              核心程序，不能 import bpy
-│  │  ├─ cli.py               命令行 asrp（doctor、check）
+│  │  ├─ cli.py               命令行 asrp（doctor、check、import-asset）
 │  │  ├─ doctor.py            找 FEBio、Blender，查路径
 │  │  ├─ febio.py             调用 FEBio、读日志
 │  │  ├─ playback.py          回放包（表面网格 + PC2 点缓存）
