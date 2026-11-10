@@ -1,7 +1,11 @@
 import itertools
+import hashlib
 import json
 import math
+import subprocess
+import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
@@ -266,9 +270,60 @@ def test_outside_distances():
     assert d == pytest.approx([0.0, 1.0, 0.0])
 
 
+def test_check_fails_a_sliver_on_the_dihedral_floor_only():
+    # Apex 0.01 mm above the middle of a unit right triangle: positive volume (0.0017 mm3, above
+    # the floor) but a dihedral angle of about 1 degree.
+    sliver = TetMesh(np.array([(0, 0, 0), (1, 0, 0), (0, 1, 0), (0.5, 0.5, 0.01)]), np.array([(0, 1, 2, 3)]))
+    assert signed_volumes(sliver.nodes, sliver.tets)[0] > tetmesh.MIN_TET_VOLUME_MM3
+    failures = tetmesh.check(sliver, *surface_of(sliver)).failures
+    assert len(failures) == 1 and "dihedral" in failures[0]
+
+
+def test_check_fails_a_tiny_tet_on_the_volume_floor_only():
+    tiny = TetMesh(CORNER.nodes * 0.1, CORNER.tets)  # right shape, 0.00017 mm3
+    assert min_dihedral_deg(tiny.nodes, tiny.tets)[0] > tetmesh.MIN_DIHEDRAL_DEG
+    failures = tetmesh.check(tiny, *surface_of(tiny)).failures
+    assert len(failures) == 1 and "volume" in failures[0]
+
+
+def test_check_passes_a_well_shaped_tet_on_both_floors():
+    assert tetmesh.check(CORNER, *surface_of(CORNER)).failures == []
+
+
+def test_the_pocket_count_does_not_depend_on_the_slice_step():
+    nodes, faces = crossed_surface()
+    counts = [tetmesh.separation(nodes, faces, tetmesh.slice_positions(nodes, step)).pockets for step in (0.25, 0.125)]
+    assert counts == [1, 1]
+
+
+def test_the_real_lips_pocket_count_does_not_depend_on_the_slice_step():
+    if not LIPS.is_file():
+        pytest.skip("lab export missing")
+    from build_tetmesh import read_lips_mm
+
+    nodes, faces = read_lips_mm(LIPS)
+    counts = [tetmesh.separation(nodes, faces, tetmesh.slice_positions(nodes, step)).pockets for step in (0.25, 0.125)]
+    assert counts[0] == counts[1] == 2  # one past each mouth corner (docs/05 pit 13)
+
+
+def test_a_surface_with_no_lips_apart_reports_the_separation_check_as_not_applicable():
+    closed = lips_model(weld=set(range(12)))  # slit filled everywhere: never two pieces in a slice
+    report = tetmesh.check(closed, *surface_of(closed))
+    assert report.separation_applicable is False and report.separation_ratio is None
+    assert any("not applicable" in n for n in report.notes)
+    assert report.failures == []  # not a failure, but not a silent pass either
+    applicable = tetmesh.check(LIPS_SURFACE, *surface_of(LIPS_SURFACE))
+    assert applicable.separation_applicable is True and applicable.notes == []
+
+
 # --- on disk ----------------------------------------------------------------------------------
 
-META = {"units": "mm", "source": {"path": "x.obj", "sha256": "0" * 64}}
+META = {
+    "units": "mm",
+    "up_axis": "Z",
+    "mm_per_scene_unit": 0.962,
+    "source": {"path": "x.obj", "sha256": "0" * 64},
+}
 
 
 def test_save_and_load_round_trip_bit_for_bit(tmp_path):
@@ -299,6 +354,50 @@ def test_load_refuses_another_format_version(tmp_path):
         tetmesh.load(path)
 
 
+@pytest.mark.parametrize(
+    "field", ["units", "up_axis", "mm_per_scene_unit", "source", "content_sha256", "nodes", "tets"]
+)
+def test_load_names_a_missing_field_instead_of_raising_key_error(tmp_path, field):
+    path = tmp_path / "m.json"
+    tetmesh.save(path, LIPS_SURFACE, META)
+    data = json.loads(path.read_text())
+    del data[field]
+    path.write_text(json.dumps(data))
+    with pytest.raises(ValueError, match=f"missing {field}"):
+        tetmesh.load(path)
+
+
+def test_load_names_a_source_without_a_hash(tmp_path):
+    path = tmp_path / "m.json"
+    tetmesh.save(path, LIPS_SURFACE, {**META, "source": {"path": "x.obj"}})
+    with pytest.raises(ValueError, match="source.sha256"):
+        tetmesh.load(path)
+
+
+def test_load_with_a_surface_also_checks_the_source(tmp_path):
+    surface = tmp_path / "s.obj"
+    surface.write_text("v 0 0 0\n")
+    path = tmp_path / "m.json"
+    tetmesh.save(path, LIPS_SURFACE, {**META, "source": {"sha256": tetmesh.file_sha256(surface)}})
+    tetmesh.load(path, surface=surface)  # the matching surface is fine
+    surface.write_text("v 0 0 1\n")
+    with pytest.raises(ValueError, match="not the surface"):
+        tetmesh.load(path, surface=surface)
+    tetmesh.load(path)  # without a surface nothing is compared
+
+
+def test_importing_and_loading_does_not_import_ftetwild():
+    code = (
+        "import sys\n"
+        "from asrp_core import tetmesh\n"
+        f"tetmesh.load({str(SAVED)!r})\n"
+        "assert 'pytetwild' not in sys.modules, 'pytetwild was imported'\n"
+        "print('ok')\n"
+    )
+    done = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True)
+    assert done.returncode == 0 and done.stdout.strip() == "ok", done.stderr
+
+
 def test_check_source_notices_a_new_surface(tmp_path):
     surface = tmp_path / "s.obj"
     surface.write_text("v 0 0 0\n")
@@ -312,19 +411,55 @@ def test_check_source_notices_a_new_surface(tmp_path):
 # --- the committed lip mesh -------------------------------------------------------------------
 
 
+def test_saved_lip_mesh_has_the_numbers_it_was_accepted_with():
+    """Pinned here, not read back from the file's own metadata: if the file is regenerated, these
+    fail and someone has to look (ADR-20)."""
+    mesh, meta = tetmesh.load(SAVED)
+    assert len(mesh.nodes) == 6747 and len(mesh.tets) == 26721
+    assert meta["mm_per_scene_unit"] == 0.962
+    assert tetmesh.topology(mesh).boundary_genus == 3
+    xs = tetmesh.slice_positions(mesh.nodes)
+    assert tetmesh.separation(mesh.nodes, mesh.tets, xs).width_mm == pytest.approx(51.25, abs=0.01)
+    q = quality(mesh)
+    assert q.min_dihedral_deg > tetmesh.MIN_DIHEDRAL_DEG and q.min_tet_volume_mm3 > tetmesh.MIN_TET_VOLUME_MM3
+
+
 def test_saved_lip_mesh_is_intact_and_passes_the_checks():
     """data/tetmesh/lips.json is committed (ADR-19); everything downstream reads it."""
     mesh, meta = tetmesh.load(SAVED)
-    assert meta["units"] == "mm" and meta["up_axis"] == "Z" and meta["mm_per_scene_unit"] == 0.962
+    assert meta["units"] == "mm" and meta["up_axis"] == "Z"
     if not LIPS.is_file():
         pytest.skip("lab export missing: the saved mesh is intact, but cannot be checked against the surface")
-    tetmesh.check_source(meta, LIPS)
+    # The OBJ's own hash, computed here, not by the module under test.
+    assert meta["source"]["sha256"] == hashlib.sha256(LIPS.read_bytes()).hexdigest()
+    tetmesh.load(SAVED, surface=LIPS)
     from build_tetmesh import read_lips_mm
 
-    report = tetmesh.check(mesh, *read_lips_mm(LIPS))
-    assert report.failures == []
-    assert report.quality.nodes == meta["checks"]["quality"]["nodes"] > 0
-    assert report.separation.width_mm == pytest.approx(meta["checks"]["separation"]["width_mm"])
+    report = tetmesh.check(mesh, *read_lips_mm(LIPS, mm_per_scene_unit=0.962))
+    assert report.failures == [] and report.notes == []
+    assert report.topology.boundary_genus == report.expected_genus == 3
+    assert report.surface_separation.width_mm == pytest.approx(51.75, abs=0.01)
+    assert report.separation.width_mm == pytest.approx(51.25, abs=0.01)
+
+
+def test_the_smoke_test_wants_a_sag_of_the_right_size():
+    from s2_lips_febio import FPS, SMOKE_FRAMES, passed
+
+    def result(sag, **over):
+        r = {
+            "result": SimpleNamespace(returncode=0, normal_termination=True),
+            "frames": SMOKE_FRAMES,
+            "times": [(k + 1) / FPS for k in range(SMOKE_FRAMES)],
+            "fixed_move": 0.0,
+            "mean_sag": sag,
+        }
+        return {**r, **over}
+
+    assert passed(result(-4.26))
+    assert not passed(result(+3.75))  # gravity the wrong way
+    assert not passed(result(-0.05))  # barely moved
+    assert not passed(result(-25.0))  # collapsed, or the wrong units
+    assert not passed(result(-4.26, fixed_move=0.5))
 
 
 def test_saved_lip_mesh_settles_under_gravity_in_real_febio(tmp_path):
@@ -340,5 +475,5 @@ def test_saved_lip_mesh_settles_under_gravity_in_real_febio(tmp_path):
     assert r["result"].normal_termination, f"FEBio failed, see {r['result'].log}"
     assert r["frames"] == SMOKE_FRAMES
     assert r["fixed"] > 0 and r["fixed_move"] < 1e-6
-    assert r["mean_sag"] < -0.01  # down: the gravity sign is right (docs/05 pit 1)
+    assert -10 < r["mean_sag"] < -0.1  # down, by an amount docs/07 section 3 allows (pit 1: the sign)
     assert passed(r)

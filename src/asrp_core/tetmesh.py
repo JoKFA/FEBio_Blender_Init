@@ -21,7 +21,6 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
-import pytetwild
 
 FORMAT = "asrp-tetmesh"
 FORMAT_VERSION = 1
@@ -63,6 +62,10 @@ def tetrahedralize(
         raise ValueError("expected vertices as (n, 3) and triangles as (m, 3); split quads first")
     if edge_mm <= 0 or envelope_mm <= 0:
         raise ValueError(f"edge length and envelope must be positive, got {edge_mm} and {envelope_mm} mm")
+    # Imported here, not at the top: reading a saved mesh (`load`) must not pull in fTetWild, and
+    # only tools/build_tetmesh.py and the spikes ever generate one.
+    import pytetwild
+
     # pytetwild takes the envelope relative to the bounding-box diagonal.
     diagonal = float(np.linalg.norm(vertices.max(axis=0) - vertices.min(axis=0)))
     # fTetWild writes __tracked_surface.stl into the working directory, quiet or not; keep it out
@@ -339,6 +342,8 @@ def separation(points, cells, xs) -> Separation:
     """
     xs = np.asarray(xs, dtype=float)
     cells = np.asarray(cells)
+    if len(xs) == 0:  # a mesh smaller than one slice step has nothing to slice
+        return Separation(0.0, 0.0, 0.0, 0)
     if cells.shape[1] == 3:
         state = np.array([surface_slice_state(points, cells, x) for x in xs])
     else:
@@ -466,17 +471,23 @@ class Report:
     expected_genus: int  # surface genus plus pockets: what the solid the surface encloses has
     surface_separation: Separation
     separation: Separation
-    separation_ratio: float  # tet width / surface width
+    separation_applicable: bool  # False when the surface has no slice with the lips apart
+    separation_ratio: float | None  # tet width / surface width; None when not applicable
     asymmetry_mm: float  # |left loss - right loss| against the surface's own separated run
     outside_fraction: float  # display vertices outside every tet
     outside_p95_mm: float  # 95th percentile of how far outside, over all display vertices
     outside_max_mm: float
     failures: list[str]
+    notes: list[str]  # checks that could not be made; they do not fail the mesh but must be read
 
 
 # Upper and lower lip must stay apart over at least this share of the width where the surface
 # itself has them apart (T-04).
 MIN_SEPARATION_RATIO = 0.95
+# Hard floors on tet quality (the committed lip mesh has 10.4 degrees and 0.0043 mm3). Below them
+# FEBio's element Jacobians get so small that a few mm of motion turns a tet inside out.
+MIN_DIHEDRAL_DEG = 5.0
+MIN_TET_VOLUME_MM3 = 0.001
 
 
 def check(mesh: TetMesh, vertices_mm, triangles, step_mm: float = 0.25) -> Report:
@@ -494,13 +505,21 @@ def check(mesh: TetMesh, vertices_mm, triangles, step_mm: float = 0.25) -> Repor
     # surface, counted as a surface, does not. The lips have one past each mouth corner's
     # crossing (docs/05 pit 9, docs/13 E-03). A faithful tet mesh keeps them.
     expected_genus = surface_genus + want.pockets
-    ratio = got.width_mm / want.width_mm if want.width_mm > 0 else 1.0
-    asymmetry = abs((got.start_mm - want.start_mm) - (want.end_mm - got.end_mm))
+    # A surface with no slice that has the lips apart (e.g. a mouth closed all along) gives
+    # nothing to compare the tets with. Say so; do not let it pass as a perfect match.
+    applicable = want.width_mm > 0
+    ratio = got.width_mm / want.width_mm if applicable else None
+    asymmetry = abs((got.start_mm - want.start_mm) - (want.end_mm - got.end_mm)) if applicable else 0.0
     out = outside_distances(mesh, vertices)
 
     failures = []
+    notes = []
     if (signed_volumes(mesh.nodes, mesh.tets) <= 0).any():
         failures.append("some tets are inverted or flat")
+    if q.min_dihedral_deg <= MIN_DIHEDRAL_DEG:
+        failures.append(f"a tet has a dihedral angle of {q.min_dihedral_deg:.2f} degrees (need more than {MIN_DIHEDRAL_DEG:g})")
+    if q.min_tet_volume_mm3 <= MIN_TET_VOLUME_MM3:
+        failures.append(f"a tet has a volume of {q.min_tet_volume_mm3:.5f} mm3 (need more than {MIN_TET_VOLUME_MM3:g})")
     if topo.components != 1:
         failures.append(f"the solid is in {topo.components} pieces, expected 1")
     if topo.nonmanifold_edges or topo.nonmanifold_vertices:
@@ -512,16 +531,21 @@ def check(mesh: TetMesh, vertices_mm, triangles, step_mm: float = 0.25) -> Repor
             f"boundary genus {topo.boundary_genus}, expected {expected_genus} (the surface's {surface_genus} "
             f"plus {expected_genus - surface_genus} pockets where the slit opens again)"
         )
-    if ratio < MIN_SEPARATION_RATIO:
+    if not applicable:
+        notes.append(
+            "separation check not applicable: the surface has no slice where upper and lower lip "
+            "are apart, so the mesh could not be compared with it"
+        )
+    elif ratio < MIN_SEPARATION_RATIO:
         failures.append(
             f"upper and lower lip apart over {got.width_mm:.2f} mm, {ratio:.0%} of the surface's "
             f"{want.width_mm:.2f} mm (need {MIN_SEPARATION_RATIO:.0%})"
         )
-    if asymmetry > q.median_edge_mm:
+    if applicable and asymmetry > q.median_edge_mm:
         failures.append(f"separation lost {asymmetry:.2f} mm more on one side than the other")
     return Report(
-        q, topo, surface_genus, expected_genus, want, got, ratio, asymmetry,
-        float((out > 0).mean()), float(np.percentile(out, 95)), float(out.max()), failures,
+        q, topo, surface_genus, expected_genus, want, got, applicable, ratio, asymmetry,
+        float((out > 0).mean()), float(np.percentile(out, 95)), float(out.max()), failures, notes,
     )  # fmt: skip
 
 
@@ -564,13 +588,30 @@ def save(path: Path, mesh: TetMesh, meta: dict) -> str:
     return digest
 
 
-def load(path: Path) -> tuple[TetMesh, dict]:
-    """Read a saved mesh and check it is the one that was written. Returns (mesh, meta)."""
+# What the readers of a saved mesh rely on; `load` insists on it so a hand-made or truncated file
+# fails with a sentence instead of a KeyError later.
+REQUIRED_FIELDS = ("units", "up_axis", "mm_per_scene_unit", "source", "content_sha256", "nodes", "tets")
+
+
+def load(path: Path, surface: Path | None = None) -> tuple[TetMesh, dict]:
+    """Read a saved mesh and check it is the one that was written. Returns (mesh, meta).
+
+    With `surface` (the OBJ the mesh was made from) it also runs `check_source`, so one call tells
+    the caller that both the mesh and its source are as they were.
+    """
     data = json.loads(Path(path).read_text(encoding="utf-8"))
     if data.get("format") != FORMAT or data.get("format_version") != FORMAT_VERSION:
         raise ValueError(
             f"{path} is not an {FORMAT} v{FORMAT_VERSION} file (format {data.get('format')!r}, "
             f"version {data.get('format_version')!r}); regenerate it with tools/build_tetmesh.py"
+        )
+    missing = [k for k in REQUIRED_FIELDS if k not in data]
+    if "source" in data and not (isinstance(data["source"], dict) and "sha256" in data["source"]):
+        missing.append("source.sha256")
+    if missing:
+        raise ValueError(
+            f"{path} is missing {', '.join(missing)}, so it cannot be trusted; regenerate it with "
+            "tools/build_tetmesh.py"
         )
     nodes = np.array(data.pop("nodes"), dtype=np.float64).reshape(-1, 3)
     tets = np.array(data.pop("tets"), dtype=np.int64).reshape(-1, 4)
@@ -581,6 +622,8 @@ def load(path: Path) -> tuple[TetMesh, dict]:
             f"{data['content_sha256'][:12]}). Restore it from git or regenerate it with "
             "tools/build_tetmesh.py"
         )
+    if surface is not None:
+        check_source(data, surface)
     return TetMesh(nodes, tets), data
 
 

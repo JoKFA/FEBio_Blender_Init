@@ -220,14 +220,21 @@ def smoke(out: Path, saved: Path = SAVED) -> dict:
             "sag": sag, "stretch": float(max_stretch(mesh.nodes, frames[-1], mesh.tets).max()) if frames else math.nan}
 
 
+# Mean z change of the free nodes over the run, mm. The range is docs/07 section 3's gravity-sag
+# check (0.1 to 10 mm, down), so a sag of the wrong size fails the smoke test, not only the wrong
+# sign. It is a mean over frames of an undamped run, which oscillates frame to frame.
+SAG_RANGE_MM = (-10.0, -0.1)
+
+
 def passed(r: dict) -> bool:
-    """Normal termination, every frame there at its time, fixed nodes still, the rest sagging.
+    """Normal termination, every frame there at its time, fixed nodes still, the rest sagging by
+    an amount in SAG_RANGE_MM.
 
     With must points FEBio logs frames 1..N, not the initial state."""
     times_ok = r["frames"] == SMOKE_FRAMES and all(
         abs(t - (k + 1) / FPS) < 1e-6 for k, t in enumerate(r["times"]))
     return (r["result"].returncode == 0 and r["result"].normal_termination and times_ok
-            and r["fixed_move"] < 1e-6 and r["mean_sag"] < -0.01)
+            and r["fixed_move"] < 1e-6 and SAG_RANGE_MM[0] < r["mean_sag"] < SAG_RANGE_MM[1])
 
 
 def first_failure(log_text: str):
