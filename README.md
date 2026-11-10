@@ -29,6 +29,13 @@ A scene is `scene.json` (what to solve) plus `trajectory.json` (how the drivers 
 uv run asrp check tests/fixtures/s1/scene.json tests/fixtures/s1/trajectory.json
 ```
 
+Turn the lab export into a scene (into an empty folder; the report lands next to scene.json):
+
+```bash
+uv run asrp import-asset data/lab_export runs/lab_scene
+uv run asrp check runs/lab_scene/scene.json
+```
+
 ## Checks (definition of done)
 
 ```bash

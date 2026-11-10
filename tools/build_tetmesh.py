@@ -22,6 +22,7 @@ from pathlib import Path
 import numpy as np
 
 from asrp_core import tetmesh
+from asrp_core.asset import coords
 
 REPO = Path(__file__).resolve().parents[1]
 LIPS = REPO / "data" / "lab_export" / "mesh_middleres_OrbicularisOris.obj"
@@ -41,18 +42,10 @@ ATTEMPTS = 6
 
 
 def read_lips_mm(path: Path = LIPS, mm_per_scene_unit: float = MM_PER_SCENE_UNIT):
-    """The lip OBJ in mm, Z up, triangles: Maya (x, y, z) -> (x, -z, y), the conversion T-02 will
-    own (docs/03 section 10). The OBJ is already in scene coordinates (ADR-18)."""
-    vertices, triangles = [], []
-    with path.open(encoding="ascii") as f:
-        for line in f:
-            if line.startswith("v "):
-                x, y, z = (float(c) * mm_per_scene_unit for c in line.split()[1:4])
-                vertices.append((x, -z, y))
-            elif line.startswith("f "):
-                face = [int(c.split("/")[0]) - 1 for c in line.split()[1:]]
-                triangles += [(face[0], face[i], face[i + 1]) for i in range(1, len(face) - 1)]
-    return np.array(vertices), np.array(triangles)
+    """The lip OBJ in mm, Z up, as triangles, through the project's one conversion
+    (asrp_core.asset.coords, docs/03 section 10). The OBJ is already in scene coordinates (ADR-18)."""
+    vertices, faces = coords.read_obj(path)
+    return coords.to_mm_zup(vertices, mm_per_scene_unit), coords.triangulate(faces)
 
 
 def build(
@@ -83,7 +76,7 @@ def build(
     meta = {
         "units": "mm",
         "up_axis": "Z",
-        "axes_from_maya": "(x, y, z) -> (x, -z, y)",
+        "axes_from_maya": coords.AXES,
         "mm_per_scene_unit": mm_per_scene_unit,
         "source": {"path": LIPS.relative_to(REPO).as_posix(), "sha256": tetmesh.file_sha256(LIPS)},
         "params": {"tool": "fTetWild via pytetwild", "edge_mm": edge_mm, "envelope_mm": envelope_mm,

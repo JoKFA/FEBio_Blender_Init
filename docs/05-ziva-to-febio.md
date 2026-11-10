@@ -81,7 +81,7 @@ Ziva 的粘连是"软"的：被粘的顶点会被一个像弹簧一样的力拉�
 | 坑 3 | **FEBio 这类 C++ 程序在 Windows 上可能打不开中文路径** | 仓库和运行文件夹放在纯英文路径下；`asrp doctor` 会检查 | 预防性措施 |
 | 坑 4 | **FEBio 会读取电脑上的个人配置文件**，可能导致不同电脑结果不同 | 一律加 `-noconfig` 参数运行 | 已写进 `src/asrp_core/febio.py` |
 | 坑 5 | **Maya 场景里网格的"面"读不出来**（顶点坐标能读） | 产品用的网格一律从 Maya 导出的开放格式读入（`tools/maya_export.py`，ADR-18）；`.mb` 里的坐标只用来核对 | 见 [03](03-asset.md) 第 8 节 |
-| 坑 6 | **Maya 默认 Y 轴朝上，Blender 和我们的计算用 Z 轴朝上** | 导入时统一转换一次，写进检查报告 | 待导入时验证（T-02） |
+| 坑 6 | **Maya 默认 Y 轴朝上，Blender 和我们的计算用 Z 轴朝上** | 导入时统一转换一次，写进检查报告；换算只在 `src/asrp_core/asset/coords.py` 里有一份 | `tests/test_asset.py` 的 `test_the_conversion_is_a_rotation_not_a_mirror`、`test_every_vertex_is_scene_times_the_factor_with_the_axes_turned`（T-02） |
 | 坑 7 | **网格带着自己的变换**：骨骼和嘴唇都被放大 2.54 倍并旋转过，场景里其他物体的放大倍数还不一样。直接用网格坐标，尺寸和方向都会错 | `tools/maya_export.py` 导出时已经套好变换，OBJ 是场景坐标。**导入时不能再套一次**，只换单位、转坐标轴（[03](03-asset.md) 第 10 节，ADR-18） | `tools/asset_report.py` 打印的变换；下颌场景尺寸 155.92 与论文吻合 |
 | 坑 8 | **FEBio 的日志里有时间戳**，同样的输入跑两次，日志文件也不一样 | 判断"结果是否相同"时，比较解析出的坐标，不比较日志文件 | 实测见 11 的 A-24 |
 | 坑 9 | **嘴唇网格自己穿过自己**：266 个三角形（共 20,480 个），大部分在两侧嘴角内侧，上唇和下唇的内侧面在那里折叠、互相压进去；正中附近还有几处小褶皱。TetGen（包括 FEBio Studio 里的）遇到会直接停止 | 用 fTetWild：它取表面围出的实心区域，互相穿过的那段当作一块（ADR-20）。按 x 切片看：上下唇在 \|x\| 26.0–29.25 mm 互相穿过，29.4–30.9 mm 又分开一小段（坑 13，[13](13-explanations.md) E-03） | FEBio Studio 报 "A self-intersection was detected"；`pymeshlab` 的自相交检测数出 266 个面（T-04）；`tetmesh.surface_slice_state` 逐片判断穿过；`tests/test_tetmesh.py` 的 `test_crossing_pieces_are_not_apart`、`test_saved_lip_mesh_is_intact_and_passes_the_checks` |

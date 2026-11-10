@@ -47,7 +47,7 @@
 | 模块（建议的代码位置） | 负责 | 不负责 | 状态 |
 |---|---|---|---|
 | 环境检查 `asrp_core/doctor.py` | 找到 FEBio、Blender，检查路径和 Python 版本 | — | ✅ 已有 |
-| 资产导入 `asrp_core/asset/` | 把从 Maya 导出的网格和 Ziva 设置读进来，换算单位和坐标轴，生成场景描述 | 解析 .mb 的网格几何 | 待开发 |
+| 资产导入 `asrp_core/asset/` | 把从 Maya 导出的网格和 Ziva 设置读进来，换算单位和坐标轴（全项目唯一的一份换算，`asset/coords.py`），生成场景描述 | 解析 .mb 的网格几何 | ✅ 已有（T-02）；Ziva 属性清单还没到，读它的部分没做 |
 | 场景描述 `asrp_core/scene.py` | 定义场景描述文件的格式，提供校验（缺什么、单位对不对） | 求解 | ✅ 已有（T-05） |
 | 运动 `asrp_core/trajectory.py` | 运动文件的格式和读写、铰链运动生成（代用运动） | 转换实验室轨迹（T-10 在同一个文件里加） | ✅ 最小格式已有（T-05） |
 | 四面体化 `asrp_core/tetmesh.py` | 把嘴唇的表面网格变成计算用的四面体网格，检查质量（连通、流形、亏格、上下唇分开、左右对称），写成 `data/tetmesh/` 下的文件，读回时校验哈希（为什么需要，见 [13](13-explanations.md) E-02） | 嵌入显示网格；运行时重新生成网格（只由 `tools/build_tetmesh.py` 显式生成，ADR-20） | ✅ 已有（T-04，ADR-20） |
@@ -129,7 +129,7 @@ FEBio 是第一个实现。Ziva 不在我们的软件里运行，它的结果由
 | 命令 | 作用 | 对应需求 |
 |---|---|---|
 | `asrp doctor` | 检查环境 | — （已有） |
-| `asrp import-asset <导出文件夹>` | 导入资产，生成场景描述和检查报告 | R-01 |
+| `asrp import-asset <导出文件夹> <输出文件夹>` | 导入资产，生成场景描述和检查报告 | R-01（已有，T-02） |
 | `asrp check <scene.json> [<trajectory.json>]` | 检查场景设置；带上运动时，再查运动和场景对不对得上。有错误才失败，提醒照样通过 | R-02（已有，T-05） |
 | `asrp run <scene.json> <trajectory.json>` | 运行一次，生成运行文件夹 | R-03、R-06 |
 | `asrp compare <运行文件夹> <Ziva 参考>` | 和 Ziva 对比 | R-05 |
@@ -178,6 +178,7 @@ Blender 插件的每个按钮都对应其中一条命令。界面能做的事，
 | `src/asrp_core/febio.py` | FEBio 适配的"调用"和"读结果"部分 |
 | `src/asrp_core/playback.py` | 回放包 |
 | `src/asrp_core/scene.py`、`trajectory.py` | 场景描述、运动（T-05） |
+| `src/asrp_core/asset/` | 资产导入（T-02） |
 | `blender_addon/asrp_blender/__init__.py` | 插件：环境检查、加载结果 |
 | `spikes/s1_dynamic_jaw.py` | 试验代码，验证 FEBio 动力学；**不是产品代码**，不要在它上面直接扩展 |
 | `tools/mb_inventory.py`、`tools/asset_report.py` | 资产分析工具；**不是产品代码** |

@@ -181,7 +181,7 @@ uv run python tools/asset_report.py data/asset_inventory.json
 
 **两个文件都要留着**：非 Ziva 版没有粘连信息，T-03 算"嘴唇哪些区域挂到骨头上"还要读完整版。
 
-导出和核对的命令见 [12](12-lab-export-checklist.md) 第一部分。实测的网格情况：
+导出和核对的命令见 [12](12-lab-export-checklist.md) 第一部分。实测的网格情况（尺寸也由 `uv run asrp import-asset data/lab_export <输出文件夹>` 打印）：
 
 | 网格 | 顶点 | 面 | 尺寸 mm（Blender 的 x / y / z，按 0.962 mm/单位） | 封闭吗 | 块数 |
 |---|---|---|---|---|---|

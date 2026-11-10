@@ -58,8 +58,9 @@ asrp/
 │  │  ├─ playback.py          回放包（表面网格 + PC2 点缓存）
 │  │  ├─ tetmesh.py           四面体网格的检查和读写（ADR-20）
 │  │  ├─ scene.py             场景描述 scene.json 的格式和校验（asrp check）
-│  │  └─ trajectory.py        运动 trajectory.json 的格式、铰链运动生成
-│                             待开发：asset/、run.py、skinning.py、compare.py……
+│  │  ├─ trajectory.py        运动 trajectory.json 的格式、铰链运动生成
+│  │  └─ asset/               资产导入（asrp import-asset）；coords.py 是唯一的一份坐标换算
+│                             待开发：run.py、skinning.py、compare.py……
 │
 ├─ blender_addon/asrp_blender/  Blender 插件，只管界面，不用第三方库
 ├─ tests/                     自动测试（pytest）

@@ -24,6 +24,7 @@ from pathlib import Path
 import numpy as np
 
 from asrp_core import febio, tetmesh
+from asrp_core.asset import coords
 from asrp_core.doctor import febio_exe
 
 REPO = Path(__file__).resolve().parents[1]
@@ -43,9 +44,9 @@ JAW_DENSITY = 1.9e-9
 
 
 def hinge_mm(mm_per_scene_unit: float) -> tuple[float, float, float]:
-    """jaw01's position in our frame: scene units -> mm, Maya (x, y, z) -> (x, -z, y)."""
-    x, y, z = json.loads(JOINTS.read_text())["jaw01"]["world_position"]
-    return (x * mm_per_scene_unit, -z * mm_per_scene_unit, y * mm_per_scene_unit)
+    """jaw01's position in our frame (mm, Z up), through asrp_core.asset.coords."""
+    position = json.loads(JOINTS.read_text())["jaw01"]["world_position"]
+    return tuple(coords.to_mm_zup([position], mm_per_scene_unit)[0].tolist())
 
 
 def slit_height(vertices, triangles) -> float:
