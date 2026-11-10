@@ -122,7 +122,7 @@ M0 基础 ✅ ──► M1 原料就绪 ──► M2 物理段 ──► 【关�
 ---
 
 ### T-05 场景描述格式定稿和校验器 ✅
-- **结果**（2026-11-10）：格式 `asrp-scene/1`、`asrp-trajectory/1` 的字段写在 `src/asrp_core/scene.py`、`src/asrp_core/trajectory.py` 开头的格式说明里；命令 `asrp check <scene.json> [<trajectory.json>]`。S1 写成的示例在 `tests/fixtures/s1/`，由 `uv run python tests/fixtures/s1/build.py` 生成（测试每次重建并逐字节比较）。`uv run asrp check tests/fixtures/s1/scene.json tests/fixtures/s1/trajectory.json` 输出 `check PASSED: 0 errors, 0 warnings`。实现时定下、卡里没写死的两点："帧数和场景不一致"按两条查，每个驱动源的变换个数等于 `frames`、`fps` 等于场景的求解帧率（场景本身不记帧数）；粘连的类型是 `hard`（计算点并入目标，没有刚度）或 `spring`（刚度 × 权重），对应 05 第 3 节的两种做法。
+- **结果**（2026-11-10）：格式 `asrp-scene/1`、`asrp-trajectory/1` 的字段写在 `src/asrp_core/scene.py`、`src/asrp_core/trajectory.py` 开头的格式说明里；命令 `asrp check <scene.json> [<trajectory.json>]`。S1 写成的示例在 `tests/fixtures/s1/`，由 `uv run python tests/fixtures/s1/build.py` 生成（测试每次重建并逐字节比较）。`uv run asrp check tests/fixtures/s1/scene.json tests/fixtures/s1/trajectory.json` 输出 `check PASSED: 0 errors, 0 warnings`。实现时定下、卡里没写死的两点（"帧数不一致"怎么查、粘连的两种类型）写在 04 第 5.1 节，待项目负责人确认。
 - **目标**：把 [04](04-architecture.md) 第 5.1 节的场景描述写成正式格式，并提供 `asrp check`。
 - **为什么**：几乎所有后续任务（T-02、T-06、T-08）都通过这个文件交接，要先定下来。
 - **按照**：04 第 5.1 节；单位规则 ADR-04。
@@ -245,7 +245,7 @@ M0 基础 ✅ ──► M1 原料就绪 ──► M2 物理段 ──► 【关�
 ---
 
 ### T-10 运动轨迹转换和 landmark 部分定稿 🔴（等 D2）
-- **目标**：把实验室控制器输出的轨迹数据转换成 `trajectory.json`，并把 landmark 部分的格式定稿。最小格式（`"asrp-trajectory/1"`、骨头每帧 4×4 刚体变换）和铰链运动生成函数已经由 T-05 做好，这张卡只在它上面加转换和 `landmarks` 一节。`tools/ziva_machine_export.py` 会导出 `motion_<运动名>.json`，也就是 Maya 里每帧的关节矩阵，优先用它。
+- **目标**：把实验室控制器输出的轨迹数据转换成 `trajectory.json`，并把 landmark 部分的格式定稿。最小格式（`"asrp-trajectory/1"`、每个驱动源每帧 4×4 刚体变换）和铰链运动生成函数已经由 T-05 做好，这张卡只在它上面加转换和 `landmarks` 一节。`tools/ziva_machine_export.py` 会导出 `motion_<运动名>.json`，也就是 Maya 里每帧的关节矩阵，优先用它。
 - **格式要求**（ADR-21）：每个驱动源每帧一个 4×4 刚体变换（毫米、Z 轴朝上），包含平移和旋转；不只存关节角度。甩头（整个颅骨平移）和下颌平移都要能表达。
 - **验收**：转换后每个驱动源的刚体变换和 landmark 位置，和实验室在 Maya 里看到的一致（抽查至少 3 帧、5 个 landmark）；驱动源如果带铰链说明（比如 `jaw01`），检查它的变换和铰链的转动一致（误差小于 0.001 mm）；有一条含平移的运动（甩头或下颌平移）能完整读入。
 - **依赖**：T-05（格式）、D2。
