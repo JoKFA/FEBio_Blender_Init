@@ -24,7 +24,7 @@ from pathlib import Path
 
 import numpy as np
 
-from asrp_core import __version__, scene
+from asrp_core import __version__, scene, tetmesh
 from asrp_core.asset import coords
 
 DEFAULT_MM_PER_SCENE_UNIT = 0.962  # paper appendix V, same as the lab controller (ADR-31); still a setting
@@ -107,6 +107,15 @@ def import_asset(export: Path, out: Path, tet_mesh: Path,
     if (out / "scene.json").exists():
         raise AssetError(f"{out} already holds a scene.json; import into an empty or new folder")
     _need(tet_mesh)
+    # Through the shared loader, and before anything is written: a damaged or foreign file is
+    # then reported the same way as everywhere else, and no half-made output folder is left.
+    try:
+        _, tet_meta = tetmesh.load(tet_mesh)
+    except ValueError as e:
+        # load() names the file in its own messages; a JSON syntax error does not.
+        raise AssetError(str(e) if str(tet_mesh) in str(e) else
+                         f"{tet_mesh} is not a readable tet mesh file ({e}); restore it from git or "
+                         "regenerate it with tools/build_tetmesh.py") from e
     (out / "meshes").mkdir(parents=True, exist_ok=True)
     (out / "landmarks").mkdir(parents=True, exist_ok=True)
     mm_note = ("paper appendix V's 0.962, also the lab controller's conversion (ADR-31)"
@@ -145,7 +154,6 @@ def import_asset(export: Path, out: Path, tet_mesh: Path,
 
     lips_mesh, lips_source = convert("lips", LIPS, "soft tissue")
     shutil.copyfile(tet_mesh, out / "meshes" / "lips_tet.json")
-    tet_meta = json.loads((out / "meshes" / "lips_tet.json").read_text(encoding="utf-8"))
     no_attribute_list = "placeholder: the Ziva attribute list has not arrived (docs/12 item 2, Q4)"
     tissue = scene.SoftTissue(
         "lips", lips_mesh, lips_source,

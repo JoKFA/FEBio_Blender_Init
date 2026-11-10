@@ -165,6 +165,27 @@ def test_the_factor_is_a_setting_and_a_tet_mesh_for_another_factor_is_refused(tm
 
 
 @needs_export
+@pytest.mark.parametrize("text", ["[]", "null", "not json at all"])
+def test_a_tet_mesh_file_that_cannot_be_read_is_refused_before_anything_is_written(tmp_path, text):
+    bad = tmp_path / "lips.json"
+    bad.write_text(text)
+    out = tmp_path / "lab"
+    with pytest.raises(lab.AssetError):
+        lab.import_asset(EXPORT, out, bad)
+    assert not out.exists()
+
+
+@needs_export
+def test_an_edited_tet_mesh_is_refused_with_how_to_restore_it(tmp_path):
+    edited = tmp_path / "lips.json"
+    data = json.loads(TET.read_text())
+    data["nodes"][0][0] += 0.5
+    edited.write_text(json.dumps(data))
+    with pytest.raises(lab.AssetError, match="has been changed since it was written.*tools/build_tetmesh.py"):
+        lab.import_asset(EXPORT, tmp_path / "lab", edited)
+
+
+@needs_export
 def test_obj_files_not_in_scene_coordinates_are_refused(tmp_path):
     export = tmp_path / "export"
     export.mkdir()
