@@ -120,7 +120,8 @@ asrp/
 
 ## 10. 数据和安全
 
-- 实验室的原始场景文件（`assets/`）、论文、演示视频和运行结果（`runs/`）**永远不进 git**。`data/` 里的 `lab_export/`、`preview/`、`briefing/` 提交到私有仓库，其余不提交（ADR-19）。这些都不发到仓库以外的地方。
+- 实验室的原始场景文件（`assets/`）、论文、演示视频、实验室的控制器源码和运行结果（`runs/`）**永远不进 git**。`data/` 里的 `lab_export/`、`preview/`、`briefing/`、`tetmesh/` 提交到私有仓库，其余不提交（ADR-19）。这些都不发到仓库以外的地方。实验室源码只读，用 `git show` 查，不运行（ADR-28）。
+- **被哈希的文件按字节检出**：`data/` 和 `tests/fixtures/` 下的文件由 sha256 识别（`scene.json`、`data/tetmesh/lips.json` 和 S1 示例都记着哈希）。Git for Windows 默认 `core.autocrlf=true`，会在检出时改换行符，哈希就全对不上。仓库根目录的 `.gitattributes` 把这两个目录设成 `-text`，检出的字节等于仓库里的字节，不管各人怎么设。往这两个目录加新的文本文件时不用另外处理；要在别的目录放被哈希的文件，先把目录加进 `.gitattributes`。证明：用 `git clone --config core.autocrlf=true` 克隆，跑 `tests/test_scene.py`、`test_asset.py`、`test_tetmesh.py`、`test_trajectory.py`：没有 `.gitattributes` 时 14 个失败，有了以后全部通过（2026-11-10）。
 - 实验室的论文还在审稿，不对外引用其中的内容和图表。
 - FEBio 的安装包和程序文件不能放进仓库，也不能转发（许可规定）。每个人自己去官网下载。
 - FEBio 启动时会向犹他大学发送一个匿名编号，用于统计使用情况（许可协议里写明了）。除此之外，软件不联网。

@@ -45,6 +45,7 @@ asrp/
 ├─ pyproject.toml  uv.lock    Python 依赖（Python 3.13）
 ├─ .github/                   合并请求模板
 ├─ .claude/verify.json        自动检查的入口，和 tools/verify.py 相同
+├─ .gitattributes             data/、tests/fixtures/ 按字节检出，哈希在任何电脑上都对得上（08 第 10 节）
 │
 ├─ docs/                      设计文档（本目录），唯一依据
 │  ├─ 01 … 13、glossary.md    见上面的"全部文档"
@@ -71,7 +72,7 @@ asrp/
 ├─ tools/                     迁移、检查、渲染工具，不是产品代码
 │  ├─ verify.py               "完成"的定义：测试 + doctor + 插件 + 回放检查
 │  ├─ check_blender_addon.py  check_playback.py  render_playback.py
-│  ├─ mb_inventory.py  asset_report.py     不开 Maya 读 .mb，打印 03 里的数字
+│  ├─ mb_inventory.py  asset_report.py     不开 Maya 读 .mb，打印 03 里的数字（含粘连权重的读法）
 │  ├─ maya_export.py  check_lab_export.py  本机 Maya 导出网格、权重、关节并逐点核对
 │  ├─ blender_import_preview.py            导出结果进 Blender，渲染预览
 │  ├─ ziva_machine_export.py               在 Ziva 机器上跑一次（12 第二部分）
