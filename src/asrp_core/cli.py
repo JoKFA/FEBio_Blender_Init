@@ -86,6 +86,42 @@ def cmd_import_asset(args: argparse.Namespace) -> int:
     return 0 if result.check.ok else 1
 
 
+def cmd_run(args: argparse.Namespace) -> int:
+    from pathlib import Path
+
+    from asrp_core import run
+    from asrp_core.doctor import febio_exe
+
+    if args.scene or args.trajectory:
+        print("ERROR  Running from a scene and a trajectory is not built yet (T-06a). "
+              "For now use: asrp run --feb <existing .feb>")
+        return 2
+    if not args.feb:
+        print("ERROR  Give --feb <existing .feb>.")
+        return 2
+
+    def show(p: run.Progress) -> None:
+        print(f"progress   frame {p.done} / {p.total if p.total is not None else '?'}", flush=True)
+
+    try:
+        prepared = run.standin(Path(args.feb))
+        result = run.execute(prepared, Path(args.runs_dir), febio_exe(), args.name, show, None, args.timeout)
+    except (run.RunError, FileNotFoundError) as e:
+        print(f"ERROR  {e}")
+        return 1
+    print(f"run folder {result.run_dir}")
+    if result.status == "complete":
+        print(f"run COMPLETE: {result.frames} frames")
+        return 0
+    if result.status == "cancelled":
+        print(f"run CANCELLED after {result.frames} frames; FEBio stopped, no results written")
+        return 2
+    f = result.failure
+    print(f"ERROR  {f'frame {f.frame}' if f.frame is not None else 'before the first frame'}: {f.message}")
+    print("run FAILED: no results written")
+    return 1
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="asrp")
     parser.add_argument("--version", action="version", version=f"asrp {__version__}")
@@ -107,6 +143,15 @@ def main(argv: list[str] | None = None) -> int:
                      help="geometry scale, mm per scene unit (default 0.962, the lab controller's conversion, ADR-31)")
     imp.add_argument("--tetmesh", help="the lip tet mesh (default: <export>/../tetmesh/lips.json)")
     imp.set_defaults(func=cmd_import_asset)
+
+    r = sub.add_parser("run", help="run FEBio once and keep everything in a run folder")
+    r.add_argument("scene", nargs="?", help="path of scene.json (not built yet, T-06a)")
+    r.add_argument("trajectory", nargs="?", help="path of trajectory.json (not built yet, T-06a)")
+    r.add_argument("--feb", help="stand-in mode: run this existing .feb as is")
+    r.add_argument("--runs-dir", default="runs", help="where run folders go (default: runs; English-only path)")
+    r.add_argument("--name", help="name for the run folder (default: the .feb's name)")
+    r.add_argument("--timeout", type=float, default=3600, help="stop FEBio after this many seconds")
+    r.set_defaults(func=cmd_run)
 
     args = parser.parse_args(argv)
     return args.func(args)
