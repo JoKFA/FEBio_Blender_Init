@@ -29,6 +29,7 @@
 | 11 | [风险与待决问题](11-risks-and-questions.md) | 还没定的事、要问实验室的事、可能出问题的地方 |
 | 12 | [导出清单](12-lab-export-checklist.md) | 哪些数据已经从 Maya 导出、哪些要在 Ziva 机器上做、怎么做 |
 | 13 | [设计解释（问答）](13-explanations.md) | 看文档、做任务时冒出的"为什么要这样""这一步从哪来"，答案在这里 |
+| 14 | [实验室演示的 Ziva 操作流程](14-ziva-demo-walkthrough.md) | 2026-11-10 会议录像里看到的 Maya + Ziva 操作、读到的设置，和我们假设的对照 |
 | — | [术语表](glossary.md) | 文档里出现的专业词是什么意思 |
 | — | [templates/](templates/) | 任务卡和合并请求的模板 |
 
