@@ -4,9 +4,11 @@
     uv run python tools/prototype2_numbers.py --write    # rewrite the blocks inside docs/15
     uv run python tools/prototype2_numbers.py --check    # exit 1, naming the block, if docs/15 differs
 
-The numbers come from six archived files in data/preview/:
+The numbers come from nine archived files in data/preview/:
 aa_standin_report.json (the fitting tool's report), aa_a_run_report.json / aa_a_provenance.json and
-aa_b_run_report.json / aa_b_provenance.json (the two complete `asrp run`s), landmark_layer_check.json.
+aa_b_run_report.json / aa_b_provenance.json (the two complete `asrp run`s), landmark_layer_check.json, and, for the
+blocks named p2-cycles-* (section 8.8, ten round trips), aa_cycles_report.json with the two run reports
+aa_cycles_a_run_report.json / aa_cycles_b_run_report.json.
 The explanatory Chinese text in each table is fixed text in this file; every number and every verdict (passed,
 failed, not run, applied or not) comes from the JSON, and a claim the JSON does not hold is not written.
 The tables sit between marker comments
@@ -41,6 +43,9 @@ FILES = {
     "b_report": PREVIEW / "aa_b_run_report.json",
     "b_prov": PREVIEW / "aa_b_provenance.json",
     "layer": PREVIEW / "landmark_layer_check.json",
+    "cycles": PREVIEW / "aa_cycles_report.json",
+    "cycles_a_report": PREVIEW / "aa_cycles_a_run_report.json",
+    "cycles_b_report": PREVIEW / "aa_cycles_b_run_report.json",
 }
 
 # The END marker differs from prototype_numbers.py's ("END generated: NAME"), so each tool ignores the other's blocks.
@@ -214,6 +219,81 @@ def build(data: dict[str, dict]) -> dict[str, str]:
         ["拟合工具的命令（记在报告里）", f"`{st['command_line']}`"],
         ["`asrp check` 对两份运动文件", "、".join(f"{k.upper()}：{'通过' if v else '**不通过**'}" for k, v in st["asrp_check_passed"].items())],
     ])
+    blocks.update(build_cycles(data))
+    return blocks
+
+
+SLOPE_WORD = {"up": "上升", "down": "下降", "flat": "持平"}
+
+
+def build_cycles(data: dict[str, dict]) -> dict[str, str]:
+    """The blocks of section 8.8 (ten round trips); only aa_cycles_report.json and its two run reports are read."""
+    cy = data["cycles"]
+    reports = {"a": data["cycles_a_report"], "b": data["cycles_b_report"]}
+    blocks: dict[str, str] = {}
+    n = cy["cycles"]
+    rows_n = range(n)
+
+    def pair(x: dict, name: str, i: int) -> str:
+        return f"{base.sci(x[name + '_max_mm']['values'][i])} / {base.sci(x[name + '_mean_mm']['values'][i])}"
+
+    # --- conditions
+    a = cy["a"]
+    blocks["p2-cycles-conditions"] = base.table(["项", "值"], [
+        ["运动", f"{a['frames']} 帧：前 15 帧不动，然后 {n} 次（{cy['frames_per_half']} 帧走出去 + {cy['frames_per_half']} 帧原样倒着走回来）"],
+        ["回到静止的帧（下颌回到起点）", "、".join(str(f) for f in a["return_frames"])],
+        ["张到最大的帧", "、".join(str(f) for f in a["open_frames"])],
+        ["怎么重跑", "<br>".join(f"`{c}`" for c in cy["command"])],
+        ["面的朝向和边长怎么数的", cy["mesh_health_definition"]],
+    ])
+
+    # --- the five checks
+    rows = [["整体", *[f"{'五项检查全部通过' if cy[k]['all_passed'] else '**有没通过的**'}；没运行的检查：{', '.join(cy[k]['not_run']) or '无'}"
+                        for k in ("a", "b")]]]
+    rows += [[label, *[check_cell(key, reports[k]["checks"][key]) for k in ("a", "b")]] for key, label in CHECK_NAMES]
+    d = {k: cy[k]["check_d"] for k in ("a", "b")}
+    rows.append(["(d) 的数字", *[
+        f"体积比 {base.ratio3(d[k]['min_volume_ratio'])}（第 {d[k]['min_volume_ratio_frame']} 帧）到 {base.ratio3(d[k]['max_volume_ratio'])}；"
+        f"翻转 {d[k]['inverted_tets']} 个（{d[k]['frames_with_inverted_tets']} 帧），共 {d[k]['tets']} 个四面体、{d[k]['frames']} 帧"
+        for k in ("a", "b")]])
+    blocks["p2-cycles-checks"] = base.table(["", "甲", "乙"], rows)
+
+    # --- physics at the returns
+    head = ["第几次回到起点（帧）", "甲 物理：最大 / 平均 (mm)", "乙 物理：最大 / 平均 (mm)"]
+    blocks["p2-cycles-physics"] = base.table(head, [
+        [f"{i + 1}（第 {a['return_frames'][i]} 帧）", *[pair(cy[k], "physics_return", i) for k in ("a", "b")]] for i in rows_n])
+    agg = {k: cy[k]["return_to_settled_report"] for k in ("a", "b")}
+    blocks["p2-cycles-physics-report"] = base.table(["", "甲", "乙"], [
+        ["运行报告自己的 `return_to_settled`（所有回到起点的帧合起来）最大 / 平均 (mm)",
+         *[f"{base.sci(agg[k]['max_mm'])} / {base.sci(agg[k]['mean_mm'])}（{agg[k]['returns_found']} 个回到起点的帧）" for k in ("a", "b")]]])
+
+    # --- final shape at the returns, and at the open pose
+    blocks["p2-cycles-final"] = base.table(
+        ["第几次", "甲 最终形状回到起点：最大 / 平均 (mm)", "乙 最终形状回到起点：最大 / 平均 (mm)",
+         "甲 张开的形状离第 1 次：最大 / 平均 (mm)", "乙 张开的形状离第 1 次：最大 / 平均 (mm)"],
+        [[str(i + 1), *[pair(cy[k], "final_return", i) for k in ("a", "b")], *[pair(cy[k], "final_open", i) for k in ("a", "b")]]
+         for i in rows_n])
+
+    # --- first / last / largest / slope
+    def trend(x: dict) -> str:
+        return (f"第 1 次 {base.sci(x['first'])}；第 {n} 次 {base.sci(x['last'])}；最大 {base.sci(x['largest'])}"
+                f"（第 {x['largest_at_cycle']} 次）；直线拟合的斜率 {base.sci(x['slope_per_cycle'])} mm/次（{SLOPE_WORD[x['slope_sign']]}）")
+
+    names = (("physics_return_max_mm", "物理：回到起点，最大"), ("physics_return_mean_mm", "物理：回到起点，平均"),
+             ("final_return_max_mm", "最终形状：回到起点，最大"), ("final_return_mean_mm", "最终形状：回到起点，平均"),
+             ("final_open_max_mm", "最终形状：张开的形状离第 1 次，最大"))
+    blocks["p2-cycles-trend"] = base.table(
+        ["量 (mm)", "甲", "乙"], [[label, trend(cy["a"][key]), trend(cy["b"][key])] for key, label in names])
+
+    # --- mesh health of the final surface at the open frames
+    def health(h: dict) -> str:
+        return (f"翻面 {h['flipped (dot < 0)']} / {h['faces']} 个面；短于静止长度一半的边 {h['edges < 0.5x']} 条；"
+                f"最小面积比 {h['smallest face area ratio']:.3f}")
+
+    blocks["p2-cycles-health"] = base.table(
+        ["张开的帧", "甲", "乙"],
+        [[f"第 {c} 次（第 {a['open_frames'][0 if c == 1 else n - 1]} 帧）",
+            *[health(cy[k]["mesh_health_open"][f"cycle_{c}"]) for k in ("a", "b")]] for c in (1, n)])
     return blocks
 
 
