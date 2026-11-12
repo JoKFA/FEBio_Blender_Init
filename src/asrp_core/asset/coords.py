@@ -30,6 +30,19 @@ def to_mm_zup(points, mm_per_scene_unit: float) -> np.ndarray:
     return np.stack([s[:, 0], -s[:, 2], s[:, 1]], axis=1)
 
 
+def from_mm_zup(points, mm_per_scene_unit: float) -> np.ndarray:
+    """The inverse of `to_mm_zup`: points (n, 3) in mm, Z up -> (n, 3) float64 in scene units, Y up.
+    Like `to_mm_zup` it is linear, so it also turns differences and directions (T-31 hands the lab's
+    world positions back this way)."""
+    p = np.asarray(points, dtype=np.float64)
+    if p.ndim != 2 or p.shape[1] != 3:
+        raise ValueError(f"expected points as (n, 3), got shape {p.shape}")
+    if not mm_per_scene_unit > 0:
+        raise ValueError(f"mm_per_scene_unit must be positive, got {mm_per_scene_unit}")
+    s = p / mm_per_scene_unit
+    return np.stack([s[:, 0], s[:, 2], -s[:, 1]], axis=1)
+
+
 def read_obj(path) -> tuple[np.ndarray, list[list[int]]]:
     """Vertices (n, 3) as written and faces as 0-based vertex lists (triangles or quads), in file
     order. Texture and normal indices are dropped."""

@@ -71,6 +71,7 @@ asrp/
 │  │  ├─ embed.py             把显示网格嵌进四面体网格，算出每帧显示顶点位置
 │  │  ├─ simulate.py          asrp run 的整条流程：生成 → FEBio → ÷ k → 嵌入 → 检查 → 回放包
 │  │  ├─ skinning.py          landmark 层：deform = base + weights @ translations，读 skin_mm.json
+│  │  ├─ final_shape.py       训练接口：final_shape(下颌转动, landmark 位置)，不经过 Maya（T-31 第一版）
 │  │  ├─ plausibility.py      合理性检查 (a)(b)(b2)(c)(d)
 │  │  ├─ run.py               运行外壳：运行文件夹、进度、取消、出错处理
 │  │  ├─ provenance.py        溯源记录 provenance.json

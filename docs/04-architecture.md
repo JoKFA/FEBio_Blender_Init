@@ -60,6 +60,7 @@ landmark 段是物理之后的**可替换层**：顺序按实验室源码和论�
 | 场景运行 `asrp_core/simulate.py` | `asrp run <scene.json> <trajectory.json>`：生成器 → 运行外壳 → 嵌入、沉降后的形状、landmark 层（运动文件有 `landmarks` 一节时）、回放包、合理性检查、运行报告 | 运行文件夹的外壳（`run.py`） | ✅ 已有（T-06a） |
 | 运行外壳 `asrp_core/run.py` | 一次运行 = 一个文件夹：拷入输入、启动 FEBio、进度（只读日志新增的部分）、取消、出错处理、读 FEBio 写的 `positions.txt`、把位置除以 k 后存成 `physics/positions.json` + `positions.npy`、写溯源（T-08、T-25） | 生成 FEBio 输入（`simulate.py` 通过 `run.Prepared` 接入） | ✅ 已有（替身模式 T-08，生成模式 T-06a） |
 | landmark 变形层 `asrp_core/skinning.py` | `deform(base, weights, translations)` = base + weights @ translations，运行用的就是这一个核；`deform_matrices` 是一般的矩阵形式，只用来证明换算和化简；`load` 读 `landmarks/skin_mm.json` | — | ✅ 已有（T-09；验收进度见 09 的 T-09 卡） |
+| 训练接口 `asrp_core/final_shape.py` | `final_shape(下颌转动, landmark 位置)`：实验室训练环境每一步要的嘴唇形状，不经过 Maya（第 12.4 节）；基底取一次已完成的运行的沉降形状 | 推进物理；实验室的目标函数和梯度 | ✅ 第一版（T-31；下颌转动暂不影响结果，11 的 Q20） |
 | 回放包 `asrp_core/playback.py` | 把结果打包成 Blender 能直接播放的格式；有 landmark 层时多写一份最终形状的点缓存（5.3） | — | ✅ 已有 |
 | 对比 `asrp_core/compare.py` | 读入 Ziva 参考结果，计算误差，出报告和热力图数据 | — | 待开发 |
 | 溯源 `asrp_core/provenance.py` | 记录每次运行的输入指纹、软件版本、参数 | — | ✅ 已有（T-08） |
