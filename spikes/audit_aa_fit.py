@@ -39,7 +39,9 @@ from asrp_core.doctor import febio_exe
 
 FRACTIONS = (0.0, 0.25, 0.5, 0.75, 1.0)
 SETTLE, STEPS = 14, 36
-RIDGE = 1e-8  # keeps the fit well posed; far below the weights' scale
+RIDGE = 1e-8  # keeps the fit well posed and changes nothing visible; relative to the mean diagonal of W^T W
+RIDGES = (1e-8, 1e-4, 1e-3, 1e-2, 1e-1)  # the regularisation strengths tried at the end
+DEFAULT_FRACTION = 0.5
 
 
 def target_array(text: str, name: str) -> np.ndarray:
@@ -59,9 +61,11 @@ def rigid_fit(a: np.ndarray, b: np.ndarray) -> tuple[list[float], float]:
     return [*r[0], t[0], *r[1], t[1], *r[2], t[2], 0.0, 0.0, 0.0, 1.0], residual
 
 
-def fit(weights: np.ndarray, gap: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-    """Landmark translations d (300, 3) minimising |W d - gap|^2 + RIDGE |d|^2, and what is left (v, 3)."""
-    normal = weights.T @ weights + RIDGE * np.eye(weights.shape[1])
+def fit(weights: np.ndarray, gap: np.ndarray, ridge: float = RIDGE) -> tuple[np.ndarray, np.ndarray]:
+    """Landmark translations d (300, 3) minimising |W d - gap|^2 + ridge x m x |d|^2, and what is left (v, 3);
+    m is the mean diagonal of W^T W, so ridge is a plain number (0.01 = one per cent of a landmark's own weight)."""
+    gram = weights.T @ weights
+    normal = gram + ridge * float(np.trace(gram)) / len(gram) * np.eye(len(gram))
     d = np.linalg.solve(normal, weights.T @ gap)
     return d, gap - weights @ d
 
@@ -97,6 +101,7 @@ def main() -> None:
     jaw_driver = next(d["name"] for d in scene["drivers"] if d.get("hinge"))
 
     rows = [("no physics (rest lips)", rest)]
+    settled = [rest]  # per row: the lips at the end of the gravity-only settle (jaw still closed)
     exe = febio_exe()
     for fraction in FRACTIONS:
         folder = work / f"scene_{fraction:g}"
@@ -117,6 +122,7 @@ def main() -> None:
             raise SystemExit(f"fraction {fraction:g}: run {run.status}: {run.report['checks']['a']['message']}")
         display = simulate.read_display(run.run_dir / simulate.DISPLAY)["positions"]
         rows.append((f"physics, anchor fraction {fraction:g}", display[-1]))
+        settled.append(display[SETTLE])
         print(f"ran fraction {fraction:g}: FEBio {run.report['timing']['febio_s']} s, plausibility "
               f"{'passed' if run.passed else 'NOT passed'}", flush=True)
 
@@ -130,6 +136,39 @@ def main() -> None:
         before, after, effort = (np.linalg.norm(x, axis=1) for x in (gap, left, d))
         print(f"{label:32} {before.max():18.3f} {before.mean():7.3f}   {after.max():22.3f} {after.mean():7.3f}"
               f"   {effort.max():24.3f} {effort.mean():7.3f}")
+
+    # The two ways to put the AA shape together (ADR-40), for every anchor fraction:
+    # A: the landmark translations are fitted against the SETTLED lips (jaw closed), then added to the physics
+    #    result with the jaw open: the lab's pipeline as we read it (training does not advance the physics).
+    # B: they are fitted against the physics result itself, so the final shape is as near the target as it can be.
+    print("\nthe two ways to put the shape together; distance of the FINAL shape from the target, and how far the "
+          "landmarks move (mm):\n")
+    print(f"{'physics run':32} {'A final: largest':>16} {'mean':>7} {'A landmarks: largest':>20} {'mean':>7}   "
+          f"{'B final: largest':>16} {'mean':>7} {'B landmarks: largest':>20} {'mean':>7}")
+    finals = {}
+    for (label, lips), calm, fraction in zip(rows[1:], settled[1:], FRACTIONS):
+        d_a, _ = fit(weights, lips1 - calm)
+        final_a = lips + weights @ d_a
+        d_b, _ = fit(weights, lips1 - lips)
+        final_b = lips + weights @ d_b
+        finals[fraction] = (final_a, final_b, lips)
+        off_a, off_b = (np.linalg.norm(lips1 - f, axis=1) for f in (final_a, final_b))
+        go_a, go_b = (np.linalg.norm(d, axis=1) for d in (d_a, d_b))
+        print(f"{label:32} {off_a.max():16.3f} {off_a.mean():7.3f} {go_a.max():20.3f} {go_a.mean():7.3f}   "
+              f"{off_b.max():16.3f} {off_b.mean():7.3f} {go_b.max():20.3f} {go_b.mean():7.3f}")
+
+    # What regularising the fit costs: what is left against how far the landmarks move.
+    print("\nregularised fits (ridge relative to a landmark's own weight); what is left and how far the landmarks "
+          "move (mm):\n")
+    print(f"{'ridge':>8}   {'against the rest lips: left largest':>35} {'mean':>7} {'landmarks largest':>18} {'mean':>7}   "
+          f"{'B at fraction ' + format(DEFAULT_FRACTION, 'g') + ': left largest':>35} {'mean':>7} {'landmarks largest':>18} {'mean':>7}")
+    for ridge in RIDGES:
+        line = f"{ridge:8.0e}  "
+        for base in (rest, finals[DEFAULT_FRACTION][2]):
+            d, left = fit(weights, lips1 - base, ridge)
+            off, go = np.linalg.norm(left, axis=1), np.linalg.norm(d, axis=1)
+            line += f" {off.max():35.3f} {off.mean():7.3f} {go.max():18.3f} {go.mean():7.3f}  "
+        print(line)
 
     # How much of the jaw's motion do the lips make, group by group: in the target, and in each physics run?
     # "Riding the jaw" = where a vertex would go if it were glued to the jaw. The follow ratio is the
@@ -146,11 +185,14 @@ def main() -> None:
     physics = rows[1:]
     print(f"\nfollow ratio against riding the jaw ({angle:.2f} degrees), and the mean distance moved (mm):\n")
     print(f"{'group':30} {'vertices':>8} {'riding the jaw':>14} {'target moves':>12} {'target follow':>13}  "
-          + " ".join(f"{'a=' + format(f, 'g'):>7}" for f in FRACTIONS) + "   (a = anchor fraction of the physics run)")
+          + " ".join(f"{'a=' + format(f, 'g'):>7}" for f in FRACTIONS) + f" {'A final':>8} {'B final':>8}"
+          + f"   (a = anchor fraction of the physics run; A and B: the final shapes at a = {DEFAULT_FRACTION:g})")
+    final_a, final_b, _ = finals[DEFAULT_FRACTION]
     for name, v in groups:
         print(f"{name:30} {len(v):8d} {np.linalg.norm(riding[v], axis=1).mean():14.2f} "
               f"{np.linalg.norm((lips1 - rest)[v], axis=1).mean():12.2f} {follow(lips1 - rest, v):13.2f}  "
-              + " ".join(f"{follow(lips - rest, v):7.2f}" for _, lips in physics))
+              + " ".join(f"{follow(lips - rest, v):7.2f}" for _, lips in physics)
+              + f" {follow(final_a - rest, v):8.2f} {follow(final_b - rest, v):8.2f}")
 
 
 if __name__ == "__main__":
