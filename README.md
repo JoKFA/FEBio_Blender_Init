@@ -8,7 +8,7 @@ ASRP replaces Ziva (the physics backend under the lab's facial controller) with 
 
 ## Run the prototype
 
-After the setup below (`uv sync`, `uv run asrp doctor` all `ok`), three commands, about two minutes, no Maya or Ziva needed (the output folders are git-ignored):
+After the setup below (`uv sync`, `uv run asrp doctor` all `ok`), three commands, about a minute, no Maya or Ziva needed (the output folders are git-ignored):
 
 ```bash
 uv run asrp import-asset data/lab_export runs/prototype_scene
@@ -31,7 +31,7 @@ The last line printed is `run COMPLETE: 51 frames; plausibility PASSED`. The res
 | `uv run asrp doctor` | check that FEBio, Blender and Python are usable |
 | `uv run asrp check <scene.json> [trajectory.json]` | check a scene (and a motion against it) |
 | `uv run asrp import-asset <export folder> <new folder>` | turn the lab export in `data/lab_export` into a `scene.json` |
-| `uv run asrp run <scene.json> <trajectory.json>` | generate the FEBio model, solve it, write a run folder (generated mode) |
+| `uv run asrp run <scene.json> <trajectory.json> [--threads N]` | generate the FEBio model, solve it, run the five plausibility checks (a, b, b2, c, d), write a run folder (generated mode). FEBio uses 4 threads by default; `--threads 1` makes the playback files bit-identical between runs |
 | `uv run asrp run --feb <model.feb>` | stand-in mode: run an existing `.feb` as is, same run folder |
 | `uv run python tools/verify.py` | everything below under "Checks" |
 
