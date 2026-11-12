@@ -12,8 +12,10 @@ Writes into an output folder:
 Roles follow docs/03 sections 3 and 4: the lips are the soft tissue; skull and upper teeth are
 fixed; jaw and lower teeth both follow the driver jaw01, the joint that moves them in Maya. The
 Ziva attribute list has not arrived (docs/12 item 2), so material, solver settings and bone masses
-are placeholders marked "ours", and there are no attachments yet (T-03): `asrp check` passes with
-one warning, which the report lists first under "missing".
+are placeholders marked "ours". The four lip attachments come from T-03's lip_attachments.json
+(docs/05 section 3): upper lip hard on the skull, lower lip a spring to the jaw, the two lip
+corners springs to an anchor that turns half as far as the jaw (T-06a). Their stiffness and the
+blend factor are provisional values marked "ours". `asrp check` passes with no warning.
 """
 
 import hashlib
@@ -38,6 +40,22 @@ BONES = {
     "teeth_lower": ("middleres_TeethDown", "prescribed", JAW_DRIVER),
 }
 SKIN = "skin_skinCluster7.json"
+ATTACHMENTS = "lip_attachments.json"
+PHYSICS_LENGTH_SCALE = 0.67  # skull width 216.6 mm -> about 145 mm, a real person (ADR-31); ours
+# T-06a: the lip corner anchor turns this fraction of the jaw's angle (docs/05 section 3); ours.
+CORNER_BLEND = 0.5
+CORNER_DRIVER = "lip_corner_blend"
+CORNER_ANCHOR = "lip_corner_anchor"
+# T-07's provisional spring rule (docs/05 section 3): base stiffness = 100 x E x h, h = node spacing
+# in the solver's coordinates (median tet edge, geometry mm, times k).
+STIFFNESS_OVER_EH = 100.0
+# Maya attachment -> (name in scene.json, target in scene.json, kind, expected vertex count).
+LIP_ATTACHMENTS = {
+    "zAttachment1": ("upper_lip_on_skull", "skull", "hard", 74),
+    "zAttachment2": ("lower_lip_on_jaw", "jaw", "spring", 76),
+    "zAttachment9": ("left_corner_on_anchor", CORNER_ANCHOR, "spring", 348),
+    "zAttachment10": ("right_corner_on_anchor", CORNER_ANCHOR, "spring", 309),
+}
 SOLVER_FPS = 30  # the lab's zSolver frame rate (docs/03 section 5)
 
 # Data the import cannot fill yet, said once here so the report and the docs agree.
@@ -45,8 +63,12 @@ STILL_MISSING = [
     "Ziva attribute list (docs/12 item 2, Q4): material, solver substeps, damping and gravity are "
     "placeholders marked 'ours'; re-import when it arrives",
     "Motion (D2): no lab trajectory; T-06a uses a stand-in hinge motion for driver jaw01",
-    "Physical scale (ADR-31): geometry is settled (0.962 mm per scene unit), the physical scale is "
-    "physics_length_scale k, written as 1.0 for now; T-06a sets the agreed real-person size, 0.67",
+    "Attachments (A-33): the four lip attachments are present but provisional. The vertex sets come from "
+    "T-03's lip_attachments.json (a strong inference, waiting for ziva_maps.json); the spring base "
+    "stiffness (T-07's 100 x E x h) and the lip corner blend factor 0.5 are values we chose, not "
+    "Ziva's. The lower lip's follow ratio waits for Ziva's physics-only result (Q17)",
+    "Physical scale (ADR-31): geometry is settled (0.962 mm per scene unit); physics_length_scale k "
+    "is 0.67, real-person size, a value we chose from the meeting conclusion, not Ziva's scale",
 ]
 
 
@@ -152,9 +174,14 @@ def import_asset(export: Path, out: Path, tet_mesh: Path,
     def ours(value, note):
         return scene.Param(value, "ours", note)
 
+    attachments_file = _need(export / ATTACHMENTS)
+    attachments_json = json.loads(attachments_file.read_text(encoding="utf-8"))
+    attachments_sha = _sha256(attachments_file)
+
     lips_mesh, lips_source = convert("lips", LIPS, "soft tissue")
     shutil.copyfile(tet_mesh, out / "meshes" / "lips_tet.json")
     no_attribute_list = "placeholder: the Ziva attribute list has not arrived (docs/12 item 2, Q4)"
+    tissue_vertex_count = len(coords.read_obj(export / f"mesh_{LIPS}.obj")[0])
     tissue = scene.SoftTissue(
         "lips", lips_mesh, lips_source,
         scene.TetRef("meshes/lips_tet.json", tet_meta.get("content_sha256", "")),
@@ -181,10 +208,57 @@ def import_asset(export: Path, out: Path, tet_mesh: Path,
     # the local axes in world space). A direction, so no scaling.
     axis = coords.to_mm_zup([jaw["world_matrix"][8:11]], 1.0)[0]
     axis = axis / np.linalg.norm(axis)
-    drivers = [scene.Driver(JAW_DRIVER, scene.Hinge(
-        pivot.tolist(), axis.tolist(), "lab_setting",
-        "jaw01 in joints.json: its position, and its local Z axis (left-right)",
-    ))]
+    drivers = [
+        scene.Driver(JAW_DRIVER, scene.Hinge(
+            pivot.tolist(), axis.tolist(), "lab_setting",
+            "jaw01 in joints.json: its position, and its local Z axis (left-right)",
+        )),
+        scene.Driver(CORNER_DRIVER, None, scene.Blend(JAW_DRIVER, ours(
+            CORNER_BLEND,
+            "alpha: the lip corner anchor turns this fraction of the jaw's angle about jaw01's hinge "
+            "(docs/05 section 3, A-35); 0 follows the skull, 1 the jaw. Provisional")))
+    ]
+    anchors = [scene.Anchor(CORNER_ANCHOR, CORNER_DRIVER,
+                            "stands for the mouth corner node of the Ziva model (zTissue4/5): no mesh, "
+                            "invisible, no collision; both corners attach to it")]
+
+    # Attachments (docs/05 section 3). The spring base stiffness is T-07's temporary rule, 100 x E x h.
+    tet_mesh_data, _ = tetmesh.load(tet_mesh)
+    k = PHYSICS_LENGTH_SCALE
+    h = tetmesh.quality(tet_mesh_data).median_edge_mm * k
+    e_mpa = tissue.material.params["E_mpa"].value
+    stiffness = float(f"{STIFFNESS_OVER_EH * e_mpa * h:.3g}")
+    stiffness_note = (
+        f"provisional (T-07 rule): 100 x E x h = 100 x {e_mpa} MPa x {h:.3f} mm, h = median tet edge "
+        f"{h / k:.3f} mm x k {k}; to be set from the first run's force and the lower lip's follow "
+        "ratio (docs/05 section 3, Q17)"
+    )
+    groups = {g.get("attachment"): g for g in attachments_json.get("groups", [])}
+    attachments = []
+    attachments_report = []
+    for maya_name, (name, target, kind, count) in LIP_ATTACHMENTS.items():
+        g = groups.get(maya_name)
+        if g is None or len(g.get("vertices", [])) != count:
+            raise AssetError(
+                f"{ATTACHMENTS} should hold {maya_name} with {count} vertices, found "
+                f"{'no such group' if g is None else len(g.get('vertices', []))}; re-export it with "
+                "tools/lip_attachments.py (T-03)"
+            )
+        if g.get("source_vertex_count") != tissue_vertex_count:
+            raise AssetError(
+                f"{maya_name} in {ATTACHMENTS} is for a mesh of {g.get('source_vertex_count')} vertices, the "
+                f"lips have {tissue_vertex_count}; the files do not belong together"
+            )
+        base = ours(None if kind == "hard" else stiffness,
+                    "hard: the vertices join the target, no stiffness" if kind == "hard" else stiffness_note)
+        weights = [[int(v), float(w)] for v, w in g["vertices"]]
+        attachments.append(scene.Attachment(name, tissue.name, target, kind, base, weights))
+        attachments_report.append({
+            "name": name, "maya_attachment": maya_name, "label": g.get("label", ""), "to": target,
+            "kind": kind, "vertices": len(weights),
+            "defaulted_weights": len(g.get("defaulted_vertices", [])),
+            "stiffness_n_per_mm": base.value, "source": "ours" if kind == "spring" else "lip_attachments.json",
+        })
 
     skin_file = _need(export / SKIN)
     skin = json.loads(skin_file.read_text(encoding="utf-8"))
@@ -210,17 +284,22 @@ def import_asset(export: Path, out: Path, tet_mesh: Path,
                       f"mesh_report.json sha256 {_sha256(export / 'mesh_report.json')}",
             "tool": f"asrp import-asset {__version__}",
             "notes": f"OBJ files are scene coordinates (ADR-18): scaled and turned, no world matrix applied. "
-                     f"meshes/lips_tet.json is a byte copy of {tet_origin}",
+                     f"meshes/lips_tet.json is a byte copy of {tet_origin}. "
+                     f"Attachments are from {ATTACHMENTS} (sha256 {attachments_sha}, a strong inference awaiting "
+                     "ziva_maps.json)",
         },
         units=scene.Units(
             scene.Param(mm_per_scene_unit, "ours", mm_note),
-            ours(1.0, "ADR-31: real-person size is k = 0.67, which T-06a writes; 1.0 until then"),
+            ours(PHYSICS_LENGTH_SCALE,
+                 "meeting conclusion (ADR-31): skull width 216.6 mm becomes about 145 mm, a real person; "
+                 "not Ziva's scale"),
             coords.AXES,
         ),
         soft_tissues=[tissue],
         bones=bones,
         drivers=drivers,
-        attachments=[],
+        attachments=attachments,
+        anchors=anchors,
         landmarks=landmarks,
         solver=scene.Solver(
             "dynamic",
@@ -240,8 +319,11 @@ def import_asset(export: Path, out: Path, tet_mesh: Path,
             "mm_per_scene_unit": mm_per_scene_unit, "mm_per_scene_unit_source": "ours", "note": mm_note,
             "axes": coords.AXES,
             "order": "the OBJ files are scene coordinates already (ADR-18): scale to mm, then turn the axes",
-            "physics_length_scale": 1.0,
+            "physics_length_scale": PHYSICS_LENGTH_SCALE,
         },
+        "attachments_file": {"name": ATTACHMENTS, "sha256": attachments_sha},
+        "attachments": attachments_report,
+        "anchors": [{"name": CORNER_ANCHOR, "driver": CORNER_DRIVER, "of": JAW_DRIVER, "factor": CORNER_BLEND}],
         "meshes": meshes_report,
         "landmarks": len(names),
         "drivers": {JAW_DRIVER: {"pivot_mm": pivot.tolist(), "axis": axis.tolist(),
