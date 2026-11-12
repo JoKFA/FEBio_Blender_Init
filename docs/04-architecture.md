@@ -114,6 +114,7 @@ runs/2026-11-03_neutral-to-AA_001/
 | `not_run` | 没运行的检查的汇总（属于 `checks`） |
 | `settled_shape` | `available`、`frame`（n，没有沉降形状时为 `null`）；不可用时多一个 `reason` |
 | `return_to_settled` | 只报告，`{frames, max_mm, mean_mm}`；没有这样的帧时 `frames` 是空列表 |
+| `relative_to_head` | 只报告（T-28）：每帧自由显示顶点（没有粘连的）相对头的最大位移，减去参考帧的值。"头"是 `hard` 粘连所粘的那个刚体（实验室场景里是颅骨，头的驱动源动时它跟着动）；`hard` 粘连没有、或粘到两个以上刚体时相对世界。参考帧是沉降形状那一帧，没有沉降形状时是第 0 帧。键：`body`、`reference_frame`、`per_frame_max_mm`（每帧一个数）、`max_mm` 和 `frame`（只在参考帧之后找：参考帧之前的曲线是沉降本身）、`free_vertices` |
 | `motion` | 任一显示顶点离静止位置最远的距离 `max_display_distance_mm` 和出现的帧 `frame` |
 | `landmark_layer` | landmark 层有没有叠上：`applied`（`true` 或 `false`）。`true` 时另有 `landmarks_moved`（运动文件里有过非零平移的 landmark 个数）、`max_translation_mm`（最大的平移）、`max_final_minus_physics_mm`（最终形状离物理结果最远的距离）和 `frame`（它出现的帧）；`false` 时另有 `reason`。五项检查仍然只检查物理结果 |
 | `spring_slip` | 每个弹簧组的 max\|u\|、δ、比值和是否超过 0.1 |
@@ -164,11 +165,11 @@ runs/2026-11-03_neutral-to-AA_001/
 | 单位 | 固定为 mm、N、MPa、s；记录每个网格原来的变换、从原始资产换算过来的系数和坐标轴转换（顺序见 [03](03-asset.md) 第 10 节）。**几何单位和物理尺度分开**（ADR-22）：`units.mm_per_scene_unit`（几何，0.962，**必填**）；`units.physics_length_scale`（无量纲 k，**可以不写**，不写时取 1.0 并把来源标成"我们定的"；第一阶段按真人大小取 0.67，由导入写进场景，T-06a 实现，ADR-31）：求解器把模型当成几何尺寸的 k 倍大来算，几何和输出仍是毫米；实现是 FEBio 里节点坐标 = 几何毫米 × k、物理参数不缩放、读回除以 k（[05](05-ziva-to-febio.md) 第 2 节，ADR-36） |
 | 软组织 | 名字、网格文件、原始 OBJ 的文件名和 sha256、四面体网格文件及其内容哈希、材料（类型和参数）、每个参数的来源（实验室设置 / Ziva 默认值 / 我们定的） |
 | 骨头 `bones` | 名字、网格文件、原始 OBJ 的文件名和 sha256、质量 `mass_t`（值可以是 `null`：未知，运动是固定或完全给定时用不到）、运动方式 `motion`：**`"fixed"`（固定）或 `"prescribed"`（给定）**（ADR-21）。给定时用 `driver` 写明**跟随哪个驱动源**，运动由 `trajectory.json` 里这个驱动源的每帧变换提供 |
-| 驱动源 `drivers` | 名字（实验室资产里就是关节名，比如 `jaw01`），以及可选的铰链说明 `hinge`（`pivot_mm`、`axis`、`source`、`note`），用来生成代用运动和做检查。一个驱动源可以带动几块骨头：下颌和下牙都跟随 `jaw01`，和 Maya 里一个关节同时带动两块骨头一样（[03](03-asset.md) 第 4 节）。**派生驱动源**（T-06a 补充，见本节末的"嘴角的锚"）：可以不带自己的运动，写成"驱动源 X 的 factor 倍"，由 X 的整个刚体运动算出来 |
+| 驱动源 `drivers` | 名字（实验室资产里就是关节名，比如 `jaw01`），以及可选的铰链说明 `hinge`（`pivot_mm`、`axis`、`source`、`note`），用来生成代用运动和做检查。一个驱动源可以带动几块骨头：下颌和下牙都跟随 `jaw01`，和 Maya 里一个关节同时带动两块骨头一样（[03](03-asset.md) 第 4 节）。**派生驱动源**（T-06a 补充，见本节末的"嘴角的锚"）：可以不带自己的运动，写成"驱动源 X 的 factor 倍"，由 X 的整个刚体运动算出来；可选 `relative_to`（T-28）。**可选 `absent_means_rest`**（T-28，不能和 `blend` 同时有）：为 `true` 时运动文件可以不写这个驱动源，它就停在静止位置；跟着它的骨头这时按固定的骨头写进 FEBio，`.feb` 和以前逐字节相同。实验室场景里头的驱动源 `head` 带动颅骨和上牙，就是这样标的，所以只写 `jaw01` 的运动文件照旧能跑 |
 | 连接 | 连接的两样东西、每个顶点的权重（稀疏列表 `[[顶点, 权重], ...]`）、刚度、类型。类型是 [05](05-ziva-to-febio.md) 第 3 节的两种做法：硬绑定（`hard`，没有刚度）或弹簧（`spring`，刚度 × 权重）。第一阶段：上唇 `hard`、下唇 `spring`、嘴角 `spring` 连到"锚"（05 第 3 节，ADR-32）。粘连顶点怎么对应到计算点见 05 第 3 节。`to` 可以是骨头，也可以是下面的锚 |
 | 锚 | 可选。名字，以及它跟随哪个驱动源（`anchors` 一节，见本节末）。锚是不显示、不参与碰撞、没有网格的刚体 |
 | landmark `landmarks` | 可为 `null`。`names`、静止位置 `rest_positions_mm`、对嘴唇顶点的蒙皮权重 `weights`（被引用的文件 `landmarks/skin_mm.json`，格式 `asrp-skin/1`：`names`、`rest_world`、`bind_pre`、`geom`（列向量 4×4，毫米、Z 轴朝上，导入时换算，T-09）、稀疏的 `weights`、`source`（实验室导出文件的名字和原始文件的 sha256））、`note` |
-| 求解设置 `solver` | `fps`、`substeps_per_frame`、`damping`、`gravity_mm_per_s2`（物理方向）、分析类型 `analysis`（动力学）。场景不记帧数：运动的帧率必须等于这里的帧率，帧数由 `trajectory.json` 给出 |
+| 求解设置 `solver` | `fps`、`substeps_per_frame`、`damping`、`gravity_mm_per_s2`（物理方向）、分析类型 `analysis`（动力学），可选的 `numerical_damping_rhoi`（T-28）。场景不记帧数：运动的帧率必须等于这里的帧率，帧数由 `trajectory.json` 给出。`damping` 是物理阻尼：FEBio "mass damping" 体载荷的 C（1/秒，f = −C ρ v），0 是没有（[05](05-ziva-to-febio.md) 第 4 节）。`numerical_damping_rhoi` 是 FEBio 的 `rhoi`：0 到 1，或 −2（Newmark，没有数值阻尼）；不写时取生成器的默认 0，场景写回时也不写。两个都进运行报告的 `parameters`，带来源 |
 | 来源 `origin` | 从哪个资产文件、哪次导出生成的（`asset`、`export`、`tool`、`notes`） |
 | 简化说明 `simplifications` | 可选。字符串列表（非空字符串），写"这个场景没建什么、简化了什么"，由导入器写（嘴唇场景三句：嘴周 6 块肌肉没建、9 处皮肤粘连没建、嘴角到颅骨和下颌的那串组织换成了嘴角的锚；原文见 `asset/lab.py`）；空就不写。运行报告照抄到它的 `simplifications`；场景没写，报告里就是空列表（ADR-38 第 2 条） |
 
@@ -186,7 +187,7 @@ runs/2026-11-03_neutral-to-AA_001/
 ]
 ```
 
-- **派生驱动源 `blend`**：`of` 必须是另一个驱动源，也不能自己再是派生的（不连环）；`of` 不需要铰链。它的每帧变换 = `of` 那一帧整个刚体运动的 `factor` 倍：对 `of` 的变换 T 取 exp(factor·log T)（SE(3) 上；转动向量 w、θ = |w|，V = I + (1−cosθ)/θ²[w]× + (θ−sinθ)/θ³[w]×²，u = V⁻¹t，结果的转动是 exp(factor·w)，平移是 V(factor·w)·(factor·u)；θ < 10⁻⁸ 时 V = I）。α = 0 恒为单位变换（和颅骨重合），α = 1 等于 `of` 本身；`of` 是绕铰链的纯转动时，结果就是绕同一个铰链转 `factor` × 角度；`of` 是三个轴都转加平移的一般运动（实验室的下颌就是这样）时，转动和平移一起按比例缩，比例 a 的变换乘比例 b 的变换等于比例 a+b 的变换。相对静止转 π 或更多的帧不支持。`blend` 和 `hinge` 不能同时有；`blend` 的驱动源 trajectory.json 里不用写运动，写了会被忽略（提醒）。ADR-38 第 6 条。
+- **派生驱动源 `blend`**：`of` 必须是另一个驱动源，也不能自己再是派生的（不连环）；`of` 不需要铰链。它的每帧变换 = `of` 那一帧整个刚体运动的 `factor` 倍：对 `of` 的变换 T 取 exp(factor·log T)（SE(3) 上；转动向量 w、θ = |w|，V = I + (1−cosθ)/θ²[w]× + (θ−sinθ)/θ³[w]×²，u = V⁻¹t，结果的转动是 exp(factor·w)，平移是 V(factor·w)·(factor·u)；θ < 10⁻⁸ 时 V = I）。α = 0 恒为单位变换（和颅骨重合），α = 1 等于 `of` 本身；`of` 是绕铰链的纯转动时，结果就是绕同一个铰链转 `factor` × 角度；`of` 是三个轴都转加平移的一般运动（实验室的下颌就是这样）时，转动和平移一起按比例缩，比例 a 的变换乘比例 b 的变换等于比例 a+b 的变换。相对静止转 π 或更多的帧不支持。**`relative_to`**（可选，T-28，一个驱动源的名字）：取 `of` 相对这个驱动源的运动的 `factor` 倍，T = T_rel · exp(factor · log(T_rel⁻¹ · T_of))；`relative_to` 不写时就是上面的公式，结果逐位不变；写了而它停在静止（运动文件没写它、它又标了 `absent_means_rest`）时也逐位等于上面的公式。它不能是派生的，不能等于 `of`，运动文件里要有它的运动（或者它标了 `absent_means_rest`），否则是错误。实验室场景里嘴角的锚是 `jaw01` 相对 `head` 的 α 倍：头不动时和以前一样，头和下颌一起平移时锚跟着头走。`blend` 和 `hinge` 不能同时有；`blend` 的驱动源 trajectory.json 里不用写运动，写了会被忽略（提醒）。ADR-38 第 6 条。
 - **锚 `anchors`**：静止时和颅骨重合（静止位置 = 世界坐标原样，没有自己的位置字段），每帧的变换就是它跟随的那个驱动源（通常是派生的）的变换。没有网格、没有质量、不参与碰撞，所以不画、也没有源 OBJ。连接的 `to` 可以写锚的名字。锚的名字不能和骨头、软组织重名；`driver` 必须是场景里列出的驱动源。左右两个嘴角共用同一个锚（两边绕同一个铰链转同样的角度）。
 - **连接的三样东西**不变：类型 `hard` / `spring`（`hard` 的 `stiffness.value` 必须是 `null`，`spring` 必须有数）、每个顶点的权重、目标（颅骨、下颌或锚）；`spring` 的基础刚度和其他参数一样带来源。
 - **检查**（都是错误）：锚或派生驱动源指向不存在的驱动源；α 不在 [0, 1]；派生驱动源的 `of` 自己也是派生的；`spring` 没有刚度；`hard` 带了刚度。

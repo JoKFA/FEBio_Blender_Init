@@ -288,3 +288,24 @@ def test_a_moving_skull_with_hard_tissue_passes_b_and_b2_and_a_wrong_expected_tr
     assert plausibility.follows_bones(groups, model.mesh.nodes, tissue, model.display, moved, right).passed
     assert plausibility.follows_bones(groups, model.mesh.nodes, tissue, model.display, moved, wrong).passed is False
     assert math.isfinite(head["max_mm"])
+
+
+# --- the head shake motion (tools/head_shake_motion.py) -------------------------------------------------------------
+
+
+def test_the_head_shake_keys_follow_the_lab_script_and_the_curve_eases_in_and_out():
+    import head_shake_motion as hs
+
+    k = hs.keys()
+    assert [f for f, _ in k] == [0.0, 16.0, 18.5, 21.0, 23.5, 26.0, 28.5, 31.0, 33.5, 36.0, 38.5, 41.0, 43.5, 46.0]
+    assert [v for _, v in k][2:6] == [5.0, 0.0, -5.0, 0.0] and hs.frames() == 87
+    for f, v in k:
+        assert abs(hs.value(f) - v) < 1e-12  # the curve goes through every key
+    fine = np.linspace(0, 86, 86 * 40 + 1)
+    xs = np.array([hs.value(f) for f in fine])
+    assert np.abs(xs).max() <= 5.0 + 1e-12  # no overshoot
+    speed = np.diff(xs) / np.diff(fine)
+    # starts and stops without a jump in speed (a sine of the same keys starts at 2 pi x 5 / 10 = 3.1 units a frame)
+    assert abs(speed[16 * 40]) < 0.1 and abs(speed[46 * 40 - 1]) < 0.1
+    assert np.abs(np.diff(speed)).max() < 0.5  # the speed has no jump anywhere (steps of 1/40 frame: at most ~0.12)
+    assert all(hs.value(f) == 0.0 for f in range(0, 17)) and all(hs.value(f) == 0.0 for f in range(46, 87))
