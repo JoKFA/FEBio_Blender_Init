@@ -49,12 +49,16 @@ landmark 段是物理之后的**可替换层**：顺序按实验室源码和论�
 | 模块（建议的代码位置） | 负责 | 不负责 | 状态 |
 |---|---|---|---|
 | 环境检查 `asrp_core/doctor.py` | 找到 FEBio、Blender，检查路径和 Python 版本 | — | ✅ 已有 |
-| 资产导入 `asrp_core/asset/` | 把从 Maya 导出的网格、landmark 蒙皮和 Ziva 设置读进来，换算单位和坐标轴（全项目唯一的一份换算，`asset/coords.py`），生成场景描述 | 解析 .mb 的网格几何 | ✅ 已有（T-02）。还没做的：读 Ziva 属性清单（还没到）；读 T-03 的粘连（T-06a）；把 landmark 蒙皮矩阵换算成毫米、Z 轴朝上（T-09，ADR-34） |
+| 资产导入 `asrp_core/asset/` | 把从 Maya 导出的网格、landmark 蒙皮和 Ziva 设置读进来，换算单位和坐标轴（全项目唯一的一份换算，`asset/coords.py`），生成场景描述 | 解析 .mb 的网格几何 | ✅ 已有（T-02；T-03 的四组粘连、k = 0.67 和 T-06a 的临时材料已写进场景）。还没做的：读 Ziva 属性清单（还没到）；把 landmark 蒙皮矩阵换算成毫米、Z 轴朝上（T-09，ADR-34） |
 | 场景描述 `asrp_core/scene.py` | 定义场景描述文件的格式，提供校验（缺什么、单位对不对） | 求解 | ✅ 已有（T-05） |
 | 运动 `asrp_core/trajectory.py` | 运动文件的格式和读写、铰链运动生成（代用运动） | 转换实验室轨迹（T-10 在同一个文件里加） | ✅ 最小格式已有（T-05）。`landmarks` 一节的读取和校验由 T-09 加进来 |
 | 四面体化 `asrp_core/tetmesh.py` | 把嘴唇的表面网格变成计算用的四面体网格，检查质量（连通、流形、亏格、上下唇分开、左右对称），写成 `data/tetmesh/` 下的文件，读回时校验哈希（为什么需要，见 [13](13-explanations.md) E-02） | 嵌入显示网格；运行时重新生成网格（只由 `tools/build_tetmesh.py` 显式生成，ADR-20） | ✅ 已有（T-04，ADR-20） |
-| FEBio 适配 `asrp_core/febio.py` | 把场景描述翻译成 FEBio 输入文件，调用 FEBio（含结束整个进程树），读回结果 | 决定材料参数（参数从场景描述里来） | 部分已有：调用、读结果、结束进程；生成输入归 T-06a |
-| 运行外壳 `asrp_core/run.py` | 一次运行 = 一个文件夹：拷入输入、启动 FEBio、进度、取消、出错处理、把位置除以 k 后写成 `physics/positions.json`、写溯源（T-08） | 生成 FEBio 输入（T-06a 通过 `run.Prepared` 接入） | ✅ 已有（替身模式，T-08） |
+| FEBio 适配 `asrp_core/febio.py` | 调用 FEBio（单线程，[05](05-ziva-to-febio.md) 坑 17；含结束整个进程树），读回结果 | 决定材料参数（参数从场景描述里来） | ✅ 已有 |
+| 生成器 `asrp_core/generate.py` | 场景描述 + 运动 → `.feb`：坐标 × k、重力反号、刚体（固定、给定、锚）、粘连的对应（05 第 3 节）、动力学设置；生成器报告 | 运行 FEBio；读结果 | ✅ 已有（T-06a） |
+| 嵌入 `asrp_core/embed.py` | 显示网格跟着四面体网格动（zEmbedder 的替代）：每个显示顶点的四面体和重心坐标，粘连也用同一套 | — | ✅ 已有（T-06a） |
+| 合理性检查 `asrp_core/plausibility.py` | [07](07-validation.md) 第 3 节的三项检查 | — | ✅ 已有（T-06a） |
+| 场景运行 `asrp_core/simulate.py` | `asrp run <scene.json> <trajectory.json>`：生成器 → 运行外壳 → 嵌入、第 14 帧形状、回放包、合理性检查、运行报告 | 运行文件夹的外壳（`run.py`） | ✅ 已有（T-06a） |
+| 运行外壳 `asrp_core/run.py` | 一次运行 = 一个文件夹：拷入输入、启动 FEBio、进度、取消、出错处理、把位置除以 k 后写成 `physics/positions.json`、写溯源（T-08） | 生成 FEBio 输入（`simulate.py` 通过 `run.Prepared` 接入） | ✅ 已有（替身模式 T-08，生成模式 T-06a） |
 | landmark 变形层 `asrp_core/skinning.py` | 用蒙皮权重把 landmark 的运动叠加到物理结果上 | — | 待开发 |
 | 回放包 `asrp_core/playback.py` | 把结果打包成 Blender 能直接播放的格式 | — | ✅ 已有 |
 | 对比 `asrp_core/compare.py` | 读入 Ziva 参考结果，计算误差，出报告和热力图数据 | — | 待开发 |
@@ -71,15 +75,19 @@ runs/2026-11-03_neutral-to-AA_001/
   scene.json          场景描述（这次用到的全部设置）
   trajectory.json     这次的运动（每个驱动源每帧的刚体变换、landmark 每帧的平移）
   meshes/             用到的网格（毫米、Z 轴朝上），包括已落盘的四面体网格（只读，哈希记在 provenance.json）
+  landmarks/          场景引用的 landmark 蒙皮权重（原样拷贝）
   model.feb           生成的 FEBio 输入
   model.log           FEBio 日志（包含每帧节点位置）
   physics/            物理段结果（含第 14 帧沉降后的形状、每帧每块组织的应变能）
   final/              叠加 landmark 段之后的结果
   playback.json       回放包（Blender 加载用）
   playback.pc2
+  run_report.json     运行报告：临时值和来源、没建的粘连、生成器报告、合理性检查、用时
   compare/            和 Ziva 对比的报告（如果做了对比）
   provenance.json     溯源记录
 ```
+
+`asrp run <scene.json> <trajectory.json>`（T-06a，`simulate.py`）现在写出：场景文件夹里场景引用的每个文件按原来的相对路径拷进来（所以运行文件夹里的 `scene.json` 能直接再跑），运动改名为 `trajectory.json`；`physics/positions.json`（外壳写的，FEBio 的全部计算点，只有第 1 到 N−1 帧，坑 15）；`physics/display.json`（显示网格每帧的位置，第 0 帧是静止姿态，`asrp-display/1`）；`physics/settled_frame14.json`（第 14 帧的计算点和显示网格）和 `physics/settled_frame14.obj`（第 14 帧的显示网格，带面）；回放包是显示网格本身（嘴唇 10,240 个顶点，不是四面体网格的表面，`node_ids` 为 null）；`run_report.json`。还没有的：`final/`（T-09）、应变能（T-06b）、`compare/`（T-11）。FEBio 失败或取消时只写 `run_report.json`（检查 (a) 不通过），不写任何结果。生成器拒绝的场景（检查有错、显示顶点离四面体太远、一个点被两个刚体要走……）不建运行文件夹，`asrp run` 打印原因和 `run NOT STARTED`。
 
 `runs/` 不进 git。`data/` 里提交的有 `lab_export/`、`preview/`、`briefing/`、`tetmesh/`（四面体网格是只读输入，ADR-19、ADR-20），其余不进。四面体网格是**显式生成一次、落盘并记哈希的输入**，运行时只读，不在运行中重新生成（fTetWild 同输入多次运行结果不同，见 ADR-20 和 [13](13-explanations.md) E-03）。需要分享某次运行时，把整个文件夹打包发送。
 
@@ -157,8 +165,8 @@ FEBio 是第一个实现。Ziva 不在我们的软件里运行，它的结果由
 | `asrp doctor` | 检查环境 | — （已有） |
 | `asrp import-asset <导出文件夹> <输出文件夹>` | 导入资产，生成场景描述和检查报告 | R-01（已有，T-02） |
 | `asrp check <scene.json> [<trajectory.json>]` | 检查场景设置；带上运动时，再查运动和场景对不对得上。有错误才失败，提醒照样通过 | R-02（已有，T-05） |
-| `asrp run <scene.json> <trajectory.json>` | 运行一次，生成运行文件夹 | R-03、R-06 |
-| `asrp run --feb <现成的 .feb>` | 替身模式：不生成输入，直接跑现成的 `.feb`，做运行文件夹、溯源、进度、取消、出错处理这层外壳（T-08）。T-06a 再把生成器接进上一行 | R-03、R-06 |
+| `asrp run <scene.json> <trajectory.json>` | 运行一次，生成运行文件夹（已有，T-06a）；打印生成器报告、max\|u\|÷δ、三项检查和每帧用时，检查有不通过的就以 1 退出 | R-03、R-06 |
+| `asrp run --feb <现成的 .feb>` | 替身模式：不生成输入，直接跑现成的 `.feb`，做运行文件夹、溯源、进度、取消、出错处理这层外壳（T-08）。生成器已接进上一行（T-06a） | R-03、R-06 |
 | `asrp compare <运行文件夹> <Ziva 参考>` | 和 Ziva 对比 | R-05 |
 
 Blender 插件的每个按钮都对应其中一条命令。界面能做的事，命令行都能做。
@@ -197,7 +205,7 @@ Blender 插件的每个按钮都对应其中一条命令。界面能做的事，
 | 嘴唇 | 10,240（显示用）；计算用的四面体网格会粗一些 |
 | 下颌、颅骨、牙齿 | 7 千到 2.8 万，**只作为刚体**，不参与有限元计算，不影响速度 |
 
-速度主要取决于嘴唇四面体网格的大小和每帧子步数。S1 试验里 72 个计算点（有限元节点）、45 帧，用时约 0.3 秒（`uv run python spikes/s1_dynamic_jaw.py` 的输出）。T-04 定稿的嘴唇网格有 6,747 个计算点，只有重力的 15 帧本机 22 秒（11 的 A-18）。50 帧要多久，T-06a 实测以后再决定是否需要减少子步数或简化网格。速度要求来自正向推进（回放和钢琴界面的逐帧步进），不来自控制器训练：训练时不推进时间（ADR-30 及其修订）；暂定预算见 02 N-07。
+速度主要取决于嘴唇四面体网格的大小和每帧子步数。S1 试验里 72 个计算点（有限元节点）、45 帧，用时约 0.3 秒（`uv run python spikes/s1_dynamic_jaw.py` 的输出）。T-04 定稿的嘴唇网格有 6,747 个计算点，只有重力的 15 帧本机 22 秒（11 的 A-18）。T-06a 实测：真实嘴唇（6,747 个计算点、1,428 根弹簧）51 帧的代用张嘴，FEBio 单线程 44.8 秒，0.90 秒/帧，没有重试（多线程是 27 秒，但结果不逐位重复，05 坑 17）；生成 `.feb` 4 秒、事后处理 2.6 秒。在暂定预算 2.5 秒/帧之内，暂时不用减子步或简化网格。速度要求来自正向推进（回放和钢琴界面的逐帧步进），不来自控制器训练：训练时不推进时间（ADR-30 及其修订）；暂定预算见 02 N-07。
 
 ## 11. 已有代码和这份设计的对应
 
@@ -208,6 +216,8 @@ Blender 插件的每个按钮都对应其中一条命令。界面能做的事，
 | `src/asrp_core/run.py`、`provenance.py` | 运行外壳、溯源（T-08） |
 | `src/asrp_core/playback.py` | 回放包 |
 | `src/asrp_core/scene.py`、`trajectory.py` | 场景描述、运动（T-05） |
+| `src/asrp_core/generate.py`、`embed.py`、`plausibility.py`、`simulate.py` | 生成器、嵌入、合理性检查、场景运行（T-06a） |
+| `tools/placeholder_jaw_motion.py`、`tools/render_prototype.py` | T-06a 的代用下颌运动；在 Blender 里检查原型的回放并画图 |
 | `src/asrp_core/asset/` | 资产导入（T-02） |
 | `blender_addon/asrp_blender/__init__.py` | 插件：环境检查、加载结果 |
 | `spikes/s1_dynamic_jaw.py` | 试验代码，验证 FEBio 动力学；**不是产品代码**，不要在它上面直接扩展 |
