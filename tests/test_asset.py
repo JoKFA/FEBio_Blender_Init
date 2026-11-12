@@ -121,6 +121,7 @@ def test_the_scene_has_the_roles_of_docs_03(imported):
     assert k["value"] == 0.67 and k["source"] == "ours" and "ADR-31" in k["note"]
     assert raw["units"]["mm_per_scene_unit"]["value"] == 0.962
     assert len(s.landmarks.names) == 300
+    assert len(s.simplifications) == 3 and "6 muscles" in s.simplifications[0]  # what phase 1 leaves out (ADR-32)
     # Each OBJ is named with its sha256, as T-02 asks.
     lips_obj = EXPORT / "mesh_middleres_OrbicularisOris.obj"
     assert s.soft_tissues[0].source_obj.file == lips_obj.name

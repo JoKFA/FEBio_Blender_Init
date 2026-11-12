@@ -116,7 +116,7 @@ class ASRP_OT_load_playback(bpy.types.Operator):
         if not manifest_path.is_file():
             self.report({"ERROR"}, f"no playback.json in {folder}")
             return {"CANCELLED"}
-        manifest = json.loads(manifest_path.read_text())
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
         if manifest.get("format") != PLAYBACK_FORMAT:
             self.report({"ERROR"}, f"unsupported bundle format {manifest.get('format')!r}")
             return {"CANCELLED"}

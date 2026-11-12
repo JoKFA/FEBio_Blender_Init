@@ -7,9 +7,17 @@ Format `asrp-trajectory/1`, one JSON object:
       "fps": 30,                      # frames per second; must equal the scene's solver fps
       "frames": 46,                   # transforms per driver; frame 0 is the first entry
       "source": "free text: which controller output, or which generator, made this",
+      "source_tag": "lab_setting" | "ziva_default" | "ours",   # optional: where the motion comes from, the
+                                      #   same three tags as in scene.json; the run report shows it
+                                      #   ("unstated" when absent, never guessed from the text)
       "drivers": {                    # keyed by driver name (a joint name for the lab asset,
         "jaw01": [[16 numbers], ...]  #   e.g. jaw01); scene.json says which bones follow which
       },
+      "settle_until_frame": 14,       # optional: the last frame of the gravity-only settle (0 <= n < frames).
+                                      #   Every driver the scene uses must be at rest (identity) on frames
+                                      #   0..n. The run writes the settled shape at frame n and check (c)
+                                      #   (gravity sag) averages frames max(1, n-4)..n (never frame 0, the rest
+                                      #   pose); without it, or with n = 0, neither is done
       "landmarks": ...                # optional; its format is docs/04 section 5.2, T-09 reads and checks it
     }
 
@@ -25,7 +33,10 @@ import math
 from dataclasses import dataclass, field
 from pathlib import Path
 
+import numpy as np
+
 FORMAT_VERSION = "asrp-trajectory/1"
+SOURCE_TAGS = ("lab_setting", "ziva_default", "ours")  # the same three values as scene.SOURCES
 # How far a transform may be from rigid (rotation part orthonormal with determinant 1, last row
 # 0 0 0 1). Round-trip through text keeps ~1e-16; this only lets through rounding, not a scale.
 RIGID_TOLERANCE = 1e-6
@@ -42,6 +53,8 @@ class Trajectory:
     drivers: dict[str, list[list[float]]]
     source: str = ""
     landmarks: object = None  # format in docs/04 section 5.2; T-09 adds reading and checks; kept as read
+    source_tag: str | None = None  # "lab_setting" | "ziva_default" | "ours"; None: the file does not say
+    settle_until_frame: int | None = None  # last frame of the gravity-only settle; None: the file does not say
     extra: dict = field(default_factory=dict)  # unknown top-level keys, kept for the round trip
 
     def to_json(self) -> dict:
@@ -52,6 +65,10 @@ class Trajectory:
             "source": self.source,
             "drivers": self.drivers,
         }
+        if self.source_tag is not None:
+            data["source_tag"] = self.source_tag
+        if self.settle_until_frame is not None:
+            data["settle_until_frame"] = self.settle_until_frame
         if self.landmarks is not None:
             data["landmarks"] = self.landmarks
         return {**data, **self.extra}
@@ -85,50 +102,60 @@ def hinge_transforms(pivot_mm, axis, angles_rad) -> list[list[float]]:
     return out
 
 
-def hinge_angle(transform, axis) -> float:
-    """The signed angle (rad) of a transform's rotation part about `axis`, in (-pi, pi]. Any part of
-    the rotation that is not about the axis, and the translation, are not looked at."""
-    ax = [float(a) for a in axis]
-    norm = math.sqrt(sum(a * a for a in ax))
-    if norm == 0:
-        raise ValueError("the hinge axis is the zero vector; give it a direction")
-    m = transform
-    a = [c / norm for c in ax]
-    # A vector u perpendicular to the axis, and where the rotation puts it; the angle between u and
-    # that image, measured in the plane perpendicular to the axis, is the turn about the axis.
-    u = [a[1], -a[0], 0.0] if abs(a[2]) < 0.9 else [0.0, a[2], -a[1]]
-    un = math.sqrt(sum(c * c for c in u))
-    u = [c / un for c in u]
-    r = [sum(m[4 * i + j] * u[j] for j in range(3)) for i in range(3)]
-    dot = sum(x * y for x, y in zip(u, r))
-    cross = [u[1] * r[2] - u[2] * r[1], u[2] * r[0] - u[0] * r[2], u[0] * r[1] - u[1] * r[0]]
-    return math.atan2(sum(x * y for x, y in zip(cross, a)), dot)
+def _skew(w):
+    return np.array([[0.0, -w[2], w[1]], [w[2], 0.0, -w[0]], [-w[1], w[0], 0.0]])
 
 
-HINGE_TOLERANCE = 1e-6  # how far a parent's frame may be from a pure turn about its hinge before a warning
+def _log_rotation(r) -> np.ndarray:
+    """The rotation vector w (axis times angle, rad) of a rotation matrix; the angle is in [0, pi)."""
+    vee = np.array([r[2, 1] - r[1, 2], r[0, 2] - r[2, 0], r[1, 0] - r[0, 1]])
+    s = float(np.linalg.norm(vee)) / 2
+    c = (float(np.trace(r)) - 1) / 2
+    theta = math.atan2(s, c)
+    if theta > math.pi - 1e-6:
+        raise ValueError(
+            "a rotation of 180 degrees or more from rest cannot be scaled; split the motion into smaller steps"
+        )
+    return vee / 2 if theta < 1e-8 else vee * (theta / (2 * s))
 
 
-def hinge_deviation(transforms, pivot_mm, axis) -> tuple[float, int]:
-    """How far a motion is from a pure rotation about the hinge (`pivot_mm`, `axis`): the largest absolute
-    difference of any of the 16 numbers from the pure turn by the same angle about the axis, and the frame
-    where it is largest. Translation (mm) and off-axis rotation both show up; this is what a derived
-    driver (`blend_transforms`) drops."""
-    worst, where = 0.0, 0
-    for i, m in enumerate(transforms):
-        pure = hinge_transforms(pivot_mm, axis, [hinge_angle(m, axis)])[0]
-        d = max(abs(a - b) for a, b in zip(m, pure))
-        if d > worst:
-            worst, where = d, i
-    return worst, where
+def _exp_rotation(w) -> np.ndarray:
+    theta = float(np.linalg.norm(w))
+    k = _skew(w)
+    if theta < 1e-8:
+        a, b = 1.0, 0.5
+    else:
+        a, b = math.sin(theta) / theta, (1 - math.cos(theta)) / theta**2
+    return np.eye(3) + a * k + b * (k @ k)
 
 
-def blend_transforms(parent_transforms, pivot_mm, axis, factor) -> list[list[float]]:
-    """A derived driver's transforms (docs/04 section 5.1): for each of the parent's frames, a turn
-    about the parent's own hinge (`pivot_mm`, `axis`) by `factor` times the parent's angle. factor 0
-    is the identity, factor 1 is the parent's turn about its hinge. For a parent that is not a pure
-    hinge only the angle about the axis is used (rotation interpolation is for later)."""
-    angles = [factor * hinge_angle(m, axis) for m in parent_transforms]
-    return hinge_transforms(pivot_mm, axis, angles)
+def _left_jacobian(w) -> np.ndarray:
+    """V(w) with exp(w, t) = (exp(w), V t): the matrix that turns the screw's translation part into the
+    transform's translation."""
+    theta = float(np.linalg.norm(w))
+    k = _skew(w)
+    if theta < 1e-8:
+        return np.eye(3)
+    return np.eye(3) + (1 - math.cos(theta)) / theta**2 * k + (theta - math.sin(theta)) / theta**3 * (k @ k)
+
+
+def blend_transforms(parent_transforms, factor) -> list[list[float]]:
+    """A derived driver's transforms (docs/04 section 5.1): for each of the parent's frames, a fraction of
+    the whole rigid motion, exp(factor * log T) on SE(3). factor 0 is the identity, factor 1 is the parent.
+    For a pure turn about a hinge this is the turn by factor times the angle about the same hinge; any
+    translation and off-axis turning of the parent is scaled too. Blending twice adds the factors."""
+    out = []
+    for m in parent_transforms:
+        rot = np.array([m[0:3], m[4:7], m[8:11]], dtype=float)
+        t = np.array([m[3], m[7], m[11]], dtype=float)
+        w = _log_rotation(rot)
+        u = np.linalg.solve(_left_jacobian(w), t)
+        fw = factor * w
+        r2 = _exp_rotation(fw)
+        t2 = _left_jacobian(fw) @ (factor * u)
+        rows = [[*r2[i], t2[i]] for i in range(3)]
+        out.append([float(v) for row in rows for v in row] + [0.0, 0.0, 0.0, 1.0])  # plain floats, never numpy's
+    return out
 
 
 def apply(transform, point) -> tuple[float, float, float]:
@@ -192,13 +219,27 @@ def from_json(data) -> Trajectory:
                     f"driver {name!r}, frame {k}: not a rigid transform ({why}). Each frame must be "
                     "a 4x4 rotation plus translation in mm, written row by row, column vectors"
                 )
-    known = {"format_version", "fps", "frames", "source", "drivers", "landmarks"}
+    tag = data.get("source_tag")
+    if tag is not None and tag not in SOURCE_TAGS:
+        raise TrajectoryError(
+            f"source_tag is {tag!r}; it must be one of {', '.join(SOURCE_TAGS)} (or leave it out if the "
+            "origin of the motion is not known)"
+        )
+    settle = data.get("settle_until_frame")
+    if settle is not None and (not isinstance(settle, int) or isinstance(settle, bool) or not 0 <= settle < frames):
+        raise TrajectoryError(
+            f"settle_until_frame is {settle!r}; it must be a whole frame number from 0 to {frames - 1} (the last "
+            "frame of the gravity-only settle), or leave it out if the motion has no such settle"
+        )
+    known = {"format_version", "fps", "frames", "source", "source_tag", "settle_until_frame", "drivers", "landmarks"}
     return Trajectory(
         fps=fps,
         frames=frames,
         drivers={k: [list(m) for m in v] for k, v in drivers.items()},
         source=data.get("source", ""),
         landmarks=data.get("landmarks"),
+        source_tag=tag,
+        settle_until_frame=settle,
         extra={k: v for k, v in data.items() if k not in known},
     )
 

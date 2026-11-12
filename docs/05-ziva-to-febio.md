@@ -68,7 +68,7 @@ Ziva 的粘连是"软"的：被粘的顶点会被一个像弹簧一样的力拉�
 
 顶点集由 T-03 导出（[03](03-asset.md) 第 6 节）。四组互不重叠，所以固定区和随下颌区之间自然隔着没有约束的顶点，这正是 T-04 的下颌张开试验要求的过渡带（[13](13-explanations.md) E-03）。
 
-**嘴角的锚怎么做**：锚是一个刚体，不显示、不参与碰撞，每帧给定运动：静止时和颅骨重合，下颌转动时它绕同一个铰链转 **α 倍的角度**（`jaw01` 是铰链，所以混合就是按比例转；以后驱动源不是纯铰链时，用旋转插值）。嘴角顶点经下面的规则对应到计算点，各按下面第 3 条接弹簧（每个节点三根，另一端是锚上的对应点）。α = 0 时嘴角跟颅骨，α = 1 时跟下颌。它近似的是"口角 node → zTissue2/3 → 颅骨和下颌"整条链（zTissue2/3 同时挂在两块骨头上），是推断出来的简化（A-35）。场景描述里锚和它的运动怎么写已经定了：派生驱动源加 `anchors`，见 [04](04-architecture.md) 第 5.1 节末（格式仍是 `asrp-scene/1`）。
+**嘴角的锚怎么做**：锚是一个刚体，不显示、不参与碰撞，每帧给定运动：静止时和颅骨重合，下颌转动时它绕同一个铰链转 **α 倍的角度**（派生驱动源取来源整个刚体运动的 α 倍：转动和平移一起按比例缩，来源是绕铰链的纯转动时就是绕同一个铰链转 α 倍的角度；三个轴都转的下颌也能用，公式见 [04](04-architecture.md) 第 5.1 节，ADR-38）。嘴角顶点经下面的规则对应到计算点，各按下面第 3 条接弹簧（每个节点三根，另一端是锚上的对应点）。α = 0 时嘴角跟颅骨，α = 1 时跟下颌。它近似的是"口角 node → zTissue2/3 → 颅骨和下颌"整条链（zTissue2/3 同时挂在两块骨头上），是推断出来的简化（A-35）。场景描述里锚和它的运动怎么写已经定了：派生驱动源加 `anchors`，见 [04](04-architecture.md) 第 5.1 节末（格式仍是 `asrp-scene/1`）。
 
 **为什么下唇的绑定强度是参数**（ADR-27）：landmark 层本身不带下颌转动（`joints.json` 里 landmark 的父节点都是 `joint_oor`，`jaw01` 的父节点是 `head`），而轨迹是在物理冻结于第 14 帧时优化出来的，已经含有下唇跟着张嘴的位移。物理段再把下唇硬绑在下颌上，张嘴位移可能被算两遍（**推断，有间接证据，Q17、A-29**）。所以下唇用弹簧，不默认权重 1 硬绑。
 
@@ -130,7 +130,7 @@ E·h = 0.02 MPa × 2.5 mm（节点间距）= 0.05 N/mm 是组织自己的刚度�
 - 上限 10⁸ N/mm（本算例是 2×10⁹ E·h）；
 - 想要"软"的粘连（下唇的跟随比例、嘴角的混合）时，K 是表达这种软的参数，不按"趋近硬"的规则取。
 
-**基础刚度的具体数值：待定**。原因：下唇想要的跟随比例要等 Ziva 的"只有物理"结果（Q17）；"刚度 × 权重"（A-23）和权重小于 1 的情形是 T-07 第 3 步，还没试；用上面的公式 K ≥ F ÷（N × δ<sub>tol</sub>）核对基础刚度，需要从运行里量出粘连承受的力 F，还没有做。T-06a 用的是临时值 K = 100 × E × h（E·h 里的 h 是 FEBio 坐标里的节点间距；嘴唇 2.43 N/mm），已经跑完整条运动，三组 `spring` 的 max|u|÷δ 都 < 0.1（下唇 0.039、左右嘴角 0.0100、0.0083，09 T-06a 的结果）。
+**基础刚度的具体数值：待定**。原因：下唇想要的跟随比例现在是我们自己定的设计选择（11 的 Q17，2026-11-11），按结果看着合理、动作重复时保持稳定来判断，Ziva 的"只有物理"结果和 Q20 的实验可作参考；"刚度 × 权重"（A-23）和权重小于 1 的情形是 T-07 第 3 步，还没试；用上面的公式 K ≥ F ÷（N × δ<sub>tol</sub>）核对基础刚度，需要从运行里量出粘连承受的力 F，还没有做。T-06a 用的是临时值 K = 100 × E × h（E·h 里的 h 是 FEBio 坐标里的节点间距；嘴唇 2.43 N/mm），已经跑完整条运动，三组 `spring` 的 max|u|÷δ 都 < 0.1（下唇 0.039、左右嘴角 0.0100、0.0083，09 T-06a 的结果）。
 
 验收（T-06a，已通过，`tests/test_generate.py`）：方块算例里，`hard` 区域的计算点和嵌入后的显示顶点，位移都等于目标位移；`spring` 的基础刚度加大时，结果趋近 `hard`。
 
@@ -180,10 +180,10 @@ E·h = 0.02 MPa × 2.5 mm（节点间距）= 0.05 N/mm 是组织自己的刚度�
 | 坑 12 | **fTetWild 每次结果都不一样**：同一台机器、同样输入，即使 `num_threads=1`、关掉简化或优化，节点数和哈希每次都变（25.4 mm / 1.27 mm 单线程连跑三次：360、333、328 个节点）。在运行时重新生成，就违反 R-06 | 网格只用 `tools/build_tetmesh.py` 显式生成一次，写成 `data/tetmesh/lips.json` 并提交；之后一律 `tetmesh.load`，它校验内容哈希，`tetmesh.check_source` 校验源表面没变（ADR-20） | `tests/test_tetmesh.py` 的 `test_save_and_load_round_trip_bit_for_bit`、`test_load_refuses_an_edited_mesh`、`test_check_source_notices_a_new_surface` |
 | 坑 13 | **自身穿插的表面，"表面的亏格"不等于它围出的实体的亏格**：嘴唇表面是亏格 1 的环，但两侧嘴角的上下唇先互相穿过，再往外又分开一小段（约 1.6 mm 长、0.17–0.29 mm 宽）。这两小段前后贯通，是实体上的两个小孔，所以忠实的四面体网格亏格是 3 | 期望亏格 = 表面亏格 + "穿过之后又分开"的段数（`tetmesh.check`）；只是焊住（没有穿过）的不算 | `test_a_crossing_that_opens_again_is_a_pocket`、`test_a_weld_is_not_a_pocket`、`test_check_wants_the_pocket_kept`；[13](13-explanations.md) E-03 |
 | 坑 14 | **fTetWild 偶尔直接崩溃**：进程退出码 139，没有任何报错。包络 1.5 mm 时遇到过，大批量重复运行时也遇到过一次 | 只在 `tools/build_tetmesh.py` 里生成，崩了就重跑；产品运行时不调用 fTetWild（坑 12） | T-04 比较时两次（退出码 139） |
-| 坑 15 | **FEBio 的 `load_controller` 编号必须从 1 连续往上**，跳号就报 `invalid value for attribute "id"`；用 must points 控制输出时，日志里**没有第 0 帧**，只有第 1 到 N 帧 | 编号连续生成；检查帧数时数 1..N | `spikes/s2_lips_febio.py`；`tests/test_tetmesh.py` 的 `test_saved_lip_mesh_settles_under_gravity_in_real_febio` |
+| 坑 15 | **FEBio 的 `load_controller` 编号必须从 1 连续往上**，跳号就报 `invalid value for attribute "id"`；用 must points 控制输出时，位置记录里（`positions.txt`，以前是日志）**没有第 0 帧**，只有第 1 到 N 帧 | 编号连续生成；检查帧数时数 1..N | `spikes/s2_lips_febio.py`；`tests/test_tetmesh.py` 的 `test_saved_lip_mesh_settles_under_gravity_in_real_febio` |
 | 坑 16 | **FEBio 把读不懂的数字当成 0，不报错**：numpy 的数写成文字是 `np.float64(0.1)`，FEBio 读成 0，刚体就一动不动，日志里正常结束 | 生成器里每个数都经 `generate._num`（Python 的 `float` 再 `repr`）写出 | T-06a 试验时刚体转动全变成 0；`tests/test_generate.py` 的 `test_numbers_reach_the_feb_as_plain_floats` |
-| 坑 17 | **FEBio 多线程求解时，同一个 `.feb` 两次的结果在日志最后一位不同**（约 10⁻¹¹ mm）；回放文件要逐位相同就不行（float32 舍入偶尔会翻过去） | 我们启动的每个 FEBio 都加环境变量 `OMP_NUM_THREADS=1`（`febio.ENV`，记进溯源）。代价：嘴唇 50 帧从 27 秒变成 45 秒 | 同一个方块 `.feb` 多线程连跑三次，日志数据三个不同的哈希；单线程三次完全相同；`test_same_input_twice_gives_the_same_playback_files`（单线程以前它失败） |
-| 坑 18 | **不属于任何单元的计算点，FEBio 只给一个警告就删掉**（"isolated vertices removed"），它们在日志里就没有结果 | 生成器发现四面体网格里有不属于任何四面体的计算点就报错；每个刚体都带一个小四面体，弹簧的锚点属于弹簧单元 | T-06a 试验；`test_a_tet_mesh_node_in_no_tet_stops_the_generator` |
+| 坑 17 | **FEBio 多线程求解时，同一个 `.feb` 两次的结果在日志最后一位不同**（约 10⁻¹¹ mm）；回放文件要逐位相同就不行（float32 舍入偶尔会翻过去） | 我们启动的每个 FEBio 都加环境变量 `OMP_NUM_THREADS=1`（`febio.ENV`，记进溯源）。代价：嘴唇 50 帧从 27 秒变成 45 秒。**2026-11-11 更新（ADR-38）**：默认改为 4 线程（`febio.DEFAULT_THREADS`，同时设 `OMP_NUM_THREADS` 和 `MKL_NUM_THREADS`，`asrp run --threads N` 可改）；需要回放文件逐位相同时用 `--threads 1`。上面"每个 FEBio 都加 `OMP_NUM_THREADS=1`"是当时的做法 | 同一个方块 `.feb` 多线程连跑三次，日志数据三个不同的哈希；单线程三次完全相同；`test_same_input_twice_gives_the_same_playback_files`（单线程以前它失败）；2026-11-11 实测（`spikes/audit_threads.py`，原型机 `.feb`，50 步）：1 线程 56.2 秒，4 线程 26.8 秒，8 线程 29.7 秒，16 线程 38.6 秒，4 线程比 1 线程最多差 1×10⁻¹⁰ mm（满足 1×10⁻⁹ mm，只是回放文件不保证逐位相同） |
+| 坑 18 | **不属于任何单元的计算点，FEBio 只给一个警告就删掉**（"isolated vertices removed"），它们在位置记录里就没有结果 | 生成器发现四面体网格里有不属于任何四面体的计算点就报错；每个刚体都带一个小四面体，弹簧的锚点属于弹簧单元 | T-06a 试验；`test_a_tet_mesh_node_in_no_tet_stops_the_generator` |
 
 ## 6. 这份文档什么时候要更新
 

@@ -3,10 +3,10 @@
     blender --background --factory-startup --python-exit-code 1 --python tools/render_prototype.py -- <run_dir> [--check-only] [--out <dir>]
 
 Loads <run_dir>/playback.json with the add-on's Load Result operator (as a researcher would), then compares
-Blender's evaluated lip mesh with physics/display.json (what asrp computed) at frames 0, 14, the fully open
-frame and the last one. Then, unless --check-only, adds the skull and the jaw from <run_dir>'s copies of the
+Blender's evaluated lip mesh with physics/display.json + display.npy (what asrp computed) at frames 0, the settled frame
+(settled_shape.frame in <run_dir>/run_report.json), the fully open frame and the last one. Then, unless --check-only, adds the skull and the jaw from <run_dir>'s copies of the
 meshes (the jaw moved by its driver's transform from trajectory.json on each frame) and renders three side
-views: rest (frame 0), settled (frame 14) and jaw fully open (the frame where the jaw's angle is largest) to
+views: rest (frame 0), settled (the settled frame) and jaw fully open (the frame where the jaw's angle is largest) to
 <out>/prototype_rest.png, prototype_settled.png, prototype_open.png (default out: data/preview).
 
 With --frames-dir <dir> [--frames-size <px>] it also renders every frame of the same side view to
@@ -23,6 +23,7 @@ REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "blender_addon"))
 
 import bpy  # noqa: E402
+import numpy as np  # noqa: E402  (Blender bundles it)
 from mathutils import Matrix  # noqa: E402
 
 import asrp_blender  # noqa: E402
@@ -32,6 +33,13 @@ run_dir = Path(args[0]).resolve()
 check_only = "--check-only" in args
 out = Path(args[args.index("--out") + 1]).resolve() if "--out" in args else REPO / "data" / "preview"
 
+report = json.loads((run_dir / "run_report.json").read_text(encoding="utf-8"))
+settled_shape = report.get("settled_shape") or {}
+if not settled_shape.get("available") or not isinstance(settled_shape.get("frame"), int):
+    sys.exit(f"{run_dir} has no settled shape (run_report.json settled_shape: {settled_shape or 'missing'}); "
+             "the trajectory must name settle_until_frame >= 1 with the drivers still until then. Nothing was rendered.")
+settled = settled_shape["frame"]
+
 for obj in list(bpy.data.objects):
     bpy.data.objects.remove(obj)
 asrp_blender.register()
@@ -39,7 +47,9 @@ assert bpy.ops.asrp.load_playback(directory=str(run_dir)) == {"FINISHED"}
 lips = bpy.context.view_layer.objects.active
 scene = bpy.context.scene
 
-display = json.loads((run_dir / "physics" / "display.json").read_text())["positions"]
+display_header = json.loads((run_dir / "physics" / "display.json").read_text())  # header; the numbers are in .npy
+display = np.load(run_dir / "physics" / display_header["array"], allow_pickle=False)
+assert list(display.shape) == display_header["shape"], "physics/display.json and its array do not belong together"
 motion = json.loads((run_dir / "trajectory.json").read_text())
 scene_json = json.loads((run_dir / "scene.json").read_text())
 jaw = next(b for b in scene_json["bones"] if b["name"] == "jaw")
@@ -51,7 +61,7 @@ def angle(m):
 
 
 open_frame = max(range(len(jaw_motion)), key=lambda f: angle(jaw_motion[f]))
-frames = sorted({0, 14, open_frame, len(display) - 1})
+frames = sorted({0, settled, open_frame, len(display) - 1})
 assert (scene.frame_start, scene.frame_end) == (0, len(display) - 1)
 worst = moved = 0.0
 for f in frames:
@@ -120,7 +130,7 @@ scene.render.resolution_x = scene.render.resolution_y = 720
 scene.render.image_settings.file_format = "PNG"
 out.mkdir(parents=True, exist_ok=True)
 
-for label, f in (("rest", 0), ("settled", 14), ("open", open_frame)):
+for label, f in (("rest", 0), ("settled", settled), ("open", open_frame)):
     scene.frame_set(f)
     m = jaw_motion[f]
     jaw_obj.matrix_world = Matrix.Scale(0.001, 4) @ Matrix([m[0:4], m[4:8], m[8:12], m[12:16]])

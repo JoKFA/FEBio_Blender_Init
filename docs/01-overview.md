@@ -54,13 +54,13 @@ FEBio 是一个专门为生物力学开发、经过同行评审的开源有限�
 | 嘴唇的四组粘连顶点集已导出（T-03）：74、76、348、309 个顶点，位置核对通过（上唇贴颅骨、下唇贴下颌） | `uv run python tools/lip_attachments.py --inventory ...`，[09](09-roadmap-and-tasks.md) T-03 |
 | `asrp run --feb` 能跑现成的 `.feb`：运行文件夹、溯源、进度、取消、出错处理，位置除以 k 后才写入（T-08） | `uv run pytest tests/test_run.py -q`，[09](09-roadmap-and-tasks.md) T-08 |
 | 被哈希的数据在任何电脑上检出都逐字节相同（`.gitattributes`） | 打开 `core.autocrlf` 克隆后跑测试，[08](08-engineering-standards.md) 第 10 节 |
-| **原型机（T-06a）**：真实嘴唇被下颌带动（代用运动，张开 12°）、算完 51 帧（含第 0 帧，FEBio 算 50 步；0.9–2.0 秒/帧（随本机负载，[15](15-prototype.md) 第 3 节），重试 0 次），四项合理性检查通过，第 14 帧沉降后的形状单独存下，回放包在 Blender 里逐帧对得上；同一份输入两次的回放文件逐位相同。材料、粘连刚度、k 都是标明来源的临时值 | `uv run asrp import-asset data/lab_export <out>`、`uv run python tools/placeholder_jaw_motion.py <out>/scene.json <out>/placeholder_jaw.json`、`uv run asrp run <out>/scene.json <out>/placeholder_jaw.json`；图在 `data/preview/prototype_*.png`；[09](09-roadmap-and-tasks.md) T-06a 的结果 |
+| **原型机（T-06a）**：真实嘴唇被下颌带动（代用运动，张开 12°）、算完 51 帧（含第 0 帧，FEBio 算 50 步；默认 4 线程，用时见 [15](15-prototype.md) 第 3 节，重试 0 次），五项合理性检查通过，第 14 帧沉降后的形状单独存下，回放包在 Blender 里逐帧对得上；同一份输入两次，默认坐标差不超过 1×10⁻⁹ mm，`--threads 1` 时回放文件逐位相同（ADR-38）。材料、粘连刚度、k 都是标明来源的临时值 | `uv run asrp import-asset data/lab_export <out>`、`uv run python tools/placeholder_jaw_motion.py <out>/scene.json <out>/placeholder_jaw.json`、`uv run asrp run <out>/scene.json <out>/placeholder_jaw.json`；图在 `data/preview/prototype_*.png`；[09](09-roadmap-and-tasks.md) T-06a 的结果 |
 
-**原型机已经跑通（2026-11-11 的参考运行）**：实验室的真实嘴唇被下颌带动，FEBio 算完 51 帧、四项合理性检查通过，结果在 Blender 里回放，同一份输入两次的回放文件逐字节相同。它只有物理层，下颌运动和材料都是临时值，还没有 landmark 层，也没有和 Ziva 对比。动图、数字、自己跑一遍的命令和结果的局限，都在一页里：[15 原型机：怎么跑、跑出了什么](15-prototype.md)。
+**原型机已经跑通（2026-11-11 的参考运行）**：实验室的真实嘴唇被下颌带动，FEBio 算完 51 帧、五项合理性检查通过，结果在 Blender 里回放，同一份输入两次的结果在 1×10⁻⁹ mm 内相同（`--threads 1` 时回放文件逐字节相同）。它只有物理层，下颌运动和材料都是临时值，还没有 landmark 层，也没有和 Ziva 对比。动图、数字、自己跑一遍的命令和结果的局限，都在一页里：[15 原型机：怎么跑、跑出了什么](15-prototype.md)。
 
 ![原型机：真实嘴唇被下颌带动，张开再合上](../data/preview/prototype_motion.gif)
 
-下一步：T-06b（应变能、k 的对比、网格敏感性报告）；拿到 Ziva 设置和运动文件以后换掉临时值（T-12）、做 landmark 段（M3）；见 [09 路线图与任务](09-roadmap-and-tasks.md) 第 1 节。
+下一步（2026-11-11 项目负责人接受的顺序，[13](13-explanations.md) E-08）：先是 T-22（审计后的小修，已完成），再做 landmark 层（T-09），然后是三个独立的试验（T-17 软粘软、T-23 方块上的主动收缩、T-24 原型机上的"landmark 进物理"）；拿到 Ziva 设置和运动文件以后换掉临时值（T-12）；见 [09 路线图与任务](09-roadmap-and-tasks.md) 第 1 节。
 
 ## 谁参与、各自负责什么
 
@@ -73,8 +73,8 @@ FEBio 是一个专门为生物力学开发、经过同行评审的开源有限�
 
 ## 最需要尽快解决的三件事
 
-1. **约 Ziva 机器，趁许可还有效拿到只有它能给的数据**（ADR-35）：Ziva 的完整设置和权重表、一条运动的参考结果、Ziva 存的各物体网格（尤其嘴角链条上的）。许可哪天到期（Q5）要先问清楚，现有的两条线索都没有核实。步骤见 [12 导出清单](12-lab-export-checklist.md) 第二部分；第二阶段要的多网格、多运动，脚本也已支持（T-19），可以同一次做。
-2. **把 5 个问题发给实验室，并要运动文件**：可以直接转发的一页在 [12](12-lab-export-checklist.md) 第三部分；运动文件 `combined_checkpoints.pkl` 不在源码仓库里（D2）。
+1. **约 Ziva 机器，趁许可还有效拿到只有它能给的数据**（ADR-35）：Ziva 的完整设置和权重表、一条运动的参考结果、Ziva 存的各物体网格（尤其嘴角链条上的），以及运动的检查点文件（远程登录取）。许可约一年半后到期（Q5，2026-11-11 项目负责人转述），不急，排在 landmark 层和三个试验之后。步骤见 [12 导出清单](12-lab-export-checklist.md) 第二部分；第二阶段要的多网格、多运动，脚本也已支持（T-19），可以同一次做。
+2. **把问题发给实验室**：可以直接转发的一页在 [12](12-lab-export-checklist.md) 第三部分（现在实际是第 1、3、5 问，Q5、Q17 不再等实验室）；运动文件不再向实验室要，在 Ziva 机器上取（D2）。
 3. **原型机给实验室看**：T-06a 已跑通（2026-11-11，目标日期 2026-11-17），可以拿 `data/preview/prototype_*.png` 和回放包给研究员看下唇跟下颌、嘴角拉长是否合理；参数都是临时值（09 T-06a 卡）。
 
 第二阶段投入之前还有一道关：T-17、T-18 复核 FEBio 撑不撑得起第二阶段（ADR-26）；它们随时可以做，不挡 M3。
