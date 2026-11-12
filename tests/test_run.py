@@ -300,6 +300,19 @@ def test_a_run_whose_step_count_differs_from_time_steps_but_reaches_the_end_time
     assert abs(febio.time_reached(result.run_dir / "model.log") - febio.end_time(feb)) < 1e-4
 
 
+def test_control_settings_inside_xml_comments_do_not_count(tmp_path):
+    # PR #7 review: a .feb keeping old settings in a comment was failed after a normal solve.
+    feb = make_feb(tmp_path / "in" / "commented.feb")
+    old = "<!-- <Control><time_steps>60</time_steps><step_size>0.1</step_size></Control> -->\n  <Control>"
+    feb.write_text(feb.read_text().replace("<Control>", old, 1))
+    assert "<time_steps>60</time_steps>" in feb.read_text()
+    assert febio.total_steps(feb) == FRAMES
+    assert febio.end_time(feb) == pytest.approx(FRAMES / 30)
+    result = execute(feb, tmp_path / "runs")
+    record = json.loads((result.run_dir / "provenance.json").read_text())
+    assert record["status"] == "complete", record.get("failure")
+
+
 def test_a_run_that_stops_short_of_the_end_time_is_not_complete(tmp_path):
     log = tmp_path / "model.log"
     log.write_text("------- converged at time : 0.0333333\n------- converged at time : 0.0666667\n")

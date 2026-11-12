@@ -6,6 +6,7 @@ import signal
 import subprocess
 import sys
 import time
+import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -125,21 +126,35 @@ def kill_tree(proc: subprocess.Popen, timeout: float = 10) -> None:
                            "End it in Task Manager.") from None
 
 
+def _controls(feb: Path) -> list[tuple[int | None, float | None]] | None:
+    """(time_steps, step_size) of every active <Control> block, read with an XML parser so that settings
+    left inside XML comments do not count (PR #7 review). None if the file is not readable XML."""
+    try:
+        root = ET.parse(feb).getroot()
+    except (ET.ParseError, OSError):
+        return None
+    out = []
+    for control in root.iter("Control"):
+        n, dt = control.findtext("time_steps"), control.findtext("step_size")
+        out.append((int(n) if n and n.strip() else None, float(dt) if dt and dt.strip() else None))
+    return out
+
+
 def total_steps(feb: Path) -> int | None:
     """Number of time steps the .feb asks for (summed over steps), or None if it does not say."""
-    found = re.findall(r"<time_steps>\s*(\d+)\s*</time_steps>", feb.read_text(errors="replace"))
-    return sum(map(int, found)) if found else None
+    controls = _controls(feb)
+    if not controls or any(n is None for n, _ in controls):
+        return None
+    return sum(n for n, _ in controls)
 
 
 def end_time(feb: Path) -> float | None:
     """The time the .feb asks FEBio to reach: sum over steps of time_steps × step_size.
     None if a step does not say both."""
-    text = feb.read_text(errors="replace")
-    steps = re.findall(r"<time_steps>\s*(\d+)\s*</time_steps>", text)
-    sizes = re.findall(r"<step_size>\s*([0-9.eE+-]+)\s*</step_size>", text)
-    if not steps or len(steps) != len(sizes):
+    controls = _controls(feb)
+    if not controls or any(n is None or dt is None for n, dt in controls):
         return None
-    return sum(int(n) * float(dt) for n, dt in zip(steps, sizes))
+    return sum(n * dt for n, dt in controls)
 
 
 def time_reached(log: Path) -> float | None:
