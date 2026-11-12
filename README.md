@@ -4,11 +4,11 @@
 
 *The lab's real lips, pulled by the jaw (red: lips computed by FEBio; blue: jaw; grey: skull). Placeholder jaw motion, temporary material values, no landmark layer yet.*
 
-ASRP replaces Ziva (the physics backend under the lab's facial controller) with FEBio, and Maya (the host) with Blender. The prototype takes the lab's real lip mesh, lets the jaw pull it through 51 frames, solves it with FEBio in about two minutes and plays it back in Blender; the numbers and their limits are on one page: **[docs/15-prototype.md](docs/15-prototype.md)** (Chinese).
+ASRP replaces Ziva (the physics backend under the lab's facial controller) with FEBio, and Maya (the host) with Blender. The prototype takes the lab's real lip mesh, lets the jaw pull it through 51 frames, solves it with FEBio in under a minute and plays it back in Blender; the measured timings, the other numbers and their limits are on one page: **[docs/15-prototype.md](docs/15-prototype.md)** (Chinese).
 
 ## Run the prototype
 
-After the setup below (`uv sync`, `uv run asrp doctor` all `ok`), three commands, about a minute, no Maya or Ziva needed (the output folders are git-ignored):
+After the setup below (`uv sync`, `uv run asrp doctor` all `ok`), three commands, under a minute on the reference machine, no Maya or Ziva needed (the output folders are git-ignored):
 
 ```bash
 uv run asrp import-asset data/lab_export runs/prototype_scene

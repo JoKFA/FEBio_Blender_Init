@@ -66,7 +66,7 @@ asrp/
 │  │  ├─ generate.py          生成器：scene + trajectory → FEBio 输入 .feb（真实大小、× k，粘连）
 │  │  ├─ embed.py             把显示网格嵌进四面体网格，算出每帧显示顶点位置
 │  │  ├─ simulate.py          asrp run 的整条流程：生成 → FEBio → ÷ k → 嵌入 → 检查 → 回放包
-│  │  ├─ plausibility.py      合理性检查 (a)(b)(b2)(c)
+│  │  ├─ plausibility.py      合理性检查 (a)(b)(b2)(c)(d)
 │  │  ├─ run.py               运行外壳：运行文件夹、进度、取消、出错处理
 │  │  ├─ provenance.py        溯源记录 provenance.json
 │  │  └─ asset/               资产导入（asrp import-asset）
@@ -79,7 +79,10 @@ asrp/
 │  ├─ fixtures/s1/            S1 写成的示例 scene.json、trajectory.json，由同目录的 build.py 生成
 │  ├─ cube_scene.py           生成器测试用的方块场景（有教科书答案）
 │  ├─ test_generate.py        生成器、嵌入、合理性检查、asrp run（方块算例）
-│  ├─ test_prototype.py       真实嘴唇整条运行（ASRP_SLOW=1 才跑，约 2 分钟）
+│  ├─ test_prototype.py       真实嘴唇整条运行（约 2 分钟；验证门每次都设 ASRP_SLOW=1 跑它，单独跑 pytest 时要自己设）
+│  ├─ test_prototype_page.py  15 里生成的数字表和存档的参考运行一致（tools/prototype_numbers.py）
+│  ├─ test_verify_gate.py     验证门本身：它必须带 ASRP_SLOW=1 跑真实嘴唇的测试，别的步骤不带
+│  ├─ hinge.py                测试用的小工具：从铰链变换反推转角（不是测试）
 │  ├─ test_run.py             运行外壳（替身模式）
 │  ├─ test_lip_attachments.py test_s3_attachment.py
 │  └─ test_line_endings.py    被跟踪的文本文件一律 LF
@@ -92,10 +95,14 @@ asrp/
 │  ├─ attachment_overlap.py   一次性测量：四组嘴唇粘连是否共用四面体计算点
 │  ├─ audit_material.py       审计（E-08）：嘴唇的 E 乘 10、除以 10 各重跑一遍，比下垂和形状
 │  ├─ audit_threads.py        审计（E-08）：同一份 .feb 用不同线程数，比用时和坐标
-│  └─ audit_cycles.py         审计（E-08）：张嘴来回多次，看形状会不会越跑越偏
+│  ├─ audit_cycles.py         审计（E-08）：张嘴来回多次，看形状会不会越跑越偏
+│  ├─ audit_attachment.py     审计（E-09）：嘴角锚的比例、弹簧刚度各改一档，比形状
+│  ├─ audit_skin_identity.py  审计（E-09）：landmark 蒙皮数据能不能直接用（四项核对）
+│  ├─ audit_head_shake.py     审计（E-09）：甩头时嘴唇相对头晃多少
+│  └─ audit_aa_fit.py         审计（E-09）：只靠蒙皮够不够到 AA 目标、目标里嘴唇跟不跟下颌
 │
 ├─ tools/                     迁移、检查、渲染工具，不是产品代码
-│  ├─ verify.py               "完成"的定义：测试 + doctor + 插件 + 回放检查
+│  ├─ verify.py               "完成"的定义：ruff + 测试 + doctor + 插件 + 回放检查
 │  ├─ build_tetmesh.py        生成嘴唇四面体网格 data/tetmesh/lips.json，只显式跑一次（ADR-20）
 │  ├─ lip_attachments.py      导出嘴唇的四组粘连顶点集 data/lab_export/lip_attachments.json（T-03）
 │  ├─ lip_attachments_preview.py  把四组粘连画在真实网格上，给人看
