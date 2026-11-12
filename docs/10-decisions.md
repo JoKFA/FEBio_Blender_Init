@@ -342,7 +342,7 @@
   5. **临时值**一律带来源标注（实验室设置 / Ziva 默认值 / 我们定的）和说明；
   6. 下颌**铰链**来自 `joints.json`，来源标"实验室设置"；
   7. 导入结果带一条提醒（嘴唇还没有任何粘连），这是预期的，T-06a 加上粘连后消失（已兑现：`import PASSED: scene check 0 errors, 0 warnings`）。
-- **一处缺口**：`landmarks/skin_skinCluster7.json` 是原样拷贝，里面的蒙皮矩阵还是场景单位、Y 轴朝上，**还没换算成毫米和 Z 轴朝上**。归 T-09 完成，但实现放在导入模块 `src/asrp_core/asset/` 里（单位只在导入时换算一次，N-01）。[09](09-roadmap-and-tasks.md) 的 M1 状态里注明。
+- **一处缺口**：`landmarks/skin_skinCluster7.json` 是原样拷贝，里面的蒙皮矩阵还是场景单位、Y 轴朝上，**还没换算成毫米和 Z 轴朝上**。归 T-09 完成，但实现放在导入模块 `src/asrp_core/asset/` 里（单位只在导入时换算一次，N-01）。[09](09-roadmap-and-tasks.md) 的 M1 状态里注明。**2026-11-12 已补上**（T-09）：导入时写换算好的 `landmarks/skin_mm.json`，不再原样拷贝（[04](04-architecture.md) 第 4 节）。
 - **另外写明**：运动文件 `trajectory.json` 用**列向量**约定，Maya 的矩阵是**行向量**约定，T-10 转换时要转置（T-10 卡）。
 - **原因**：这些都是 T-02、T-05 实现时定下、当时没来得及请项目负责人确认的点。
 - **放弃了**：无。

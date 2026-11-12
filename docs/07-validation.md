@@ -41,7 +41,7 @@
 |---|---|---|
 | 用一个有理论答案的简单方块，比较拉伸、悬挂的结果 | 材料参数和单位换算正确 | ✅ T-06a：`tests/test_generate.py`（悬挂差 0.22%、0.43%，拉伸的横向收缩差 0.001） |
 | 嵌入的显示网格在没有变形时和原网格完全重合 | 嵌入（zEmbedder 的替代）正确 | ✅ T-06a：嘴唇 7×10⁻¹⁴ mm（`test_embedded_lips_at_rest_equal_the_lip_mesh`） |
-| landmark 层：landmark 不动时，最终形状等于物理结果 | 蒙皮层没有多余的变形 | T-09 |
+| landmark 层：landmark 不动时，最终形状等于物理结果 | 蒙皮层没有多余的变形 | T-09 ✅（`tests/test_simulate.py::test_landmarks_at_rest_give_a_final_that_is_the_physics_exactly`） |
 | 同一台机器、同一份输入跑两次，解析出的每帧每个点的坐标差别不超过 1×10⁻⁹ mm（默认 4 线程）；`--threads 1` 时回放文件逐位相同 | 同环境复现（R-06 的 a，ADR-38）。不比较 FEBio 日志，日志里有时间戳 | T-08（坐标）；✅ T-06a（回放文件逐位相同，要 1 线程，[05](05-ziva-to-febio.md) 坑 17；`test_same_input_twice_gives_the_same_playback_files`；默认线程的 1×10⁻⁹ mm 标准和真实嘴唇在 `tests/test_prototype.py`，现在每次验证都跑） |
 | 把运行文件夹拷到另一个目录，只用它自己的文件重跑，每帧坐标和原来相差不超过 1×10⁻⁹ mm | 运行不依赖绝对路径（R-06 的 a） | T-08 |
 | 换一台 Windows 电脑、换一个文件夹，只用运行文件夹自己的文件重跑 | 跨环境复现（R-06 的 b）。容差先量再定，不预设 | M5（T-14）验证 |
