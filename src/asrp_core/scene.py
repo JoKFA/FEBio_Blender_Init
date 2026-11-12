@@ -38,6 +38,9 @@ scene.json only names them and records their hash.
       }],                                             #   motion of its own; docs/04 section 5.1
       "anchors": [{"name": str, "driver": str, "note": str}],   # optional (T-06a): invisible rigid
                                                       #   bodies with no mesh; attachments may go to one
+      "simplifications": [str, ...],                  # optional: what this scene leaves out of the lab's
+                                                      #   model, one sentence each (non-empty strings); the
+                                                      #   run report copies the list
       "attachments": [{
         "name": str,
         "from": str,                                  # a soft tissue; weights are on its surface
@@ -293,6 +296,7 @@ class Scene:
     landmarks: Landmarks | None
     solver: Solver
     anchors: list[Anchor] = field(default_factory=list)
+    simplifications: list[str] = field(default_factory=list)
 
     def to_json(self) -> dict:
         d = {
@@ -308,6 +312,8 @@ class Scene:
         }
         if self.anchors:  # absent when empty, so scenes without an anchor are written as before
             d["anchors"] = [a.to_json() for a in self.anchors]
+        if self.simplifications:  # likewise
+            d["simplifications"] = list(self.simplifications)
         return d
 
 
@@ -623,10 +629,18 @@ def parse(data, report: Report | None = None) -> Report:
     drivers = _named_list(data, "drivers", report, _driver)
     attachments = _named_list(data, "attachments", report, _attachment)
     anchors = _named_list(data, "anchors", report, _anchor) if "anchors" in data else []
+    simplifications = []
+    if "simplifications" in data:
+        raw = data["simplifications"]
+        if not isinstance(raw, list) or not all(isinstance(x, str) and x.strip() for x in raw):
+            report.errors.append("'simplifications' must be a list of non-empty sentences (strings); remove the "
+                                 "key if the scene leaves nothing out")
+        else:
+            simplifications = list(raw)
     if report.errors:
         return report
     report.scene = Scene(origin, parts["units"], tissues, bones, drivers, attachments, parts["landmarks"],
-                         parts["solver"], anchors)
+                         parts["solver"], anchors, simplifications)
     return report
 
 

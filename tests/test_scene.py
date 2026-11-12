@@ -385,6 +385,20 @@ def test_a_scene_without_anchors_is_written_without_the_field():
     assert "anchors" not in scene.load(S1 / "scene.json").to_json()
 
 
+def test_simplifications_are_optional_round_trip_and_must_be_non_empty_strings(tmp_path):
+    assert "simplifications" not in scene.load(S1 / "scene.json").to_json()
+    assert scene.load(S1 / "scene.json").simplifications == []
+    folder = copy_s1(tmp_path)
+    path = edit_scene(folder, lambda d: d.update(simplifications=["no muscles", "no skin"]))
+    s = scene.load(path)
+    assert s.simplifications == ["no muscles", "no skin"] and s.to_json()["simplifications"] == ["no muscles", "no skin"]
+    scene.write(tmp_path / "again.json", s)
+    assert scene.load(tmp_path / "again.json") == s
+    for n, bad in enumerate(("one sentence", ["fine", ""], ["fine", 3], [" "])):
+        report, text = errors_of(edit_scene(copy_s1(tmp_path / f"bad{n}"), lambda d, bad=bad: d.update(simplifications=bad)))
+        assert not report.ok and "'simplifications' must be a list of non-empty sentences" in text, bad
+
+
 def test_an_anchor_whose_driver_is_unknown_is_an_error(tmp_path):
     folder = copy_s1(tmp_path)
     report, text = errors_of(edit_scene(folder, lambda d: with_anchor(d, driver="nowhere")))

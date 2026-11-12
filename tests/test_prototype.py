@@ -93,8 +93,10 @@ def test_the_run_report_lists_every_temporary_value_and_the_unbuilt_attachments(
     assert where["scene.soft_tissues[lips].material.E_mpa"]["value"] == 0.015
     assert all(p["source"] in scene.SOURCES for p in report["parameters"])
     assert sum(p["source"] == "ours" for p in report["parameters"]) > 15
-    assert len(report["attachments_not_built"]) == 3 and "6 muscles" in report["attachments_not_built"][0]
-    assert report["timing"]["febio_s_per_frame"] > 0 and report["timing"]["budget_s_per_frame"] == 2.5
+    assert len(report["simplifications"]) == 3 and "6 muscles" in report["simplifications"][0]
+    assert report["simplifications"] == scene.load(runs[0].run_dir / "scene.json").simplifications
+    assert where["trajectory.source"]["source"] == "ours" and "attachments_not_built" not in report
+    assert report["timing"]["febio_s_per_frame"] > 0
 
 
 @pytest.mark.skipif(sys.platform != "win32", reason="Blender path is the Windows default here")

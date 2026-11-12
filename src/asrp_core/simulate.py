@@ -12,9 +12,9 @@
     physics/settled_frame14.obj   controller's starting point): tet nodes and display mesh, and the
                                   display mesh as an OBJ with its faces
     playback.json, playback.pc2   the display mesh and its point cache for Blender (`playback`)
-    run_report.json               every temporary value and its source, the attachments not built in
-                                  phase 1, the generator's report, max|u|/δ per spring group, the three
-                                  plausibility checks (`plausibility`), timing
+    run_report.json               every temporary value and its source, the scene's simplifications,
+                                  the generator's report, max|u|/δ per spring group, the plausibility
+                                  checks (`plausibility`), timing
 
 A failed or cancelled run gets run_report.json (with check (a) failed) but no physics results.
 """
@@ -61,16 +61,6 @@ GENERATOR_SETTINGS = [
     ("plausibility.hard_tolerance_mm", plausibility.HARD_TOLERANCE_MM, "docs/07 section 3"),
     ("plausibility.sag_range_mm_at_k1", list(plausibility.SAG_RANGE_MM), "docs/07 section 3, provisional; times k"),
 ]
-
-# ADR-32: attachments of the lab's model that phase 1 does not build (a simplification).
-NOT_BUILT = [
-    "the 6 muscles around the mouth attached to the lips (zAttachment to zTissue around the orbicularis): not built in "
-    "phase 1, ADR-32",
-    "the 9 skin attachments to the lips (zCloth): not built in phase 1, ADR-32 (skin is phase 2, T-18)",
-    "the chain mouth-corner node -> zTissue2/3 -> skull and jaw: replaced by the lip-corner anchor that turns alpha x the "
-    "jaw angle (A-35, docs/05 section 3)",
-]
-
 
 class SceneRunError(Exception):
     """The scene could not be run; nothing was started. The message says what to do."""
@@ -165,7 +155,7 @@ def run_scene(scene_path, trajectory_path, runs_dir: Path, exe: Path, name: str 
         "status": result.status,
         "frames": model.frames,
         "parameters": _parameters(model, trajectory_path),
-        "attachments_not_built": NOT_BUILT,
+        "simplifications": list(model.scene.simplifications),
         "warnings": model.warnings,
         "generator": model.report,
         "checks": {},
