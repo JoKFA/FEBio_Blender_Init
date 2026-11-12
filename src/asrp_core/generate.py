@@ -55,6 +55,7 @@ import math
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
+from xml.sax.saxutils import escape
 
 import numpy as np
 
@@ -144,6 +145,12 @@ class Model:
     feb_text: str = ""
     report: dict = field(default_factory=dict)
     warnings: list = field(default_factory=list)  # from `asrp check`, carried into the run report
+
+
+def _x(name: str) -> str:
+    """A scene name written into the .feb (attribute or text): XML-escaped. Scene validation already limits names to
+    letters, digits, _ - . ; this is the second line of defence."""
+    return escape(name, {'"': "&quot;"})
 
 
 def _num(v) -> str:
@@ -363,7 +370,7 @@ def _feb(m: Model) -> str:
     domains = ['    <SolidDomain name="tissue" mat="tissue"/>']
     eid = len(m.mesh.tets) + 1
     for b in bodies:
-        rb = f"rb_{b.name}"
+        rb = f"rb_{_x(b.name)}"
         materials.append(f"""    <material id="{b.material_id}" name="{rb}" type="rigid body">
       <density>{_num(RIGID_DENSITY)}</density>
       <center_of_mass>{_vec(b.reference_mm * k)}</center_of_mass>
@@ -377,16 +384,16 @@ def _feb(m: Model) -> str:
         held = sorted(node + 1 for node, t in m.hard.items() if t == b.name)
         for label, ids in (("hard", held), ("anchors", anchors_of[b.name])):
             if ids:
-                nodesets.append(f'    <NodeSet name="{label}_{b.name}">{",".join(map(str, ids))}</NodeSet>')
-                ties.append(f'    <bc name="{label}_{b.name}" type="rigid" node_set="{label}_{b.name}">\n'
-                            f'      <rb>rb_{b.name}</rb>\n    </bc>')
+                nodesets.append(f'    <NodeSet name="{label}_{_x(b.name)}">{",".join(map(str, ids))}</NodeSet>')
+                ties.append(f'    <bc name="{label}_{_x(b.name)}" type="rigid" node_set="{label}_{_x(b.name)}">\n'
+                            f'      <rb>rb_{_x(b.name)}</rb>\n    </bc>')
 
     sets, discrete, dmat = [], [], 0
     for g in m.groups:
         for level, stiffness in enumerate(g.levels):
             pairs = [(sp.node + 1, sp.anchor) for sp in springs if sp.group == g.name and sp.level == level]
             dmat += 1
-            name = f"springs_{g.name}_{level}"
+            name = f"springs_{_x(g.name)}_{level}"
             sets.append(f'    <DiscreteSet name="{name}">\n'
                         + "\n".join(f"      <delem>{a},{b}</delem>" for a, b in pairs) + "\n    </DiscreteSet>")
             discrete.append(f'    <discrete_material id="{dmat}" name="{name}" type="linear spring">\n'
@@ -399,9 +406,9 @@ def _feb(m: Model) -> str:
     curves = [[(0.0, 1.0), (times[-1], 1.0)], None]  # 1 gravity, 2 must points (written below)
     rigid = []
     for b in bodies:
-        rb = f"rb_{b.name}"
+        rb = f"rb_{_x(b.name)}"
         if b.motion == "fixed":
-            rigid.append(f'    <rigid_bc name="{b.name}_fixed" type="rigid_fixed">\n      <rb>{rb}</rb>\n'
+            rigid.append(f'    <rigid_bc name="{_x(b.name)}_fixed" type="rigid_fixed">\n      <rb>{rb}</rb>\n'
                          + "\n".join(f"      <{d}_dof>1</{d}_dof>" for d in ("Rx", "Ry", "Rz", "Ru", "Rv", "Rw"))
                          + "\n    </rigid_bc>")
             continue
@@ -419,7 +426,7 @@ def _feb(m: Model) -> str:
                                   ("Rv", [w[1] for w in turns], "rigid_rotation"),
                                   ("Rw", [w[2] for w in turns], "rigid_rotation")]:
             curves.append(list(zip(times, values)))
-            rigid.append(f'    <rigid_bc name="{b.name}_{dof}" type="{kind}">\n      <rb>{rb}</rb>\n'
+            rigid.append(f'    <rigid_bc name="{_x(b.name)}_{dof}" type="{kind}">\n      <rb>{rb}</rb>\n'
                          f'      <dof>{dof}</dof>\n      <value lc="{len(curves)}">1.0</value>\n    </rigid_bc>')
 
     load_lines = []

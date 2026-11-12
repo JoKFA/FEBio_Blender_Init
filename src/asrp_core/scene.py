@@ -68,6 +68,7 @@ and what to do.
 
 import hashlib
 import json
+import re
 import math
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -707,7 +708,23 @@ def _check_tet_mesh(base: Path, tissue: SoftTissue, units: Units, report: Report
         )
 
 
+NAME_OK = re.compile(r"[A-Za-z0-9_.-]+")
+
+
+def _check_names(scene: Scene, report: Report) -> None:
+    """Names go into the FEBio input (node sets, rigid bodies, load curves), so they stay plain ASCII."""
+    kinds = (("soft tissue", scene.soft_tissues), ("bone", scene.bones), ("anchor", scene.anchors),
+             ("driver", scene.drivers), ("attachment", scene.attachments))
+    for kind, items in kinds:
+        for i in items:
+            if not NAME_OK.fullmatch(i.name):
+                report.errors.append(
+                    f"{kind} name {i.name!r} has characters outside ASCII letters, digits, _ - and .; names go into "
+                    "the FEBio input file, where other characters (for example & < > or a space) break it. Rename it")
+
+
 def _check_references(scene: Scene, base: Path, report: Report) -> None:
+    _check_names(scene, report)
     names = [o.name for o in scene.soft_tissues] + [o.name for o in scene.bones] + [o.name for o in scene.anchors]
     seen = set()
     for n in names:
@@ -899,10 +916,17 @@ def driver_motion(scene: Scene, traj: trajectory_module.Trajectory) -> dict[str,
     scene and trajectory do not fit; run `check` first for a readable list of what is wrong."""
     out = {}
     by_name = {d.name: d for d in scene.drivers}
+    # A derived driver is computed only when something uses it: a prescribed bone, or an anchor that an
+    # attachment refers to. An unused one with no source motion is skipped (the trajectory check accepts it).
+    referenced = {x for a in scene.attachments for x in (a.source, a.target)}
+    used = {b.driver for b in scene.bones if b.motion == "prescribed"} | {
+        a.driver for a in scene.anchors if a.name in referenced}
     for d in scene.drivers:
         if d.blend is None:
             if d.name in traj.drivers:
                 out[d.name] = traj.drivers[d.name]
+            continue
+        if d.name not in used:
             continue
         parent = by_name.get(d.blend.of)
         if parent is None or parent.hinge is None or parent.blend is not None:

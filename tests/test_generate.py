@@ -443,3 +443,47 @@ def test_asrp_run_with_a_scene_prints_the_checks(hard_plate, capsys):
     code = cli.main(["run", str(c["scene"]), str(c["scene"].parent / "motion.json"), "--runs-dir", str(folder / "cli")])
     out = capsys.readouterr().out
     assert code == 0 and "plausibility PASSED" in out and "check b    [PASS]" in out and "s per frame" in out
+
+
+# --- PR #8 review: a dropped frame leaves no results; names stay safe for XML --------------------
+
+
+@needs_febio
+def test_a_run_whose_febio_log_misses_a_frame_fails_and_leaves_no_results(tmp_path, monkeypatch):
+    from asrp_core import run as run_module
+    real = run_module.read_positions
+
+    def drop_one(path):
+        data = real(path)
+        data["times_s"] = data["times_s"][:2] + data["times_s"][3:]
+        data["positions"] = data["positions"][:2] + data["positions"][3:]
+        return data
+
+    monkeypatch.setattr(run_module, "read_positions", drop_one)
+    cs.write(tmp_path / "box", attachments=[("top", "skull", "hard", None, at_z(10.0))])
+    r = run(tmp_path / "box", cs.still(6), "dropped")
+    assert r.status == "failed" and not r.passed
+    a = r.report["checks"]["a"]
+    assert a["passed"] is False and "missing frame(s) 3" in a["message"]
+    assert r.report["status"] == "failed"
+    assert not (r.run_dir / "physics").exists() and not (r.run_dir / "playback.json").exists()
+    assert json.loads((r.run_dir / "provenance.json").read_text())["status"] == "failed"
+    assert (r.run_dir / "run_report.json").exists()
+
+
+def test_the_generator_escapes_names_even_if_validation_let_one_through(tmp_path):
+    import xml.etree.ElementTree as ET
+    c = cs.write(tmp_path / "box", attachments=[("top", "skull", "hard", None, at_z(10.0)),
+                                                ("side", "plate", "spring", 1.0, at_z(0.0))])
+    model = generate.build(c["scene"], cs.motion(tmp_path / "box", cs.still(3)))
+    bad = 'sk&<ull"'
+    for body in model.bodies.values():
+        if body.name == "skull":
+            body.name = bad
+    model.bodies = {b.name: b for b in model.bodies.values()}
+    for g in model.groups:
+        if g.target == "skull":
+            g.target = bad
+    model.hard = {n: (bad if t == "skull" else t) for n, t in model.hard.items()}
+    root = ET.fromstring(generate._feb(model))  # raises ParseError if a name went in raw
+    assert any(e.get("name") == f"rb_{bad}" for e in root.iter())

@@ -20,6 +20,7 @@ A failed or cancelled run gets run_report.json (with check (a) failed) but no ph
 """
 
 import json
+import shutil
 import tempfile
 import time
 from dataclasses import dataclass
@@ -171,19 +172,30 @@ def run_scene(scene_path, trajectory_path, runs_dir: Path, exe: Path, name: str 
         "timing": {},
     }
     checks = {}
-    if result.status != "complete":
-        checks["a"] = plausibility.motion_completed(result.status, model.frames, [], retries,
-                                                    result.failure.message if result.failure else None)
+    status = result.status
+    failure_text = result.failure.message if result.failure else None
+    positions = logged = None
+    if status == "complete":
+        positions = run.read_positions(run_dir / run.POSITIONS)
+        logged = [round(t * model.fps) for t in positions["times_s"]]
+        check_a = plausibility.motion_completed("complete", model.frames, logged, retries)
+        if not check_a.passed:  # FEBio reached the end time but dropped a frame: no results, like any failed run (T-08)
+            status, failure_text = "failed", check_a.message
+            shutil.rmtree(run_dir / "physics", ignore_errors=True)
+            record["outputs"] = {}
+            record["failure"] = {"frame": None, "message": check_a.message}
+            report["status"] = "failed"
+    if status != "complete":
+        checks["a"] = (check_a if logged is not None else
+                       plausibility.motion_completed(status, model.frames, [], retries, failure_text))
         checks["b"] = plausibility.Check("hard attachments follow their bones", None, "the run did not complete")
         checks["b2"] = plausibility.Check("spring anchors follow their rigid bodies", None, "the run did not complete")
         checks["c"] = plausibility.Check("gravity sag", None, "the run did not complete")
     else:
-        positions = run.read_positions(run_dir / run.POSITIONS)
+        checks["a"] = check_a
         index = {nid: i for i, nid in enumerate(positions["node_ids"])}
-        logged = [round(t * model.fps) for t in positions["times_s"]]
-        checks["a"] = plausibility.motion_completed("complete", model.frames, logged, retries)
         tissue = [index[n + 1] for n in range(len(model.mesh.nodes))]
-        node_frames = np.empty((model.frames, len(model.mesh.nodes), 3))
+        node_frames = np.full((model.frames, len(model.mesh.nodes), 3), np.nan)
         node_frames[0] = model.mesh.nodes
         for f, frame in zip(logged, positions["positions"]):
             if 0 < f < model.frames:
@@ -196,7 +208,7 @@ def run_scene(scene_path, trajectory_path, runs_dir: Path, exe: Path, name: str 
         rest_febio = generate.node_rest_febio(model)
         anchor_ids = [sp.anchor for sp in model.springs]
         anchor_rest = np.array([rest_febio[a] for a in anchor_ids]).reshape(-1, 3) / model.k
-        anchor_frames = np.empty((model.frames, len(anchor_ids), 3))
+        anchor_frames = np.full((model.frames, len(anchor_ids), 3), np.nan)
         anchor_frames[0] = anchor_rest
         for f, frame in zip(logged, positions["positions"]):
             if 0 < f < model.frames:
@@ -213,7 +225,7 @@ def run_scene(scene_path, trajectory_path, runs_dir: Path, exe: Path, name: str 
                                                   if model.frames > SETTLED_FRAME else
                                                   [run.POSITIONS, DISPLAY, "playback.json", "playback.pc2"])
     report["checks"] = {key: c.to_json() for key, c in checks.items()}
-    passed = result.status == "complete" and all(c.passed for c in checks.values())
+    passed = status == "complete" and all(c.passed for c in checks.values())
     report["passed"] = passed
     febio_s = record.get("timing", {}).get("febio_seconds")
     steps = model.frames - 1
@@ -225,10 +237,11 @@ def run_scene(scene_path, trajectory_path, runs_dir: Path, exe: Path, name: str 
     }
     (run_dir / REPORT).write_text(json.dumps(report, indent=2, ensure_ascii=False) + "\n", encoding="utf-8", newline="\n")
     record["outputs"] = {**record.get("outputs", {}), **provenance.hash_files(run_dir, [REPORT])} \
-        if result.status == "complete" else {}
+        if status == "complete" else {}
     record.pop("format", None)
+    record["status"] = status
     provenance.write(run_dir, record)
-    return SceneRun(run_dir, result.status, report, passed)
+    return SceneRun(run_dir, status, report, passed)
 
 
 def _write_results(run_dir: Path, model: generate.Model, node_frames: np.ndarray, display: np.ndarray) -> None:

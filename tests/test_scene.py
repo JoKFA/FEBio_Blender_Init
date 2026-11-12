@@ -485,3 +485,45 @@ def test_driver_motion_gives_the_derived_driver_half_the_jaw_angle_about_the_sam
     expected = trajectory.hinge_transforms(hinge.pivot_mm, hinge.axis, [a / 2 for a in angles])
     assert all(abs(a - b) < 1e-12 for got, want in zip(motion["corner_blend"], expected)
                for a, b in zip(got, want))
+
+
+# --- scene names go into the FEBio input (PR #8 review) ------------------------------------------
+
+
+def test_a_name_with_a_character_the_febio_input_cannot_hold_is_an_error(tmp_path):
+    folder = copy_s1(tmp_path)
+    path = folder / "scene.json"
+    path.write_text(path.read_text().replace('"skull"', '"skull&jaw"'))
+    report, text = errors_of(path)
+    assert not report.ok and "bone name 'skull&jaw'" in text and "FEBio input" in text
+
+
+# --- derived drivers nothing uses (PR #8 review) -------------------------------------------------
+
+
+def _second_hinge(data, used):
+    data["drivers"].append({"name": "other_hinge", "hinge": {
+        "pivot_mm": [0.0, 0.0, 0.0], "axis": [1.0, 0.0, 0.0], "source": "ours"}})
+    data["drivers"].append({"name": "spare_blend", "hinge": None,
+                            "blend": {"of": "other_hinge", "factor": {"value": 0.5, "source": "ours"}}})
+    if used:
+        data["anchors"] = [{"name": "corner_anchor", "driver": "spare_blend"}]
+        data["attachments"].append({"name": "corner", "from": "tissue", "to": "corner_anchor", "kind": "spring",
+                                    "stiffness": {"value": 2.0, "source": "ours"}, "weights": [[0, 1.0]]})
+
+
+def test_an_unused_derived_driver_without_source_motion_is_skipped_but_a_used_one_still_fails(tmp_path):
+    from asrp_core import trajectory
+    folder = copy_s1(tmp_path)
+    traj = trajectory.read(folder / "trajectory.json")
+    assert "other_hinge" not in traj.drivers
+    path = edit_scene(folder, lambda d: _second_hinge(d, used=False))
+    assert scene.check(path, folder / "trajectory.json").ok
+    motion = scene.driver_motion(scene.load(path), traj)  # raised ValueError before the fix
+    assert "spare_blend" not in motion and "jaw_hinge" in motion
+
+    folder2 = copy_s1(tmp_path / "used")
+    path2 = edit_scene(folder2, lambda d: _second_hinge(d, used=True))
+    assert not scene.check(path2, folder2 / "trajectory.json").ok
+    with pytest.raises(ValueError, match="no motion for its source 'other_hinge'"):
+        scene.driver_motion(scene.load(path2), trajectory.read(folder2 / "trajectory.json"))

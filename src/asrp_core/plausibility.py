@@ -52,7 +52,8 @@ def motion_completed(status: str, frames: int, logged_frames: list[int], retries
     if sorted(logged_frames) != want:
         missing = sorted(set(want) - set(logged_frames))
         return Check("motion completed", False, f"FEBio logged {len(logged_frames)} of the {len(want)} frames after frame 0"
-                     + (f"; missing e.g. frame {missing[0]}" if missing else "; frames do not match"), numbers)
+                     + (f"; missing frame(s) {', '.join(map(str, missing[:10]))}" + (" ..." if len(missing) > 10 else "")
+                        if missing else "; frames do not match"), numbers)
     return Check("motion completed", True, f"all {frames} frames; FEBio cut and retried a step {retries} times", numbers)
 
 
