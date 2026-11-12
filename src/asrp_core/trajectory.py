@@ -16,7 +16,8 @@ Format `asrp-trajectory/1`, one JSON object:
       "settle_until_frame": 14,       # optional: the last frame of the gravity-only settle (0 <= n < frames).
                                       #   Every driver the scene uses must be at rest (identity) on frames
                                       #   0..n. The run writes the settled shape at frame n and check (c)
-                                      #   (gravity sag) reads frames n-4..n; without it neither is done
+                                      #   (gravity sag) averages frames max(1, n-4)..n (never frame 0, the rest
+                                      #   pose); without it, or with n = 0, neither is done
       "landmarks": ...                # optional; its format is docs/04 section 5.2, T-09 reads and checks it
     }
 
@@ -99,26 +100,6 @@ def hinge_transforms(pivot_mm, axis, angles_rad) -> list[list[float]]:
         tz = pz - (r[2][0] * px + r[2][1] * py + r[2][2] * pz)
         out.append([*r[0], tx, *r[1], ty, *r[2], tz, 0.0, 0.0, 0.0, 1.0])
     return out
-
-
-def hinge_angle(transform, axis) -> float:
-    """The signed angle (rad) of a transform's rotation part about `axis`, in (-pi, pi]. Any part of
-    the rotation that is not about the axis, and the translation, are not looked at."""
-    ax = [float(a) for a in axis]
-    norm = math.sqrt(sum(a * a for a in ax))
-    if norm == 0:
-        raise ValueError("the hinge axis is the zero vector; give it a direction")
-    m = transform
-    a = [c / norm for c in ax]
-    # A vector u perpendicular to the axis, and where the rotation puts it; the angle between u and
-    # that image, measured in the plane perpendicular to the axis, is the turn about the axis.
-    u = [a[1], -a[0], 0.0] if abs(a[2]) < 0.9 else [0.0, a[2], -a[1]]
-    un = math.sqrt(sum(c * c for c in u))
-    u = [c / un for c in u]
-    r = [sum(m[4 * i + j] * u[j] for j in range(3)) for i in range(3)]
-    dot = sum(x * y for x, y in zip(u, r))
-    cross = [u[1] * r[2] - u[2] * r[1], u[2] * r[0] - u[0] * r[2], u[0] * r[1] - u[1] * r[0]]
-    return math.atan2(sum(x * y for x, y in zip(cross, a)), dot)
 
 
 def _skew(w):

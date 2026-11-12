@@ -369,6 +369,18 @@ def test_the_run_folder_holds_its_inputs_results_and_report(hard_plate):
     assert manifest["frame_count"] == 30 and len(manifest["vertices"]) == len(c["display"])
 
 
+@needs_febio
+def test_the_report_gives_the_largest_distance_any_display_vertex_moves_and_the_frame(hard_plate):
+    _, c, top, r = hard_plate
+    shown = display(r.run_dir)
+    far = np.linalg.norm(shown - shown[0][None], axis=2)  # worked out again here, from the written display file
+    motion = r.report["motion"]
+    assert set(motion) == {"max_display_distance_mm", "frame"}
+    assert motion["max_display_distance_mm"] == pytest.approx(far.max(), rel=1e-12) and motion["max_display_distance_mm"] > 5.0
+    assert far[motion["frame"]].max() == far.max()
+    assert cs.report(r.run_dir)["motion"] == motion  # and it is in the file, not only in memory
+
+
 # --- k with springs: a stiff box hanging on springs (ADR-36, docs/05 section 2) -----------------
 
 
@@ -539,7 +551,28 @@ def test_check_d_fails_on_an_inverted_tet_and_reports_the_volume_ratios():
     assert plausibility.tet_mesh_valid(rest, tets, flat).passed is False
     missing = frames.copy()
     missing[3, 2] = np.nan  # a frame FEBio did not log
-    assert plausibility.tet_mesh_valid(rest, tets, missing).passed is False
+    gone = plausibility.tet_mesh_valid(rest, tets, missing)
+    assert gone.passed is False
+    assert gone.numbers["min_volume_ratio"] is None  # -inf for a missing position: JSON has no such number
+    json.dumps(gone.numbers, allow_nan=False)
+    zero_rest = rest.copy()
+    zero_rest[3] = zero_rest[0]  # a rest tet of zero volume: its ratio is inf or NaN
+    degenerate = plausibility.tet_mesh_valid(zero_rest, tets, frames)
+    assert degenerate.numbers["max_volume_ratio"] is None  # inf
+    json.dumps(degenerate.numbers, allow_nan=False)
+
+
+def test_a_display_header_that_is_not_json_or_lacks_a_key_is_refused_in_a_sentence(tmp_path):
+    header = {"format": simulate.DISPLAY_FORMAT, "units": "mm", "fps": 30.0, "frames": 4, "vertex_count": 6}
+    path = tmp_path / "display.json"
+    run_module.save_array(path, header, np.zeros((4, 6, 3)), "display.npy")
+    good = json.loads(path.read_text())
+    for text, words in (("{nope", "as JSON"), ("3", "not a JSON object"),
+                        (json.dumps({k: v for k, v in good.items() if k != "vertex_count"}), "vertex_count"),
+                        (json.dumps({k: v for k, v in good.items() if k != "shape"}), "shape")):
+        path.write_text(text)
+        with pytest.raises(run_module.RunError, match=words):
+            simulate.read_display(path)
 
 
 def test_return_to_settled_measures_only_frames_where_every_driver_is_back_at_rest():
@@ -669,8 +702,8 @@ def test_the_settled_shape_is_written_at_the_frame_the_trajectory_names_and_not_
     assert other.report["checks"]["c"]["numbers"]["frames"] == [3, 7]
     assert "physics/settled_frame7.obj" in json.loads((other.run_dir / "provenance.json").read_text())["outputs"]
 
-    early = run(tmp_path / "still", cs.still(20), "still_at_2", settle=2)  # fewer than five frames: starts at frame 0
-    assert early.report["checks"]["c"]["numbers"]["frames"] == [0, 2]
+    early = run(tmp_path / "still", cs.still(20), "still_at_2", settle=2)  # fewer than five frames: starts at frame 1
+    assert early.report["checks"]["c"]["numbers"]["frames"] == [1, 2]
 
     none = run(tmp_path / "still", cs.still(20), "no_settle")  # the trajectory does not say
     assert none.report["settled_shape"]["available"] is False and none.report["settled_shape"]["frame"] is None
@@ -678,6 +711,23 @@ def test_the_settled_shape_is_written_at_the_frame_the_trajectory_names_and_not_
     c_check = none.report["checks"]["c"]
     assert c_check["passed"] is None and "does not say where the gravity-only settle ends (settle_until_frame)" in c_check["message"]
     assert none.passed and "physics/settled_frame14.json" not in json.loads((none.run_dir / "provenance.json").read_text())["outputs"]
+
+
+@needs_febio
+def test_check_c_never_averages_the_rest_pose_frame(tmp_path):
+    cs.write(tmp_path / "cube", attachments=[("top", "skull", "hard", None, at_z(10.0))])
+    zero = run(tmp_path / "cube", cs.still(20), "settle_0", settle=0)  # no frame after the rest pose: not run
+    c_check = zero.report["checks"]["c"]
+    assert c_check["passed"] is None and c_check["message"] == (
+        "settle_until_frame is 0: there is no frame after the rest pose in the gravity-only settle")
+    assert zero.status == "complete" and zero.passed and "c" in zero.report["not_run"]
+    shape = zero.report["settled_shape"]
+    assert shape["available"] is False and shape["frame"] is None and "settle_until_frame is 0" in shape["reason"]
+    assert not list((zero.run_dir / "physics").glob("settled_frame*"))
+    for n, want in ((1, [1, 1]), (2, [1, 2]), (14, [10, 14])):
+        r = run(tmp_path / "cube", cs.still(20), f"settle_{n}", settle=n)
+        assert r.report["checks"]["c"]["numbers"]["frames"] == want, n
+        assert r.report["settled_shape"] == {"available": True, "frame": n}
 
 
 @needs_febio
@@ -689,3 +739,67 @@ def test_a_driver_that_moves_before_the_settle_ends_gives_no_settled_shape_and_n
     c_check = r.report["checks"]["c"]
     assert c_check["passed"] is None and "starts on or before frame 14" in c_check["message"]
     assert r.report["settled_shape"]["available"] is False and r.report["settled_shape"]["frame"] is None and r.passed
+
+
+# --- review: post-processing that breaks after FEBio finished must not look complete -------------
+
+
+def _assert_failed_after_febio(r, tmp_path, *, text):
+    assert r.status == "failed" and r.passed is False
+    assert not (r.run_dir / "physics").exists()
+    assert not (r.run_dir / "playback.json").exists() and not (r.run_dir / "playback.pc2").exists()
+    prov = json.loads((r.run_dir / "provenance.json").read_text())
+    assert prov["status"] == "failed" and prov["outputs"] == {} and text in prov["failure"]["message"]
+    rep = cs.report(r.run_dir)
+    assert rep["status"] == "failed" and rep["passed"] is False and "settled_shape" not in rep
+    a = rep["checks"]["a"]
+    assert a["passed"] is False and text in a["message"]
+    assert str(tmp_path) not in json.dumps(rep) and str(tmp_path) not in json.dumps(prov)  # paths are scrubbed
+
+
+@needs_febio
+def test_a_failure_while_embedding_after_febio_finished_makes_the_run_failed(tmp_path, monkeypatch):
+    cs.write(tmp_path / "box", attachments=[("top", "skull", "hard", None, at_z(10.0))])
+
+    def boom(*a, **k):
+        raise RuntimeError(f"cannot embed in {tmp_path / 'secret' / 'x.bin'}")
+
+    monkeypatch.setattr(embed, "apply", boom)
+    r = run(tmp_path / "box", cs.still(6), "embed_boom", settle=2)
+    _assert_failed_after_febio(r, tmp_path, text="cannot embed in x.bin")
+
+
+@needs_febio
+def test_a_failure_while_writing_the_playback_files_removes_what_was_written(tmp_path, monkeypatch):
+    cs.write(tmp_path / "box", attachments=[("top", "skull", "hard", None, at_z(10.0))])
+    real = simulate.playback.write_surface_bundle
+
+    def half_then_boom(run_dir, *a, **k):
+        real(run_dir, *a, **k)
+        raise OSError("disk full")
+
+    monkeypatch.setattr(simulate.playback, "write_surface_bundle", half_then_boom)
+    r = run(tmp_path / "box", cs.still(6), "playback_boom")
+    _assert_failed_after_febio(r, tmp_path, text="disk full")
+
+
+@needs_febio
+def test_a_number_that_is_not_valid_json_in_the_report_fails_the_run(tmp_path, monkeypatch):
+    cs.write(tmp_path / "box", attachments=[("top", "skull", "hard", None, at_z(10.0))])
+    monkeypatch.setattr(simulate, "slips", lambda model, frames: {"g": {"ratio": float("nan")}})
+    r = run(tmp_path / "box", cs.still(6), "nan")
+    assert r.status == "failed"
+    text = (r.run_dir / "run_report.json").read_text()
+    assert "NaN" not in text and json.loads(text)["status"] == "failed"
+
+
+@needs_febio
+def test_ctrl_c_during_post_processing_is_not_swallowed(tmp_path, monkeypatch):
+    cs.write(tmp_path / "box", attachments=[("top", "skull", "hard", None, at_z(10.0))])
+
+    def interrupt(*a, **k):
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(embed, "apply", interrupt)
+    with pytest.raises(KeyboardInterrupt):
+        run(tmp_path / "box", cs.still(6), "ctrl_c")

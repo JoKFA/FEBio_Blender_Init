@@ -568,7 +568,7 @@
           },
           "right_corner_on_anchor": {
             "max_mm": 0.008110945186401146,
-            "mean_mm": 0.00017701698249907935,
+            "mean_mm": 0.0001770169825015907,
             "worst_frame": 32
           }
         }
@@ -639,10 +639,14 @@
     }
   },
   "timing": {
-    "generate_s": 5.655,
-    "febio_s": 28.562,
-    "post_s": 1.022,
-    "febio_s_per_frame": 0.571
+    "generate_s": 5.9,
+    "febio_s": 30.021,
+    "post_s": 1.139,
+    "febio_s_per_frame": 0.6
+  },
+  "motion": {
+    "max_display_distance_mm": 30.410873184221376,
+    "frame": 32
   },
   "settled_shape": {
     "available": true,
@@ -653,7 +657,7 @@
       50
     ],
     "max_mm": 0.004128629332535777,
-    "mean_mm": 0.001201832020212095
+    "mean_mm": 0.0012018320202121578
   },
   "spring_slip": {
     "lower_lip_on_jaw": {
