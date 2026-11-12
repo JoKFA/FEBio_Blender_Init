@@ -49,22 +49,22 @@ landmark 段是物理之后的**可替换层**：顺序按实验室源码和论�
 | 模块（建议的代码位置） | 负责 | 不负责 | 状态 |
 |---|---|---|---|
 | 环境检查 `asrp_core/doctor.py` | 找到 FEBio、Blender，检查路径和 Python 版本 | — | ✅ 已有 |
-| 资产导入 `asrp_core/asset/` | 把从 Maya 导出的网格、landmark 蒙皮和 Ziva 设置读进来，换算单位和坐标轴（全项目唯一的一份换算，`asset/coords.py`），生成场景描述和 `import_report.json`（换算系数、坐标轴、网格、每个参数的来源、"缺了什么"、场景检查结果） | 解析 .mb 的网格几何 | ✅ 已有（T-02；T-03 的四组粘连、k = 0.67 和 T-06a 的临时材料已写进场景）。还没做的：读 Ziva 属性清单（还没到）；把 landmark 蒙皮矩阵换算成毫米、Z 轴朝上（T-09，ADR-34） |
+| 资产导入 `asrp_core/asset/` | 把从 Maya 导出的网格、landmark 蒙皮和 Ziva 设置读进来，换算单位和坐标轴（全项目唯一的一份换算，`asset/coords.py`），生成场景描述和 `import_report.json`（换算系数、坐标轴、网格、每个参数的来源、"缺了什么"、场景检查结果）；把 landmark 蒙皮矩阵换算成毫米、Z 轴朝上、列向量，写成 `landmarks/skin_mm.json`（`asset/skin.py`，格式 `asrp-skin/1`，ADR-34） | 解析 .mb 的网格几何 | ✅ 已有（T-02；T-03 的四组粘连、k = 0.67 和 T-06a 的临时材料已写进场景；T-09 的蒙皮换算）。还没做的：读 Ziva 属性清单（还没到） |
 | 场景描述 `asrp_core/scene.py` | 定义场景描述文件的格式，提供校验（缺什么、单位对不对） | 求解 | ✅ 已有（T-05） |
-| 运动 `asrp_core/trajectory.py` | 运动文件的格式和读写、铰链运动生成（代用运动） | 转换实验室轨迹（T-10 在同一个文件里加） | ✅ 最小格式已有（T-05）。`landmarks` 一节的读取和校验由 T-09 加进来 |
+| 运动 `asrp_core/trajectory.py` | 运动文件的格式和读写、铰链运动生成（代用运动）、`landmarks` 一节的校验和读成数组 | 转换实验室轨迹（T-10 在同一个文件里加） | ✅ 已有（T-05；`landmarks` 一节 T-09） |
 | 四面体化 `asrp_core/tetmesh.py` | 把嘴唇的表面网格变成计算用的四面体网格，检查质量（连通、流形、亏格、上下唇分开、左右对称），写成 `data/tetmesh/` 下的文件，读回时校验哈希（为什么需要，见 [13](13-explanations.md) E-02） | 嵌入显示网格；运行时重新生成网格（只由 `tools/build_tetmesh.py` 显式生成，ADR-20） | ✅ 已有（T-04，ADR-20） |
 | FEBio 适配 `asrp_core/febio.py` | 调用 FEBio（默认 4 线程，可用 `--threads` 改，[05](05-ziva-to-febio.md) 坑 17，ADR-38；含结束整个进程树），读回结果 | 决定材料参数（参数从场景描述里来） | ✅ 已有 |
 | 生成器 `asrp_core/generate.py` | 场景描述 + 运动 → `.feb`：坐标 × k、重力反号、刚体（固定、给定、锚）、粘连的对应（05 第 3 节）、动力学设置；生成器报告 | 运行 FEBio；读结果 | ✅ 已有（T-06a） |
 | 嵌入 `asrp_core/embed.py` | 显示网格跟着四面体网格动（zEmbedder 的替代）：每个显示顶点的四面体和重心坐标，粘连也用同一套 | — | ✅ 已有（T-06a） |
 | 合理性检查 `asrp_core/plausibility.py` | [07](07-validation.md) 第 3 节的五项检查 (a)(b)(b2)(c)(d)；"没运行"（`passed` 为 `null`）不算失败，只有明确的 `false` 才算 | — | ✅ 已有（T-06a，ADR-37） |
-| 场景运行 `asrp_core/simulate.py` | `asrp run <scene.json> <trajectory.json>`：生成器 → 运行外壳 → 嵌入、沉降后的形状、回放包、合理性检查、运行报告 | 运行文件夹的外壳（`run.py`） | ✅ 已有（T-06a） |
+| 场景运行 `asrp_core/simulate.py` | `asrp run <scene.json> <trajectory.json>`：生成器 → 运行外壳 → 嵌入、沉降后的形状、landmark 层（运动文件有 `landmarks` 一节时）、回放包、合理性检查、运行报告 | 运行文件夹的外壳（`run.py`） | ✅ 已有（T-06a） |
 | 运行外壳 `asrp_core/run.py` | 一次运行 = 一个文件夹：拷入输入、启动 FEBio、进度（只读日志新增的部分）、取消、出错处理、读 FEBio 写的 `positions.txt`、把位置除以 k 后存成 `physics/positions.json` + `positions.npy`、写溯源（T-08、T-25） | 生成 FEBio 输入（`simulate.py` 通过 `run.Prepared` 接入） | ✅ 已有（替身模式 T-08，生成模式 T-06a） |
-| landmark 变形层 `asrp_core/skinning.py` | 用蒙皮权重把 landmark 的运动叠加到物理结果上 | — | 待开发 |
-| 回放包 `asrp_core/playback.py` | 把结果打包成 Blender 能直接播放的格式 | — | ✅ 已有 |
+| landmark 变形层 `asrp_core/skinning.py` | `deform(base, weights, translations)` = base + weights @ translations，运行用的就是这一个核；`deform_matrices` 是一般的矩阵形式，只用来证明换算和化简；`load` 读 `landmarks/skin_mm.json` | — | ✅ 已有（T-09；验收进度见 09 的 T-09 卡） |
+| 回放包 `asrp_core/playback.py` | 把结果打包成 Blender 能直接播放的格式；有 landmark 层时多写一份最终形状的点缓存（5.3） | — | ✅ 已有 |
 | 对比 `asrp_core/compare.py` | 读入 Ziva 参考结果，计算误差，出报告和热力图数据 | — | 待开发 |
 | 溯源 `asrp_core/provenance.py` | 记录每次运行的输入指纹、软件版本、参数 | — | ✅ 已有（T-08） |
 | 命令行 `asrp_core/cli.py` | 把上面的功能包装成命令（见第 7 节） | — | 部分已有 |
-| Blender 插件 `blender_addon/asrp_blender/` | 界面（见 [06](06-ui.md)），调用命令行，加载结果 | 任何计算 | 部分已有：环境检查、加载结果 |
+| Blender 插件 `blender_addon/asrp_blender/` | 界面（见 [06](06-ui.md)），调用命令行，加载结果 | 任何计算 | 部分已有：环境检查、加载结果（加载时可选 `physics` 或 `final` 版本）。运行按钮、进度、切换版本的面板还没做 |
 
 ## 4. 运行文件夹
 
@@ -75,13 +75,14 @@ runs/2026-11-03_neutral-to-AA_001/
   scene.json          场景描述（这次用到的全部设置）
   trajectory.json     这次的运动（每个驱动源每帧的刚体变换、landmark 每帧的平移）
   meshes/             用到的网格（毫米、Z 轴朝上），包括已落盘的四面体网格（只读，哈希记在 provenance.json）
-  landmarks/          场景引用的 landmark 蒙皮权重（原样拷贝）
+  landmarks/          场景引用的 landmark 蒙皮 `skin_mm.json`（毫米、Z 轴朝上、列向量，`asrp-skin/1`；导入时换算好，原样拷进来）
   model.feb           生成的 FEBio 输入
   model.log           FEBio 日志（只有进度和提示，约 0.15 MB；节点位置不在这里）
   physics/            物理段结果（含沉降后的形状 settled_frame{n}；n 是运动文件的 settle_until_frame；只有运动文件写了 n ≥ 1、而且第 0 到 n 帧所有被用到的驱动源都停在静止位置时才写沉降形状，否则运行报告说明它不可用；每帧每块组织的应变能是 T-26，现在还没有）
-  final/              叠加 landmark 段之后的结果
+  final/              叠加 landmark 段之后的结果（`display.json` + `display.npy`；只有运动文件有 `landmarks` 一节时才有）
   playback.json       回放包（Blender 加载用）
   playback.pc2
+  playback_final.pc2  最终形状的点缓存（同样只在有 landmark 层时才有）
   run_report.json     运行报告（键见下面"运行报告的内容"）
   compare/            和 Ziva 对比的报告（如果做了对比）
   provenance.json     溯源记录
@@ -94,7 +95,8 @@ runs/2026-11-03_neutral-to-AA_001/
 3. `physics/display.json` + `physics/display.npy`：显示网格每帧的位置，第 0 帧是静止姿态；
 4. `physics/settled_frame{n}.json`（格式名 `asrp-settled/1`：`units`、`frame`、`time_s`、`tet_nodes`、`display`）和 `physics/settled_frame{n}.obj`（同一帧的显示网格，带面）。n 是运动文件的 `settle_until_frame`，原型机的代用运动 n = 14；
 5. 回放包：是显示网格本身（嘴唇 10,240 个顶点，不是四面体网格的表面，`node_ids` 为 null）；
-6. `run_report.json`。
+6. 运动文件有 `landmarks` 一节时：`final/display.json` + `final/display.npy`（格式名 `asrp-display/2`，和 `physics/display.*` 相同，内容是物理结果加 `weights @ translations`）和 `playback_final.pc2`；`playback.json` 多一个可选键 `versions`（5.3）。没有这一节时这些都不存在，别的文件和以前逐字节相同；
+7. `run_report.json`。
 
 **运行报告的内容**（`run_report.json`，格式名 `asrp-run-report/1`，07 第 3 节），每个键写一次：
 
@@ -113,17 +115,18 @@ runs/2026-11-03_neutral-to-AA_001/
 | `settled_shape` | `available`、`frame`（n，没有沉降形状时为 `null`）；不可用时多一个 `reason` |
 | `return_to_settled` | 只报告，`{frames, max_mm, mean_mm}`；没有这样的帧时 `frames` 是空列表 |
 | `motion` | 任一显示顶点离静止位置最远的距离 `max_display_distance_mm` 和出现的帧 `frame` |
+| `landmark_layer` | landmark 层有没有叠上：`applied`（`true` 或 `false`）。`true` 时另有 `landmarks_moved`（运动文件里有过非零平移的 landmark 个数）、`max_translation_mm`（最大的平移）、`max_final_minus_physics_mm`（最终形状离物理结果最远的距离）和 `frame`（它出现的帧）；`false` 时另有 `reason`。五项检查仍然只检查物理结果 |
 | `spring_slip` | 每个弹簧组的 max\|u\|、δ、比值和是否超过 0.1 |
 | `timing` | `generate_s`、`febio_s`、`febio_s_per_frame`、`post_s`；没有速度预算的键：耗时只报告，不和别的数并排（ADR-38 第 5 条） |
 | `reason` | 见 `settled_shape`：沉降形状不可用时的原因 |
 
 运行用的线程数记在溯源里（`febio_env`）。
 
-还没有的：`final/`（T-09）、应变能（T-26）、`compare/`（T-11）。
+还没有的：应变能（T-26）、`compare/`（T-11）。
 
 **失败的运行不留结果**（ADR-37 第 4 条，T-25）：
 1. FEBio 失败或取消，或整段没有全部算完，只写 `run_report.json`（检查 (a) 不通过），不写任何结果；
-2. FEBio 跑完了但**我们自己的事后处理出错**（读位置、嵌入、写回放包、报告里有 NaN 等）：运行同样记为 `failed`，删掉 `physics/`、`playback.json`、`playback.pc2`，报告里去掉 `settled_shape`、`return_to_settled`、`spring_slip`、`motion`，检查 (a) 不通过，原因写 `post-processing failed after FEBio finished: …`（路径已抹掉）。不会出现"看起来算完了"的运行；
+2. FEBio 跑完了但**我们自己的事后处理出错**（读位置、嵌入、写回放包、报告里有 NaN 等）：运行同样记为 `failed`，删掉 `physics/`、`final/`、`playback.json`、`playback.pc2`、`playback_final.pc2`，报告里去掉 `settled_shape`、`return_to_settled`、`spring_slip`、`motion`、`landmark_layer`，检查 (a) 不通过，原因写 `post-processing failed after FEBio finished: …`（路径已抹掉）。不会出现"看起来算完了"的运行；
 3. 无论成功、失败还是取消，只删除 FEBio 写的 `positions.txt` 和 `model.xplt`（见下面）；别的名字的文件不碰。
 
 生成器拒绝的场景（检查有错、显示顶点离四面体太远、一个点被两个刚体要走……）不建运行文件夹，`asrp run` 打印原因和 `run NOT STARTED`。
@@ -138,6 +141,8 @@ runs/2026-11-03_neutral-to-AA_001/
 | `physics/positions.npy` | — | float64，帧 × 节点 × 3，几何毫米（已除以 k） |
 | `physics/display.json` | `asrp-display/2` | 表头另有 `fps`、`frames`、`vertex_count`、`mesh`（显示网格的文件）、`note`；没有 `times_s` 和 `node_ids` |
 | `physics/display.npy` | — | float64，帧 × 显示顶点 × 3 |
+| `final/display.json` | `asrp-display/2` | 同 `physics/display.json`，`note` 写明是物理加 landmark 层；只有运动文件有 `landmarks` 一节时才有 |
+| `final/display.npy` | — | float64，帧 × 显示顶点 × 3，几何毫米 |
 
 沉降形状（`settled_frame{n}.json`，格式名 `asrp-settled/1`，和 `.obj`）、`playback.json`、`playback.pc2` 的格式没变，同一次运行的回放文件和以前逐字节相同。进度只读日志上次读过之后新增的部分，不再每次重读整个日志。运行外壳的 `provenance.json` 在 `outputs` 里同时列出每个结果的表头和数组。实测的大小和用时见 [10](10-decisions.md) ADR-38 第 10 条和 [15](15-prototype.md) 第 3 节。
 
@@ -162,7 +167,7 @@ runs/2026-11-03_neutral-to-AA_001/
 | 驱动源 `drivers` | 名字（实验室资产里就是关节名，比如 `jaw01`），以及可选的铰链说明 `hinge`（`pivot_mm`、`axis`、`source`、`note`），用来生成代用运动和做检查。一个驱动源可以带动几块骨头：下颌和下牙都跟随 `jaw01`，和 Maya 里一个关节同时带动两块骨头一样（[03](03-asset.md) 第 4 节）。**派生驱动源**（T-06a 补充，见本节末的"嘴角的锚"）：可以不带自己的运动，写成"驱动源 X 的 factor 倍"，由 X 的整个刚体运动算出来 |
 | 连接 | 连接的两样东西、每个顶点的权重（稀疏列表 `[[顶点, 权重], ...]`）、刚度、类型。类型是 [05](05-ziva-to-febio.md) 第 3 节的两种做法：硬绑定（`hard`，没有刚度）或弹簧（`spring`，刚度 × 权重）。第一阶段：上唇 `hard`、下唇 `spring`、嘴角 `spring` 连到"锚"（05 第 3 节，ADR-32）。粘连顶点怎么对应到计算点见 05 第 3 节。`to` 可以是骨头，也可以是下面的锚 |
 | 锚 | 可选。名字，以及它跟随哪个驱动源（`anchors` 一节，见本节末）。锚是不显示、不参与碰撞、没有网格的刚体 |
-| landmark `landmarks` | 可为 `null`。`names`、静止位置 `rest_positions_mm`、对嘴唇顶点的蒙皮权重 `weights`（被引用的文件；里面的矩阵导入时换算成毫米、Z 轴朝上，T-09）、`note` |
+| landmark `landmarks` | 可为 `null`。`names`、静止位置 `rest_positions_mm`、对嘴唇顶点的蒙皮权重 `weights`（被引用的文件 `landmarks/skin_mm.json`，格式 `asrp-skin/1`：`names`、`rest_world`、`bind_pre`、`geom`（列向量 4×4，毫米、Z 轴朝上，导入时换算，T-09）、稀疏的 `weights`、`source`（实验室导出文件的名字和原始文件的 sha256））、`note` |
 | 求解设置 `solver` | `fps`、`substeps_per_frame`、`damping`、`gravity_mm_per_s2`（物理方向）、分析类型 `analysis`（动力学）。场景不记帧数：运动的帧率必须等于这里的帧率，帧数由 `trajectory.json` 给出 |
 | 来源 `origin` | 从哪个资产文件、哪次导出生成的（`asset`、`export`、`tool`、`notes`） |
 | 简化说明 `simplifications` | 可选。字符串列表（非空字符串），写"这个场景没建什么、简化了什么"，由导入器写（嘴唇场景三句：嘴周 6 块肌肉没建、9 处皮肤粘连没建、嘴角到颅骨和下颌的那串组织换成了嘴角的锚；原文见 `asset/lab.py`）；空就不写。运行报告照抄到它的 `simplifications`；场景没写，报告里就是空列表（ADR-38 第 2 条） |
@@ -190,7 +195,7 @@ runs/2026-11-03_neutral-to-AA_001/
 
 ### 5.2 运动 `trajectory.json`
 - 每个驱动源，每一帧的 **4×4 刚体变换**（毫米、Z 轴朝上，包含平移和旋转，ADR-21；**列向量约定**，Maya 是行向量约定，转换时要转置，ADR-34），以驱动源的名字为键。跟随同一个驱动源的骨头都用这一份变换。骨头可平移也可旋转（论文 4.1.3），甩头实验里整个头在平移（4.4.6），只存关节角度表达不了；
-- `landmarks` 一节：每个 landmark 每帧相对静止位置的**平移**（毫米、Z 轴朝上）。实验室的运动数据里 landmark 只有平移（[03](03-asset.md) 第 7 节），所以这一版不存旋转。一节可以不写（没有 landmark 运动时）。代码里这一节的读取和校验由 T-09 加进 `trajectory.py`；
+- `landmarks` 一节：每个 landmark 每帧相对静止位置的**平移**（毫米、Z 轴朝上）。实验室的运动数据里 landmark 只有平移（[03](03-asset.md) 第 7 节），所以这一版不存旋转。键：`names`（各不相同的 landmark 名字列表，名字取自 `scene.json` 的 `landmarks.names`）和 `translations_mm`（每帧一项，每项对 `names` 里的每个 landmark 给一个 `[x, y, z]`）；运动文件里没写名字的 landmark 不动。一节可以不写（没有 landmark 运动时）。`trajectory.py` 读取时校验形状；`asrp check` 另外拒绝场景没有 landmark 却带了这一节、或写了场景里没有的名字；
 - `fps`、`frames`（总帧数）、`source`（自由文字：实验室控制器的哪一次输出，或哪个生成器）、`drivers`（驱动源名字 → 每帧 4×4 变换）；
 - 可选的 `source_tag`：`lab_setting`、`ziva_default`、`ours` 三个值之一（和场景参数的来源同一套），写别的值是错误。运行报告里运动那一行的来源取它，没写就记 `unstated`，不再从说明文字里猜；
 - 可选的 `settle_until_frame`：整数 n（0 ≤ n < 帧数），只有重力的沉降的最后一帧；第 0 到 n 帧所有被用到的驱动源都必须停在静止位置（单位变换）。写了、n ≥ 1 而且满足，运行写 `physics/settled_frame{n}.*`，检查 (c) 用第 max(1, n−4) 到 n 帧（不含第 0 帧，它是静止姿态）；n = 0 时没有沉降可言，(c) 没运行、不写沉降形状；写了但驱动源在 n 帧之前就动了，(c) 没运行、不写沉降形状，并说明原因；**没写**，(c) 没运行、不写沉降形状，原因是"运动文件没说沉降到哪一帧"。两个键都不改变已有文件的有效性（ADR-38 第 1、3 条）。
@@ -199,6 +204,8 @@ runs/2026-11-03_neutral-to-AA_001/
 
 ### 5.3 回放包 `playback.json` + `playback.pc2`
 已经实现，格式见 `src/asrp_core/playback.py` 开头的说明。表面网格以毫米存储，Blender 插件负责缩放显示。
+
+运行有 landmark 层时（T-09），`playback.json` 多一个可选键 `versions`：`physics` 指向 `playback.pc2`，`final` 指向 `playback_final.pc2`；`cache` 始终是物理版本。没有 landmark 层时没有 `versions` 键，也没有第二份点缓存。插件加载时可选版本（`physics` 或 `final`）。
 
 ### 5.4 溯源 `provenance.json`
 每个输入文件（包括四面体网格）的哈希值、asrp 版本和源码的 git 提交号（`software.asrp_source`：提交号，以及运行时有没有未提交的改动 `dirty`）、FEBio 版本、Python 版本、运行时间、运行命令、运行结果（成功或失败及原因）。
@@ -220,7 +227,7 @@ FEBio 是第一个实现。Ziva 不在我们的软件里运行，它的结果由
 | `asrp doctor` | 检查环境 | — （已有） |
 | `asrp import-asset <导出文件夹> <输出文件夹>` | 导入资产，生成场景描述和检查报告 | R-01（已有，T-02） |
 | `asrp check <scene.json> [<trajectory.json>]` | 检查场景设置；带上运动时，再查运动和场景对不对得上。有错误才失败，提醒照样通过 | R-02（已有，T-05） |
-| `asrp run <scene.json> <trajectory.json> [--threads N]` | 运行一次，生成运行文件夹（已有，T-06a）；打印生成器报告、max\|u\|÷δ、五项检查（a、b、b2、c、d）和每帧用时，检查有不通过的就以 1 退出。`--threads N`：FEBio 的线程数，默认 4（取 N 和本机核数中小的），1 时回放文件逐位相同（ADR-38） | R-03、R-06 |
+| `asrp run <scene.json> <trajectory.json> [--threads N]` | 运行一次，生成运行文件夹（已有，T-06a）；运行文件夹一建好就先打印 `run folder <路径>`（结束时再打一次）；之后打印生成器报告、max\|u\|÷δ、五项检查（a、b、b2、c、d）、一行 `landmarks`（叠上了：移动的个数、最大平移、最终形状离物理结果最远多少；没叠上：原因）和每帧用时，检查有不通过的就以 1 退出。`--threads N`：FEBio 的线程数，默认 4（取 N 和本机核数中小的），1 时回放文件逐位相同（ADR-38） | R-03、R-06 |
 | `asrp run --feb <现成的 .feb> [--threads N]` | 替身模式：不生成输入，直接跑现成的 `.feb`，做运行文件夹、溯源、进度、取消、出错处理这层外壳（T-08）。生成器已接进上一行（T-06a） | R-03、R-06 |
 | `asrp compare <运行文件夹> <Ziva 参考>` | 和 Ziva 对比（计划，T-11，还没有） | R-05 |
 
@@ -236,7 +243,7 @@ Blender 插件的每个按钮都对应其中一条命令。界面能做的事，
 6. 生成 `model.feb`，调用 FEBio；
 7. 插件定期读取进度（FEBio 日志里已完成的帧数）并显示；
 8. FEBio 结束后检查是否"正常结束"，读出每帧结果；
-9. 叠加 landmark 段；
+9. 运动文件有 `landmarks` 一节时叠加 landmark 段；
 10. 生成回放包；插件加载并在时间轴上播放。
 
 ## 9. 出错时怎么办
@@ -353,4 +360,4 @@ final_shape(下颌转动, landmark 位置) -> 嘴唇顶点
 | 调用时不做的 | 不启动 FEBio，不依赖 Blender；函数没有状态，同样的输入永远给同样的输出 |
 | 还不知道的 | 同一帧里下颌转了以后，Ziva 会不会重新求解（11 的 Q20）。不会：基底不随下颌变，下颌转动这个输入对嘴唇没有影响；会：基底要按下颌角度重新算。第一版按"不会"做，并把它写成一个明写的选项，另一种取值报"还不支持" |
 
-实验室梯度用的 LBS 代理（03 第 13.3 节）仍是他们的代码。它的公式是"绑定姿态 + 权重 × 平移"，和上面"怎么算"一行同形，只是基底不同（它用绑定姿态）；它读的权重文件和我们从 `.mb` 导出的权重是不是同一份，由 T-09 的验收逐点核对，不在这里下结论。
+实验室梯度用的 LBS 代理（03 第 13.3 节）仍是他们的代码。它的公式是"绑定姿态 + 权重 × 平移"，和上面"怎么算"一行同形，只是基底不同（它用绑定姿态）；它读的权重文件和我们从 `.mb` 导出的权重是不是同一份，T-09 用实验室自己的绑定姿态和权重文件、按他们的公式算过一遍，和我们的结果逐点比（结果和范围见 09 的 T-09 卡）。
