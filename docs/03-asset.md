@@ -299,9 +299,10 @@ blender --background --factory-startup --python-exit-code 1 --python tools/blend
 
 ### 13.7 目标姿态和 landmark 绑定数据 ✅
 
-- **目标姿态** `dataV22_*.py`（数据文件，用 `ast.literal_eval` 读，不执行）：在 `a1-blendshape-guided-animation-pipeline/database/` 和 `backup/b31 dataV22 backup hub/`（音素 AA、EH、IY、N、T、UW、V、Y，AU1、2、4、6、7、12、22、25 和左右单侧的版本等）。每个文件有 5 个网格（下颌 7,426 个顶点、嘴唇 10,240、两眼各 8,064、额肌 13,448），每个网格两组坐标和面表：`…0` 是**第 14 帧**沉降后的形状，`…1` 是**第 50 帧**的目标形状（生成脚本 `b98-sampling-joint/c96_finalized_datav21generating_for_b98.py`），控制器一律用 `…1` 作目标；
+- **目标姿态** `dataV22_*.py`（数据文件，用 `ast.literal_eval` 读，不执行）：在 `a1-blendshape-guided-animation-pipeline/database/` 和 `backup/b31 dataV22 backup hub/`（音素 AA、EH、IY、N、T、UW、V、Y，AU1、2、4、6、7、12、22、25 和左右单侧的版本等）。每个文件有 5 个网格（下颌 7,426 个顶点、嘴唇 10,240、两眼各 8,064、额肌 13,448），每个网格两组坐标和面表：`…0` 取自**第 14 帧**（内容就是静止形状，见下面 2026-11-11 的核对），`…1` 是**第 50 帧**的目标形状（生成脚本 `b98-sampling-joint/c96_finalized_datav21generating_for_b98.py`），控制器一律用 `…1` 作目标；
 - 坐标是世界（场景）坐标、物理和蒙皮之后的最终形状，嘴唇包围盒和第 3 节的场景尺寸一致；
-- 🔍 它来自研究用的**完整场景**（比如 `g45 AU7 done.mb`），不是 v36 代理场景。所以第 14 帧的形状能当作重力沉降的 Ziva 参考，但用之前要先核对两边的静止形状一致（A-34）；
+- 🔍 它来自研究用的**完整场景**（比如 `g45 AU7 done.mb`），不是 v36 代理场景；
+- ✅ 2026-11-11 核对了 AA 的文件 `dataV22_phoneme_AA_for_d2.py`（A-34）：`…0` 这一组里，下颌和嘴唇的坐标和我们导出的静止网格（`data/lab_export/`）逐点相同，最大差 8.6×10⁻¹⁰ 个场景单位。所以两边的静止形状一致；但 `…0` 就是静止形状本身，里面**没有重力沉降**，不能当 Ziva 的沉降参考。`…1` 里下颌相对 `…0` 是绕 `jaw01` 的纯转动 5.74°（刚体拟合的最大残差 5×10⁻⁶），嘴唇最多移动 8.77 个场景单位、平均 0.78。文件里没有 landmark 的目标位置（末尾的 `x_joint_cancatenate0` 只有 1 个点，`x_joint_rotation_cancatenate0` 全是 0）；
 - 🔍 目录名和 `dataV22_targetAU1artist.py` 这类文件名说明它们很可能是美术的目标姿态，但目标 `.mb` 里姿势是怎么做出来的，源码里看不到；
 - **landmark 绑定**：`AUTO/<组>_bind_pose.json`（全部顶点的世界坐标）、`AUTO/<组>_skin_weights.json`（顶点数 × 300），下颌另有 `AUTO/jaw_joint_pivots.json`（转轴点 (0, -56.81, 126.52)，和我们从 `joints.json` 读到的 `jaw01` 位置一致）；landmark 位置和对应顶点在 `b98-sampling-joint/joint_positions*/`。📄 采样算法（泊松盘）和绑定步骤只有结果，没有实现。
 
