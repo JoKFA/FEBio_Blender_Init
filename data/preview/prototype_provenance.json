@@ -1,6 +1,6 @@
 {
   "format": "asrp-provenance/1",
-  "run_id": "2026-11-11_placeholder-jaw_001",
+  "run_id": "2026-11-12_placeholder-jaw_001",
   "status": "complete",
   "mode": "generated",
   "command": [
@@ -11,8 +11,8 @@
   ],
   "inputs": {
     "model.feb": {
-      "sha256": "1a4515dbea1fc006681fe7e967b2355ec0009f7a3cd4b0b100778ff8b786324b",
-      "bytes": 2161319
+      "sha256": "2197afef8eb7571ecf4a9b05903223bc3d29a5aa00d144e75f9881492f626ef1",
+      "bytes": 2161340
     },
     "scene.json": {
       "sha256": "5ce1064d06fae834322f0afefd1b8a40dfdcaf1b603f23b99f07dfe9bb47a270",
@@ -85,7 +85,7 @@
   "software": {
     "asrp": "0.0.1",
     "asrp_source": {
-      "commit": "122d9e770f2fb9c9e48d771d32ad9c1d0c42bd22",
+      "commit": "29e696d8b921a450a93a3eb6c8ab1cf39ca12075",
       "dirty": false
     },
     "python": "3.13.6",
@@ -94,23 +94,31 @@
   },
   "outputs": {
     "physics/positions.json": {
-      "sha256": "38d7734c813755d6f9820be91f0c36df78231ca7720e0bc049f5fe693945a7d9",
-      "bytes": 25474158
+      "sha256": "dadc423e5f3d87b86e6e857c452ba9456a15d292f2a024d9219f36c86369fd81",
+      "bytes": 48647
+    },
+    "physics/positions.npy": {
+      "sha256": "cb7440cc17a6066ff104316564235b7e789ae3e80d182a994f7bf7444731e5d5",
+      "bytes": 9824528
     },
     "physics/display.json": {
-      "sha256": "7394c91a1d7e9f0a588f87607cb116d8bf952e166bb8d7b983bdfa30f7bc6af5",
-      "bytes": 32481718
+      "sha256": "716b466450899651a804567886a15d31e5625ec17b992fe2b54c7064c831f318",
+      "bytes": 271
+    },
+    "physics/display.npy": {
+      "sha256": "3812ba0b4eac644fb9c48da6672a4a12aea75bdc91efc3c0620fab8a6f36a0c0",
+      "bytes": 12533888
     },
     "physics/settled_frame14.json": {
-      "sha256": "9066ab3b7569c2045c800033a124182cbabcc58739fe90e8c6de30e750c46595",
-      "bytes": 1054929
+      "sha256": "7425b40dc69acb7c2bfb8140cf63c58a291b409d93b1a061705b1683a3b9fbde",
+      "bytes": 1054925
     },
     "physics/settled_frame14.obj": {
-      "sha256": "06bbab5369aa69647cb20357a95c1cc2822c4c543e0f93fdea7b60c93bd38376",
-      "bytes": 948606
+      "sha256": "6b13381f7a04ac22596b120e3747f5431f2ee58e67c884a42595a25d3d589b39",
+      "bytes": 948608
     },
     "playback.json": {
-      "sha256": "5ca5392a1b7d501fbf4d259900ef8eb5511df3a58966bb4b1147fa4e7017fb8d",
+      "sha256": "37f819e135ee6d36f8385a804a828430d551edc13e794b10a3f4f177e3668102",
       "bytes": 1047494
     },
     "playback.pc2": {
@@ -118,15 +126,15 @@
       "bytes": 6266912
     },
     "run_report.json": {
-      "sha256": "83dd58e5605a9fdb3c5d980f43065de47c69e172dec53ff9c495d428d3fd255e",
-      "bytes": 22023
+      "sha256": "bfad8a1c0930f80fc91a761974e05cf1ce03daa7114f1c4d544149b6743de885",
+      "bytes": 22021
     }
   },
   "failure": null,
   "timing": {
-    "started_utc": "2026-11-12T06:43:08+00:00",
-    "febio_seconds": 28.634,
-    "finished_utc": "2026-11-12T06:43:40+00:00"
+    "started_utc": "2026-11-12T07:14:59+00:00",
+    "febio_seconds": 28.562,
+    "finished_utc": "2026-11-12T07:15:28+00:00"
   },
   "result": {
     "frames_written": 50

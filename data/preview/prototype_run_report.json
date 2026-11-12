@@ -1,6 +1,6 @@
 {
   "format": "asrp-run-report/1",
-  "run_id": "2026-11-11_placeholder-jaw_001",
+  "run_id": "2026-11-12_placeholder-jaw_001",
   "status": "complete",
   "frames": 51,
   "parameters": [
@@ -619,8 +619,8 @@
         "k": 0.67,
         "density_t_per_mm3": 1.06e-09,
         "E_mpa": 0.015,
-        "mean_sag_along_gravity_mm": 0.09519027176870656,
-        "mean_dz_mm": -0.09519027176870656
+        "mean_sag_along_gravity_mm": 0.0951902717687066,
+        "mean_dz_mm": -0.0951902717687066
       }
     },
     "d": {
@@ -639,10 +639,10 @@
     }
   },
   "timing": {
-    "generate_s": 4.958,
-    "febio_s": 28.634,
-    "post_s": 3.728,
-    "febio_s_per_frame": 0.573
+    "generate_s": 5.655,
+    "febio_s": 28.562,
+    "post_s": 1.022,
+    "febio_s_per_frame": 0.571
   },
   "settled_shape": {
     "available": true,
@@ -653,7 +653,7 @@
       50
     ],
     "max_mm": 0.004128629332535777,
-    "mean_mm": 0.001201832020213963
+    "mean_mm": 0.001201832020212095
   },
   "spring_slip": {
     "lower_lip_on_jaw": {
