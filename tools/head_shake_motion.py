@@ -100,7 +100,9 @@ def build(scene_path: Path) -> trajectory.Trajectory:
         source=(f"head shake (T-28, ours): {HEAD} and {JAW} translate along x, keys of the lab's "
                 f"passive_dynamics_test.py (0 at frames 0 and {START}, {LOOPS} loops of {FRAMES_PER_LOOP} frames, "
                 f"+-{AMPLITUDE_UNITS:g} scene units = +-{AMPLITUDE_UNITS * mm:.4g} mm), cubic Hermite with our reading of "
-                f"Maya's auto tangents, then {AFTER} frames at rest; tools/head_shake_motion.py"),
+                f"Maya's auto tangents, then {AFTER} frames at rest; the keys at the extremes fall on half frames (as in the lab's "
+                f"script), so sampled once per frame the head goes at most {max(abs(x) for x in xs):.3g} mm; "
+                f"tools/head_shake_motion.py"),
     )
 
 
