@@ -11,6 +11,7 @@ import pytest
 import cube_scene as cs
 import placeholder_jaw_motion
 from asrp_core import cli, embed, febio, generate, plausibility, simulate, tetmesh, trajectory
+from asrp_core import run as run_module
 from asrp_core import scene as scene_module
 from asrp_core.asset import coords
 from asrp_core.doctor import febio_exe
@@ -34,12 +35,34 @@ def at_z(z):
 
 
 def display(run_dir: Path) -> np.ndarray:
-    return np.array(json.loads((run_dir / "physics" / "display.json").read_text())["positions"])
+    return simulate.read_display(run_dir / simulate.DISPLAY)["positions"]
 
 
 def run(folder: Path, transforms, name: str, settle=None, threads=febio.DEFAULT_THREADS):
     traj = cs.motion(folder, transforms, settle=settle)
     return simulate.run_scene(folder / "scene.json", traj, folder.parent / "runs", febio_exe(), name, threads=threads)
+
+
+def test_display_header_and_array_round_trip_and_a_disagreeing_header_is_refused(tmp_path):
+    frames = np.random.default_rng(1).normal(size=(4, 6, 3))
+    header = {"format": simulate.DISPLAY_FORMAT, "units": "mm", "fps": 30.0, "frames": 4, "vertex_count": 6}
+    path = tmp_path / "physics" / "display.json"
+    (tmp_path / "physics").mkdir()
+    run_module.save_array(path, header, frames, "display.npy")
+
+    read = simulate.read_display(path)
+    assert read["format"] == "asrp-display/2" and read["array"] == "display.npy" and read["shape"] == [4, 6, 3]
+    assert read["positions"].dtype == np.float64 and np.array_equal(read["positions"], frames)
+    first = (tmp_path / "physics" / "display.npy").read_bytes()
+    run_module.save_array(path, header, frames.copy(), "display.npy")  # the same numbers give the same bytes
+    assert (tmp_path / "physics" / "display.npy").read_bytes() == first
+
+    path.write_text(json.dumps({**header, "array": "display.npy", "shape": [4, 7, 3]}))
+    with pytest.raises(run_module.RunError, match="do not belong together"):
+        simulate.read_display(path)
+    path.write_text(json.dumps({**header, "vertex_count": 7, "array": "display.npy", "shape": [4, 6, 3]}))
+    with pytest.raises(run_module.RunError, match="4 frames of 7 vertices"):
+        simulate.read_display(path)
 
 
 # --- the embedding (zEmbedder stand-in) --------------------------------------------------------
@@ -304,8 +327,8 @@ def test_same_input_twice_agrees_within_1e_9_mm_at_the_default_threads(hard_plat
     a, b = display(first.run_dir), display(again.run_dir)
     assert a.shape == b.shape and np.abs(a - b).max() <= 1e-9
     assert np.abs(a - a[0]).max() > 1.0  # the plate really turns, so "equal" is not "nothing moved"
-    tets = [json.loads((r.run_dir / "physics" / "positions.json").read_text())["positions"] for r in (first, again)]
-    assert np.abs(np.array(tets[0]) - np.array(tets[1])).max() <= 1e-9
+    tets = [run_module.read_positions(r.run_dir / run_module.POSITIONS)["positions"] for r in (first, again)]
+    assert tets[0].shape == tets[1].shape and np.abs(tets[0] - tets[1]).max() <= 1e-9
 
 
 @needs_febio
@@ -313,7 +336,8 @@ def test_same_input_twice_gives_the_same_playback_files_with_one_thread(hard_pla
     folder, c, _, _ = hard_plate
     first = run(c["scene"].parent, TURN, "hard_1a", threads=1)
     again = run(c["scene"].parent, TURN, "hard_1b", threads=1)
-    for name in ("playback.json", "playback.pc2", "physics/display.json"):
+    for name in ("playback.json", "playback.pc2", "physics/display.json", "physics/display.npy", "physics/positions.json",
+                 "physics/positions.npy"):
         assert (first.run_dir / name).read_bytes() == (again.run_dir / name).read_bytes(), name
     assert json.loads((first.run_dir / "provenance.json").read_text())["parameters"]["febio_env"] == {
         "OMP_NUM_THREADS": "1", "MKL_NUM_THREADS": "1"}
@@ -324,11 +348,14 @@ def test_the_run_folder_holds_its_inputs_results_and_report(hard_plate):
     _, c, _, r = hard_plate
     d = r.run_dir
     for name in ("scene.json", "trajectory.json", "tissue.obj", "tissue_tet.json", "skull.obj", "plate.obj", "model.feb",
-                 "physics/positions.json", "physics/display.json", "playback.json", "playback.pc2", "run_report.json", "provenance.json"):
+                 "physics/positions.json", "physics/positions.npy", "physics/display.json", "physics/display.npy", "playback.json",
+                 "playback.pc2", "run_report.json", "provenance.json"):
         assert (d / name).is_file(), name
     record = json.loads((d / "provenance.json").read_text())
     assert record["mode"] == "generated" and record["parameters"]["length_scale"] == 1.0
-    assert {"run_report.json", "playback.pc2", "physics/display.json"} <= set(record["outputs"])
+    assert {"run_report.json", "playback.pc2", "physics/positions.json", "physics/positions.npy", "physics/display.json",
+            "physics/display.npy"} <= set(record["outputs"])
+    assert not (d / "positions.txt").exists() and not (d / "model.xplt").exists()  # derived and large: not kept
     report = cs.report(d)
     where = {p["where"]: p["source"] for p in report["parameters"]}
     assert where["scene.soft_tissues[tissue].material.E_mpa"] == "ours" and where["generator.rhoi"] == "ours"
@@ -360,7 +387,7 @@ def test_a_box_on_springs_drops_by_weight_over_stiffness_at_real_size(tmp_path, 
     assert r.status == "complete", r.report["checks"]["a"]
     model = generate.build(c["scene"], folder / "motion.json")
     [g] = model.groups
-    positions = json.loads((r.run_dir / "physics" / "positions.json").read_text())
+    positions = run_module.read_positions(r.run_dir / run_module.POSITIONS)
     index = {n: i for i, n in enumerate(positions["node_ids"])}
     nodes = sorted(g.stiffness)
     stiffness = np.array([g.levels[g.level_of[n]] for n in nodes])
@@ -570,13 +597,12 @@ def test_asrp_run_with_a_scene_prints_the_checks(hard_plate, capsys):
 
 @needs_febio
 def test_a_run_whose_febio_log_misses_a_frame_fails_and_leaves_no_results(tmp_path, monkeypatch):
-    from asrp_core import run as run_module
     real = run_module.read_positions
 
     def drop_one(path):
         data = real(path)
         data["times_s"] = data["times_s"][:2] + data["times_s"][3:]
-        data["positions"] = data["positions"][:2] + data["positions"][3:]
+        data["positions"] = np.concatenate([data["positions"][:2], data["positions"][3:]])
         return data
 
     monkeypatch.setattr(run_module, "read_positions", drop_one)

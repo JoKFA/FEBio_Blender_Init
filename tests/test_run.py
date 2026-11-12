@@ -9,6 +9,7 @@ import sys
 import threading
 import time
 
+import numpy as np
 import pytest
 
 from asrp_core import cli, febio, provenance, run
@@ -21,11 +22,12 @@ except FileNotFoundError:
 
 from s1_dynamic_jaw import FRAMES, build_feb  # noqa: E402
 
-PHYSICS_FILES = {"model.feb", "model.log", "physics/positions.json", "provenance.json"}
+PHYSICS_FILES = {"model.feb", "model.log", "physics/positions.json", "physics/positions.npy", "provenance.json"}
 
 
-def make_feb(path, time_steps=None, jaw_open=None, drop_output=False):
-    """The S1 model, optionally with a different step count, a jaw angle that breaks it, or no node output."""
+def make_feb(path, time_steps=None, jaw_open=None, drop_output=False, data_file=False):
+    """The S1 model, optionally with a different step count, a jaw angle that breaks it, no node output, or the
+    node output in its own data file (as the generator writes it) instead of the log."""
     path.parent.mkdir(parents=True, exist_ok=True)
     build_feb(path)
     text = path.read_text()
@@ -35,6 +37,9 @@ def make_feb(path, time_steps=None, jaw_open=None, drop_output=False):
         text = re.sub(r'(<value lc="2">)[^<]*', rf"\g<1>{jaw_open}", text)
     if drop_output:
         text = re.sub(r"<Output>.*</Output>", "", text, flags=re.S)
+    if data_file:
+        assert 'delim=","/>' in text
+        text = text.replace('delim=","/>', f'delim="," file="{febio.NODE_DATA_FILE}"/>')
     path.write_text(text)
     return path
 
@@ -52,8 +57,9 @@ def positions(result):
 
 
 def max_diff(a, b):
-    assert len(a) == len(b) > 0
-    return max(abs(x - y) for fa, fb in zip(a, b) for pa, pb in zip(fa, fb) for x, y in zip(pa, pb))
+    a, b = np.asarray(a), np.asarray(b)
+    assert a.shape == b.shape and a.size > 0
+    return float(np.abs(a - b).max())
 
 
 def pid_alive(pid):
@@ -113,7 +119,7 @@ def test_run_folder_has_exactly_what_this_step_produces(tmp_path, capsys):
     assert record["software"]["asrp"] and record["software"]["python"]
     assert record["parameters"]["total_frames"] == FRAMES and "-noconfig" in record["parameters"]["febio_args"]
     assert record["command"] == ["asrp", "run", "--feb", "jaw.feb"]
-    assert set(record["outputs"]) == {run.POSITIONS}
+    assert set(record["outputs"]) == {run.POSITIONS, run.POSITIONS_ARRAY}
     assert provenance.mismatches(folder) == []
     # Nothing machine-specific anywhere in it: no drive letter, no temp folder, no user name.
     raw = (folder / "provenance.json").read_text()
@@ -190,8 +196,8 @@ def test_runs_are_reproducible_to_1e_9_mm(tmp_path):
     assert a.run_dir != b.run_dir and a.status == b.status == "complete"
     pa, pb = positions(a), positions(b)
     # The same numbers come out of the raw log as out of the saved file; the log itself is never compared.
-    from_log = febio.read_node_data(a.run_dir / "model.log", "positions").values
-    assert max_diff(pa, [[list(f[n]) for n in sorted(f)] for f in from_log]) == 0
+    from_log = febio.read_node_series(a.run_dir / "model.feb", a.run_dir / "model.log").values
+    assert max_diff(pa, from_log) == 0
     moved = max_diff(pa, [pa[0]] * len(pa))
     assert moved > 1.0  # the model really moves (the jaw opens), so "equal" is not "nothing happened"
     assert max_diff(pa, pb) <= 1e-9
@@ -202,6 +208,8 @@ def test_one_thread_is_bit_identical_and_the_threads_actually_used_are_recorded(
     a = execute(feb, tmp_path / "runs", threads=1)
     b = execute(feb, tmp_path / "runs", threads=1)
     assert max_diff(positions(a), positions(b)) == 0  # exactly, not within 1e-9
+    for name in ("physics/positions.npy", "physics/positions.json"):  # and so are the saved files, byte for byte
+        assert (a.run_dir / name).read_bytes() == (b.run_dir / name).read_bytes()
     assert provenance.read(a.run_dir)["parameters"]["febio_env"] == {"OMP_NUM_THREADS": "1", "MKL_NUM_THREADS": "1"}
     default = execute(feb, tmp_path / "runs")
     want = str(min(febio.DEFAULT_THREADS, os.cpu_count()))
@@ -258,6 +266,50 @@ def test_non_convergence_names_the_frame_and_leaves_no_results(tmp_path, capsys)
     record = provenance.read(folder)
     assert record["status"] == "failed" and record["failure"]["frame"] == 20
     assert "negative jacobians" in record["failure"]["message"] and record["outputs"] == {}
+
+
+def test_node_data_in_its_own_file_gives_the_same_results_as_the_log_and_leaves_a_small_log(tmp_path):
+    in_log = execute(make_feb(tmp_path / "a" / "jaw.feb"), tmp_path / "runs", threads=1)
+    in_file = execute(make_feb(tmp_path / "b" / "jaw.feb", data_file=True), tmp_path / "runs", threads=1)
+
+    assert in_file.status == "complete"
+    assert files_in(in_file.run_dir) == PHYSICS_FILES  # the raw positions.txt is gone, like model.xplt
+    assert max_diff(positions(in_log), positions(in_file)) == 0
+    assert (in_file.run_dir / "model.log").stat().st_size < in_log.run_dir.joinpath("model.log").stat().st_size / 2
+    assert provenance.mismatches(in_file.run_dir) == []
+
+
+def test_a_failed_run_with_a_data_file_leaves_neither_results_nor_the_raw_file(tmp_path):
+    bad = execute(make_feb(tmp_path / "bad.feb", jaw_open=-9.0, data_file=True), tmp_path / "runs")
+
+    assert bad.status == "failed"
+    assert files_in(bad.run_dir) == {"model.feb", "model.log", "provenance.json"}
+
+
+def test_a_positions_header_that_disagrees_with_its_array_is_refused(tmp_path):
+    result = execute(make_feb(tmp_path / "jaw.feb"), tmp_path / "runs")
+    header_path = result.run_dir / run.POSITIONS
+    header = json.loads(header_path.read_text())
+    assert header["format"] == "asrp-positions/2" and header["array"] == "positions.npy"
+    assert header["shape"] == [FRAMES + 1, 72, 3] and run.read_positions(header_path)["positions"].dtype == np.float64
+
+    header_path.write_text(json.dumps({**header, "shape": [FRAMES + 1, 71, 3]}))
+    with pytest.raises(run.RunError, match="do not belong together"):
+        run.read_positions(header_path)
+
+    header_path.write_text(json.dumps({**header, "times_s": header["times_s"][:-1]}))  # header lists fewer frames
+    with pytest.raises(run.RunError, match="Run again"):
+        run.read_positions(header_path)
+
+    header_path.write_text(json.dumps({**header, "array": "../positions.npy"}))
+    with pytest.raises(run.RunError, match="plain file name"):
+        run.read_positions(header_path)
+
+    header_path.write_text(json.dumps(header))
+    (result.run_dir / "physics" / "positions.npy").write_bytes(b"not an array")
+    with pytest.raises(run.RunError, match="Cannot read positions.npy"):
+        run.read_positions(header_path)
+    assert provenance.mismatches(result.run_dir) == ["physics/positions.npy"]
 
 
 def test_a_feb_without_node_output_fails_and_says_why(tmp_path):
@@ -317,7 +369,7 @@ def test_positions_are_divided_by_k_and_the_recorded_hash_matches(tmp_path):
     two = run.execute(prepared, tmp_path / "runs", EXE)
 
     raw = positions(one)  # k = 1: FEBio's own coordinates
-    assert max_diff([[[c / 2 for c in p] for p in f] for f in raw], positions(two)) <= 1e-9
+    assert max_diff(raw / 2, positions(two)) <= 1e-9
     assert max_diff(raw, positions(two)) > 1.0  # the scaling really changed the numbers
     record = provenance.read(two.run_dir)
     assert record["parameters"]["length_scale"] == 2.0 and provenance.read(one.run_dir)["parameters"]["length_scale"] == 1.0

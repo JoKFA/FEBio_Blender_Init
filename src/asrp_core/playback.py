@@ -15,6 +15,8 @@ import struct
 from collections.abc import Sequence
 from pathlib import Path
 
+import numpy as np
+
 FORMAT = "asrp-playback/1"
 
 # Outward faces of a positively oriented tet (a, b, c, d).
@@ -36,17 +38,21 @@ def boundary_faces(domains: dict[str, Sequence[Sequence[int]]]) -> list[tuple[tu
     return [entry for entry in seen.values() if entry is not None]
 
 
-def write_pc2(path: Path, frames: Sequence[Sequence[Sequence[float]]]) -> None:
+def write_pc2(path: Path, frames: Sequence[Sequence[Sequence[float]]] | np.ndarray) -> None:
     """PC2: 'POINTCACHE2\\0', version 1, point count, start frame, sample rate, sample count, float32 xyz.
 
-    Sample rate is in frames per sample (1 = one sample per frame), not fps.
+    `frames` is a numpy array (frames, points, 3) or nested lists of that shape. Sample rate is in frames per
+    sample (1 = one sample per frame), not fps.
     """
-    points = len(frames[0])
+    try:
+        data = np.asarray(frames, dtype=np.float64)
+    except ValueError:
+        raise ValueError("every frame needs the same number of points") from None
+    if data.ndim != 3 or data.shape[2] != 3 or data.shape[0] == 0:
+        raise ValueError(f"a point cache needs frames of (x, y, z) points, got an array of shape {list(data.shape)}")
     with path.open("wb") as f:
-        f.write(struct.pack("<12siiffi", b"POINTCACHE2\0", 1, points, 0.0, 1.0, len(frames)))
-        for frame in frames:
-            assert len(frame) == points, "every frame needs the same number of points"
-            f.write(struct.pack(f"<{3 * points}f", *(c for p in frame for c in p)))
+        f.write(struct.pack("<12siiffi", b"POINTCACHE2\0", 1, data.shape[1], 0.0, 1.0, data.shape[0]))
+        f.write(data.astype("<f4").tobytes())
 
 
 def write_bundle(

@@ -1,6 +1,9 @@
 import json
 import struct
 
+import numpy as np
+import pytest
+
 from asrp_core.playback import boundary_faces, write_bundle, write_pc2
 
 # Unit tet, positively oriented, and a second tet sharing face (1, 2, 3) on the other side.
@@ -51,6 +54,26 @@ def test_pc2_layout(tmp_path):
     assert (magic, version, points, start, rate, samples) == (b"POINTCACHE2\0", 1, 2, 0.0, 1.0, 2)
     assert len(data) == 32 + 2 * 2 * 3 * 4
     assert struct.unpack("<3f", data[32 + 12 * 3 : 32 + 12 * 4]) == (7.0, 8.0, 9.0)
+
+
+def test_pc2_from_an_array_is_byte_identical_to_the_old_per_value_packing(tmp_path):
+    rng = np.random.default_rng(3)
+    frames = rng.normal(scale=40.0, size=(5, 7, 3))  # float64 values that do not fit float32 exactly
+    write_pc2(tmp_path / "array.pc2", frames)
+    write_pc2(tmp_path / "lists.pc2", frames.tolist())
+
+    old = struct.pack("<12siiffi", b"POINTCACHE2\0", 1, 7, 0.0, 1.0, 5)  # what the module wrote before: struct, per value
+    for frame in frames.tolist():
+        old += struct.pack("<21f", *(c for p in frame for c in p))
+    assert (tmp_path / "array.pc2").read_bytes() == (tmp_path / "lists.pc2").read_bytes() == old
+    assert not np.array_equal(frames, frames.astype("<f4"))  # the test does exercise the float32 rounding
+
+
+def test_pc2_refuses_frames_with_different_point_counts_or_a_wrong_shape(tmp_path):
+    with pytest.raises(ValueError, match="same number of points"):
+        write_pc2(tmp_path / "c.pc2", [[(0, 0, 0), (1, 2, 3)], [(4, 5, 6)]])
+    with pytest.raises(ValueError, match="shape"):
+        write_pc2(tmp_path / "c.pc2", np.zeros((3, 4)))
 
 
 def test_bundle_keeps_vertex_order_consistent(tmp_path):

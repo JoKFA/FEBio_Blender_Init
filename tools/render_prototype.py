@@ -3,7 +3,7 @@
     blender --background --factory-startup --python-exit-code 1 --python tools/render_prototype.py -- <run_dir> [--check-only] [--out <dir>]
 
 Loads <run_dir>/playback.json with the add-on's Load Result operator (as a researcher would), then compares
-Blender's evaluated lip mesh with physics/display.json (what asrp computed) at frames 0, 14, the fully open
+Blender's evaluated lip mesh with physics/display.json + display.npy (what asrp computed) at frames 0, 14, the fully open
 frame and the last one. Then, unless --check-only, adds the skull and the jaw from <run_dir>'s copies of the
 meshes (the jaw moved by its driver's transform from trajectory.json on each frame) and renders three side
 views: rest (frame 0), settled (frame 14) and jaw fully open (the frame where the jaw's angle is largest) to
@@ -23,6 +23,7 @@ REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "blender_addon"))
 
 import bpy  # noqa: E402
+import numpy as np  # noqa: E402  (Blender bundles it)
 from mathutils import Matrix  # noqa: E402
 
 import asrp_blender  # noqa: E402
@@ -39,7 +40,9 @@ assert bpy.ops.asrp.load_playback(directory=str(run_dir)) == {"FINISHED"}
 lips = bpy.context.view_layer.objects.active
 scene = bpy.context.scene
 
-display = json.loads((run_dir / "physics" / "display.json").read_text())["positions"]
+display_header = json.loads((run_dir / "physics" / "display.json").read_text())  # header; the numbers are in .npy
+display = np.load(run_dir / "physics" / display_header["array"], allow_pickle=False)
+assert list(display.shape) == display_header["shape"], "physics/display.json and its array do not belong together"
 motion = json.loads((run_dir / "trajectory.json").read_text())
 scene_json = json.loads((run_dir / "scene.json").read_text())
 jaw = next(b for b in scene_json["bones"] if b["name"] == "jaw")

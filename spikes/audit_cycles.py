@@ -20,7 +20,7 @@ from pathlib import Path
 
 import numpy as np
 
-from asrp_core import scene, tetmesh, trajectory
+from asrp_core import run, scene, tetmesh, trajectory
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
 import placeholder_jaw_motion as placeholder  # noqa: E402
@@ -54,7 +54,7 @@ def make(scene_path: Path, out: Path, cycles: int) -> None:
 
 
 def analyse(run_dir: Path, cycles: int) -> None:
-    data = json.loads((run_dir / "physics" / "positions.json").read_text(encoding="utf-8"))
+    data = run.read_positions(run_dir / run.POSITIONS)
     sc = scene.load(run_dir / "scene.json")
     fps = float(sc.solver.fps.value)
     mesh, _ = tetmesh.load(run_dir / sc.soft_tissues[0].tet_mesh.path)
