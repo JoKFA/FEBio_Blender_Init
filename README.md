@@ -6,6 +6,8 @@
 
 ASRP replaces Ziva (the physics backend under the lab's facial controller) with FEBio, and Maya (the host) with Blender. The prototype takes the lab's real lip mesh, lets the jaw pull it through 51 frames, solves it with FEBio in under a minute and plays it back in Blender; the measured timings, the other numbers and their limits are on one page: **[docs/15-prototype.md](docs/15-prototype.md)** (Chinese).
 
+**What comes next.** The next milestone is prototype two: a landmark layer on top of the prototype, shown on two motions (neutral to the lab's "AA" mouth shape, and a head shake) plus ten back-and-forth repeats (docs/09 section 1). Its first task is T-09. What the project owner still has to decide is listed in one place, docs/11 section 1 (P-06 to P-10). What can only be learnt on the Ziva machine is in docs/12 part 2. All of these documents are in Chinese.
+
 ## Run the prototype
 
 After the setup below (`uv sync`, `uv run asrp doctor` all `ok`), three commands, under a minute on the reference machine, no Maya or Ziva needed (the output folders are git-ignored):
