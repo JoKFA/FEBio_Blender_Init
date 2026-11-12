@@ -58,9 +58,11 @@ asrp/
 5. **错误信息说人话**，并且说清楚怎么办：写"找不到 FEBio。请安装 FEBio Studio，或设置 ASRP_FEBIO 指向 febio4.exe"，不要写 "FileNotFoundError"。
 6. **注释解释"为什么"**，不要复述代码在做什么。坑和反直觉的地方一定要写注释，比如重力反号。
 7. **新增依赖要说明理由**，写在合并请求里，用 `uv add` 添加。插件不能有第三方依赖，因为 Blender 自带的 Python 装不了。
-8. 代码风格：用 ruff 检查（T-15，2026-11-12 完成）。`ruff check`，规则 E、F、I、UP、B，是 `tools/verify.py` 的第一步，以工具检查结果为准。**两处和原来任务卡的写法不同**（2026-11-12 决定）：
+8. 代码风格：用 ruff 检查（T-15，2026-11-12 完成）。`ruff check`，规则 E、F、I、UP、B，是 `tools/verify.py` 的第一步，以工具检查结果为准。**和原来任务卡的写法不同的地方**（2026-11-12 决定）：
    1. **行宽不检查**（E501 忽略）：现有代码写在约 150 列，全部重排会把真正的改动埋掉；
-   2. **不加 `ruff format --check`**，原因同上。下次整个重写某个文件时再回头看。
+   2. **不加 `ruff format --check`**，原因同上。下次整个重写某个文件时再回头看；
+   3. **规则 B905（`zip()` 不带 `strict=`）整个仓库忽略**：54 处 `zip()` 全是把一起造出来的序列配对，加 `strict=` 只会添噪音；
+   4. **三个由 Maya 自带的 Python 运行的脚本**（`tools/maya_export.py`、`tools/rehearse_ziva_export.py`、`tools/ziva_machine_export.py`）在 `pyproject.toml` 里各关了几条规则（老式字符串格式化和三条风格规则），保持原样。具体清单只看 `pyproject.toml`，这里不抄。
 
 ## 6. 测试的规矩
 

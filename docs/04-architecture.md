@@ -98,15 +98,24 @@ runs/2026-11-03_neutral-to-AA_001/
 
 **运行报告的内容**（`run_report.json`，格式名 `asrp-run-report/1`，07 第 3 节），每个键写一次：
 
-1. `run_id`、`status`（`complete`、`failed`、`cancelled`）、`frames`、`passed`（整次运行是否通过）；
-2. `parameters`：临时值和来源。运动那一行的来源取运动文件的 `source_tag`，没写记 `unstated`；
-3. `simplifications`：场景 `simplifications` 里的说明，原样照抄，场景没写就是空列表（取代原来的 `attachments_not_built`）；
-4. `warnings`、`generator`（生成器报告）；
-5. `checks`：a、b、b2、c、d，每项是 `name`、`passed`（`true`、`false` 或 `null`）、`message`、`numbers`；没运行的汇总在 `not_run`；d 的数字是 `min_volume_ratio`、`min_volume_ratio_frame`、`max_volume_ratio`、`inverted_tets`、`frames_with_inverted_tets`；
-6. `settled_shape`：`available`、`frame`（n，没有沉降形状时为 `null`），不可用时多一个 `reason`；
-7. `return_to_settled`：只报告，`{frames, max_mm, mean_mm}`，没有这样的帧时 `frames` 是空列表；
-8. `motion`：任一显示顶点离静止位置最远的距离 `max_display_distance_mm` 和出现的帧 `frame`；`spring_slip`：每个弹簧组的 max|u|、δ、比值和是否超过 0.1；
-9. `timing`：`generate_s`、`febio_s`、`febio_s_per_frame`、`post_s`。没有速度预算的键：耗时只报告，不和别的数并排（ADR-38 第 5 条）。
+| 键 | 含义 |
+|---|---|
+| `run_id` | 这次运行的编号 |
+| `status` | `complete`、`failed`、`cancelled` 三个值之一 |
+| `frames` | 帧数 |
+| `passed` | 整次运行是否通过 |
+| `parameters` | 临时值和来源；运动那一行的来源取运动文件的 `source_tag`，没写记 `unstated` |
+| `simplifications` | 场景 `simplifications` 里的说明，原样照抄；场景没写就是空列表（取代原来的 `attachments_not_built`） |
+| `warnings` | 警告列表 |
+| `generator` | 生成器报告 |
+| `checks` | a、b、b2、c、d 五项，每项是 `name`、`passed`（`true`、`false` 或 `null`）、`message`、`numbers`；d 的数字是 `min_volume_ratio`、`min_volume_ratio_frame`、`max_volume_ratio`、`inverted_tets`、`frames_with_inverted_tets` |
+| `not_run` | 没运行的检查的汇总（属于 `checks`） |
+| `settled_shape` | `available`、`frame`（n，没有沉降形状时为 `null`）；不可用时多一个 `reason` |
+| `return_to_settled` | 只报告，`{frames, max_mm, mean_mm}`；没有这样的帧时 `frames` 是空列表 |
+| `motion` | 任一显示顶点离静止位置最远的距离 `max_display_distance_mm` 和出现的帧 `frame` |
+| `spring_slip` | 每个弹簧组的 max\|u\|、δ、比值和是否超过 0.1 |
+| `timing` | `generate_s`、`febio_s`、`febio_s_per_frame`、`post_s`；没有速度预算的键：耗时只报告，不和别的数并排（ADR-38 第 5 条） |
+| `reason` | 见 `settled_shape`：沉降形状不可用时的原因 |
 
 运行用的线程数记在溯源里（`febio_env`）。
 
