@@ -447,16 +447,22 @@ def process_tree():
         tree = descendants(SESSION.proc.pid)
     assert tree, "no child process of the run was seen: this case would prove nothing"
     everyone = tree | {SESSION.proc.pid}
-    assert alive(everyone), "the run is not running"
+    assert alive(everyone), f"the run is not running (exit code {SESSION.proc.poll()})"
     return everyone
 
 
-def case_close_before_folder(box, runs):
-    """Closing the session before the run folder is known must not leave uv / python running."""
-    start(box / "scene.json", box / "long.json", runs, "closed")
-    everyone = process_tree()
-    assert SESSION.run_dir is None
-    SESSION.close()
+def case_close_before_folder(box, runs, source):
+    """Closing the session before the run folder is known must not leave uv / python running. A stand-in that never
+    names its folder and does not end by itself: with the real core this case depended on catching the run in the
+    second or two before the folder line, and failed whenever the machine was slower or faster than that."""
+    try:
+        SESSION.launcher = stand_in("silent", source)
+        start(box / "scene.json", box / "long.json", runs, "closed")
+        everyone = process_tree()
+        assert SESSION.run_dir is None
+        SESSION.close()
+    finally:
+        SESSION.launcher = asrp_blender.core_command
     time.sleep(2)
     left = alive(everyone)
     assert not left, f"processes left running after close(): {left}"
@@ -629,7 +635,7 @@ try:
     case_stand_in(box, runs, run1)
     case_process_cleanup(box, runs, run1)
     case_malformed_reports()
-    case_close_before_folder(box, runs)
+    case_close_before_folder(box, runs, run1)
     case_deleted_object()
     case_file_load_mid_run(box, runs, tmp)
     print("PANEL CHECK PASSED")
