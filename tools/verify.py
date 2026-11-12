@@ -2,7 +2,8 @@
 
     uv run python tools/verify.py
 
-Runs, in order: the test suite, `asrp doctor`, Blender's own validation of the add-on
+Runs, in order: the test suite (with ASRP_SLOW=1, so the real-lip run in tests/test_prototype.py is
+included; it takes several minutes), `asrp doctor`, Blender's own validation of the add-on
 manifest, the Blender add-on round trip, and the FEBio -> Blender playback check. The two
 Blender scripts load the add-on from source, which skips packaging, so only the manifest
 step would notice an add-on that cannot be built. Blender is found the same way
@@ -22,15 +23,15 @@ sys.path.insert(0, str(REPO / "src"))
 from asrp_core.doctor import BLENDER_CANDIDATES, locate  # noqa: E402
 
 
-def step(name: str, cmd: list[str]) -> None:
+def step(name: str, cmd: list[str], extra_env: dict | None = None) -> None:
     print(f"\n=== {name}", flush=True)
-    env = {**os.environ, "PYTHONDONTWRITEBYTECODE": "1"}
+    env = {**os.environ, "PYTHONDONTWRITEBYTECODE": "1", **(extra_env or {})}
     if subprocess.run(cmd, cwd=REPO, env=env).returncode != 0:
         sys.exit(f"verify FAILED at: {name}")
 
 
 def main() -> None:
-    step("tests", [sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider"])
+    step("tests", [sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider"], {"ASRP_SLOW": "1"})
     step("asrp doctor", [sys.executable, "-m", "asrp_core.cli", "doctor"])
     blender = locate("ASRP_BLENDER", ["blender"], BLENDER_CANDIDATES)
     if blender.path is None:
