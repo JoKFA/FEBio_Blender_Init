@@ -167,7 +167,8 @@ def test_landmarks_that_are_not_numbers_are_an_error():
 # real lips run, see the T-31 report.
 
 
-def make_run(folder: Path, *, status="complete", settled=None, with_landmarks=True, sag=-0.7) -> tuple[Path, fs.LipModel]:
+def make_run(folder: Path, *, status="complete", settled=None, with_landmarks=True, sag=-0.7, passed=True,
+             scene_names=None) -> tuple[Path, fs.LipModel]:
     """A tiny run folder: scene.json with 4 landmarks and a lip mesh of 6 vertices, its skin file, the report
     and the settled shape. Returns the folder and the model that `load` should give back."""
     rng = np.random.default_rng(11)
@@ -194,7 +195,7 @@ def make_run(folder: Path, *, status="complete", settled=None, with_landmarks=Tr
     model = scene.load(folder / "box" / "scene.json")
     sha = lambda p: scene.FileRef(p, __import__("hashlib").sha256((folder / p).read_bytes()).hexdigest())  # noqa: E731
     model.units.mm_per_scene_unit = scene.Param(SCALE, "ours", "test")
-    model.landmarks = scene.Landmarks(names, coords.to_mm_zup(rest_scene, SCALE).tolist(),
+    model.landmarks = scene.Landmarks(scene_names or names, coords.to_mm_zup(rest_scene, SCALE).tolist(),
                                       sha("landmarks/skin_mm.json")) if with_landmarks else None
     for name in ("tissue_tet.json", "skull.obj", "plate.obj"):
         (folder / name).write_bytes((folder / "box" / name).read_bytes())
@@ -204,7 +205,8 @@ def make_run(folder: Path, *, status="complete", settled=None, with_landmarks=Tr
     (folder / "physics" / "settled_frame14.json").write_text(json.dumps({
         "format": "asrp-settled/1", "units": "mm", "frame": 14, "time_s": 14 / 30, "note": "test",
         "tet_nodes": [], "display": base.tolist()}), encoding="utf-8", newline="\n")
-    report = {"format": "asrp-run-report/1", "status": status,
+    report = {"format": "asrp-run-report/1", "status": status, "passed": passed,
+              "checks": {"c": {"name": "gravity sag", "passed": passed, "message": "test"}},
               "settled_shape": settled or {"available": True, "frame": 14}}
     (folder / "run_report.json").write_text(json.dumps(report), encoding="utf-8", newline="\n")
     return folder, fs.LipModel(names, w, rest_scene, base, "settled", SCALE)
@@ -213,7 +215,7 @@ def make_run(folder: Path, *, status="complete", settled=None, with_landmarks=Tr
 def test_load_reads_the_scene_the_skin_and_the_settled_shape(tmp_path):
     folder, expected = make_run(tmp_path / "run")
     model = fs.load(folder)
-    assert model.base == "settled" and model.names == expected.names and model.mm_per_scene_unit == SCALE
+    assert model.base == "settled" and list(model.names) == list(expected.names) and model.mm_per_scene_unit == SCALE
     assert np.abs(model.weights - expected.weights).max() < 1e-12
     assert np.abs(model.landmark_rest_scene - expected.landmark_rest_scene).max() < 1e-12
     assert np.abs(model.base_mm - expected.base_mm).max() < 1e-12
@@ -290,6 +292,9 @@ def test_the_bind_pose_model_equals_the_labs_formula_on_the_labs_files(real):
     bind, lab_weights = lab_arrays()
     assert bind.shape == (10240, 3) and lab_weights.shape == (10240, 300)
     positions = real.landmark_rest_scene + np.random.default_rng(0).normal(size=(300, 3)) * 2.0
+    # The landmark REST positions are ours on both sides: the lab files hold no landmark positions, so this test
+    # checks their weights, their bind mesh and the vertex order, not where the landmarks rest (tests/test_asset.py
+    # checks those against the export).
     translations = positions - real.landmark_rest_scene
     assert np.abs(translations).max() > 1.0  # counts above zero: the landmarks really moved
     ours = fs.final_shape(real, None, positions)
@@ -307,3 +312,49 @@ def test_the_bind_pose_model_equals_the_labs_formula_on_the_labs_files(real):
 def test_the_jaw_input_does_not_change_the_real_result(real):
     positions = moved(real, seed=4)
     assert fs.final_shape(real, rotation(), positions).tobytes() == fs.final_shape(real, None, positions).tobytes()
+
+
+# --- review additions -------------------------------------------------------------------------------------------
+
+
+def test_a_run_whose_checks_failed_is_refused_unless_asked_for(tmp_path):
+    folder, _ = make_run(tmp_path / "bad", passed=False)
+    with pytest.raises(fs.FinalShapeError, match="plausibility checks did not all pass.*failed: c"):
+        fs.load(folder)
+    assert fs.load(folder, allow_failed_checks=True).base == "settled"
+
+
+def test_a_scene_and_a_skin_that_disagree_on_the_landmark_order_are_refused(tmp_path):
+    folder, _ = make_run(tmp_path / "order", scene_names=["oor_02", "oor_01", "oor_03", "oor_04"])
+    with pytest.raises(fs.FinalShapeError, match="names or order differ"):
+        fs.load(folder)
+
+
+def test_a_loaded_model_cannot_be_edited_in_place(tmp_path):
+    folder, _ = make_run(tmp_path / "run")
+    model = fs.load(folder)
+    for array in (model.base_mm, model.weights, model.landmark_rest_scene):
+        with pytest.raises(ValueError, match="read-only"):
+            array[0, 0] = 1.0
+    assert isinstance(model.names, tuple)
+
+
+def test_a_real_jaw_turn_warns_that_it_changes_nothing_and_the_identity_does_not():
+    model = synthetic()
+    with pytest.warns(fs.JawIgnoredWarning, match="Q20"):
+        fs.final_shape(model, rotation(), moved(model))
+    import warnings
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        fs.final_shape(model, np.eye(3), moved(model))
+        fs.final_shape(model, None, moved(model))
+
+
+def test_importing_the_module_needs_neither_blender_nor_a_subprocess():
+    import subprocess
+    import sys
+    code = ("import sys; import asrp_core.final_shape; "
+            "bad = [m for m in ('bpy', 'subprocess', 'asrp_core.febio', 'asrp_core.run', 'asrp_core.simulate') if m in sys.modules]; "
+            "print(bad); sys.exit(1 if bad else 0)")
+    done = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True)
+    assert done.returncode == 0, done.stdout + done.stderr

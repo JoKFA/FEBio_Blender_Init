@@ -32,6 +32,7 @@ is guessed.
 """
 
 import json
+import warnings
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -51,11 +52,16 @@ class FinalShapeError(ValueError):
     """The inputs or the run folder cannot be used; the message says what is wrong and what to do."""
 
 
+class JawIgnoredWarning(UserWarning):
+    """A jaw rotation was passed that this version does not use (Q20). Python shows it once per call site."""
+
+
 @dataclass(frozen=True)
 class LipModel:
-    """Everything `final_shape` needs, loaded once. Arrays are not copied; do not modify them."""
+    """Everything `final_shape` needs, loaded once. The arrays are read-only: a training loop that edits one in
+    place gets an error instead of a silently different base on every later step."""
 
-    names: list[str]  # landmark names, in the scene's order (oor_01 .. oor_300)
+    names: tuple[str, ...]  # landmark names, in the scene's order (oor_01 .. oor_300)
     weights: np.ndarray  # (V, K)
     landmark_rest_scene: np.ndarray  # (K, 3) rest positions, the lab's convention (scene units, Y up)
     base_mm: np.ndarray  # (V, 3) the base shape, mm, Z up
@@ -104,10 +110,11 @@ def _scene_parts(scene_path: Path) -> tuple[scene_module.Scene, skinning.Skin, n
     return scene, skin, rest_scene
 
 
-def load(run_dir) -> LipModel:
+def load(run_dir, *, allow_failed_checks: bool = False) -> LipModel:
     """Load the model from a COMPLETED run folder: its scene.json (landmarks, units), the skin file the
     scene references, and the shape after the gravity-only settle (physics/settled_frame<n>.json).
-    The model's base is "settled"."""
+    The model's base is "settled". A run whose plausibility checks did not all pass is refused unless
+    allow_failed_checks=True: its settled shape may be wrong, and nothing downstream would show it."""
     run_dir = Path(run_dir)
     if not run_dir.is_dir():
         raise FinalShapeError(f"{run_dir} is not a folder; give the folder of a run made by asrp run")
@@ -117,6 +124,13 @@ def load(run_dir) -> LipModel:
         raise FinalShapeError(
             f"the run in {run_dir} has status {status!r}, not 'complete', so it has no result to take the base "
             "shape from; use a run that finished, or run again"
+        )
+    if report.get("passed") is not True and not allow_failed_checks:
+        failed = [key for key, c in (report.get("checks") or {}).items() if isinstance(c, dict) and c.get("passed") is False]
+        raise FinalShapeError(
+            f"the run in {run_dir} completed but its plausibility checks did not all pass (failed: "
+            f"{', '.join(failed) or 'see run_report.json'}), so its settled shape is not a base to train on. Fix the "
+            "run, or pass allow_failed_checks=True if you have looked at the report and accept it"
         )
     settled = report.get("settled_shape")
     if not isinstance(settled, dict) or not settled.get("available"):
@@ -164,16 +178,20 @@ def _model(scene, skin, rest_scene, base_mm, base, where) -> LipModel:
         )
     if not np.isfinite(base_mm).all():
         raise FinalShapeError(f"{where} holds a value that is not a finite number; run again")
-    return LipModel(list(scene.landmarks.names), skin.weights, rest_scene, base_mm, base,
+    weights, rest_scene, base_mm = (np.array(a, dtype=np.float64) for a in (skin.weights, rest_scene, base_mm))
+    for a in (weights, rest_scene, base_mm):
+        a.setflags(write=False)
+    return LipModel(tuple(scene.landmarks.names), weights, rest_scene, base_mm, base,
                     float(scene.units.mm_per_scene_unit.value))
 
 
 # --- the function ------------------------------------------------------------------------------------
 
 
-def _check_rotation(jaw_rotation) -> None:
+def _check_rotation(jaw_rotation) -> bool:
+    """Refuse anything that is not a rotation; True when it is a real turn (not the identity)."""
     if jaw_rotation is None:
-        return
+        return False
     try:
         r = np.asarray(jaw_rotation, dtype=np.float64)
     except (TypeError, ValueError):
@@ -192,6 +210,7 @@ def _check_rotation(jaw_rotation) -> None:
         raise FinalShapeError(
             f"jaw_rotation is not a rotation: its determinant is {det!r}, not +1 (a mirror is not allowed)"
         )
+    return bool(np.abs(r - np.eye(3)).max() > ROTATION_TOLERANCE)
 
 
 def final_shape(model: LipModel, jaw_rotation, landmark_positions, *, jaw_changes_base: str = "no") -> np.ndarray:
@@ -216,7 +235,11 @@ def final_shape(model: LipModel, jaw_rotation, landmark_positions, *, jaw_change
         )
     if jaw_changes_base not in JAW_CHANGES_BASE:
         raise FinalShapeError(f"jaw_changes_base must be one of {JAW_CHANGES_BASE}, got {jaw_changes_base!r}")
-    _check_rotation(jaw_rotation)
+    if _check_rotation(jaw_rotation):  # a real turn that will change nothing: say so, once per process
+        warnings.warn(
+            "final_shape: the jaw rotation is checked but does not change the result (jaw_changes_base='no'): "
+            "whether Ziva re-solves when the jaw turns within a frame is open question Q20 (docs/11)",
+            JawIgnoredWarning, stacklevel=2)
     k = len(model.names)
     try:
         positions = np.asarray(landmark_positions, dtype=np.float64)
