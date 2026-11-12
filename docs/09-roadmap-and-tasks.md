@@ -140,16 +140,16 @@ M0 基础 ✅ ──► M1 原料就绪 ✅ ──► M2 物理段 ──► M3 
 - **输入**：导入后的 `landmarks/` 文件；物理段结果（T-06a ✅：运行文件夹的 `physics/display.npy`，嘴唇 10,240 个顶点每帧的位置；同名的 `display.json` 是表头，`asrp-display/2`，04 第 4 节）。叠加的结果写进运行文件夹的 `final/`（04 第 4 节），回放包再多一个"最终形状"版本。蒙皮矩阵在导入时换成毫米、Z 轴朝上（下一条）。
 - **先补 M1 的缺口**（ADR-34；已补）：`asrp import-asset` 原来把 `skin_skinCluster7.json` 原样拷进 `landmarks/`，里面的蒙皮矩阵还是场景单位、Y 轴朝上。现在换算成毫米、Z 轴朝上写成 `landmarks/skin_mm.json`；换算放在导入模块 `src/asrp_core/asset/` 里（单位只在导入时换算一次，N-01），用 `asset/coords.py` 的那一份换算；`skinning.py` 只读换算好的文件。
 - **验收**：
-  - **换算对不对**：用换算后的绑定矩阵（`bind_pre_matrix`）和几何矩阵（`geom_matrix`），在所有 landmark 都不动时，对全部 10,240 个静止顶点做一次蒙皮，结果等于导入后的嘴唇网格顶点（误差小于 0.001 mm）；
+  - **换算对不对**：用换算后的绑定矩阵（`bind_pre_matrix`），在所有 landmark 都不动时，对全部 10,240 个静止顶点做一次蒙皮，结果等于导入后的嘴唇网格顶点（误差小于 0.001 mm）。几何矩阵（`geom_matrix`）也换算并存下来，但蒙皮时用不到：导出的顶点已经是世界坐标（ADR-18）；
   - landmark 不动时，最终形状和物理段结果完全相同；
   - 用一个只有两三个 landmark 的小例子，和手算结果一致；
   - `trajectory.json` 的 `landmarks` 一节（04 第 5.2 节）：读回内容不变；缺字段、帧数对不上时报错（各有测试）；
   - 拿到 D3 以后：用 Ziva 的"只有物理"结果当输入，叠加后应该和 Ziva 的"最终形状"一致（误差在 0.01 mm 以内）。这一条能单独证明蒙皮层是对的，和 FEBio 无关。
-- **依赖**：完整验收要 T-10 和 D3。
+- **依赖**：最后一条验收要 D3。
 - **改动范围**：`src/asrp_core/skinning.py`、`src/asrp_core/asset/`、`src/asrp_core/trajectory.py`（`landmarks` 一节的读取和校验）、`tests/`。
 - **规模**：小到中。
 - **结果**（2026-11-12）：
-  - 已达到：换算对不对（`tests/test_skinning.py` 里用导入后的真实嘴唇的那几条；它们需要实验室自己的文件，没有就跳过）；landmark 不动时最终形状等于物理结果（`tests/test_skinning.py`、`tests/test_simulate.py`）；小例子和手算一致（`tests/test_skinning.py`）；`landmarks` 一节读回不变、缺字段和帧数对不上时报错（`tests/test_trajectory.py`），场景不认识的 landmark 名字被 `asrp check` 拒绝（`tests/test_scene.py`）。
+  - 已达到：换算对不对。能证明换算的是这两处：`tests/test_asset.py`（换算后每个 landmark 静止矩阵里的平移等于场景里它的静止位置，轴转错或矩阵没转置都会失败）和 `tests/test_skinning.py` 里换算函数的几条；"landmark 不动时蒙皮还原静止嘴唇"那个数只说明导出的矩阵自洽，换算错了它也不会变，所以不当证据用；landmark 不动时最终形状等于物理结果（`tests/test_skinning.py`、`tests/test_simulate.py`）；小例子和手算一致（`tests/test_skinning.py`）；`landmarks` 一节读回不变、缺字段和帧数对不上时报错（`tests/test_trajectory.py`），场景不认识的 landmark 名字被 `asrp check` 拒绝（`tests/test_scene.py`）。
   - 独立对照：`uv run python tools/landmark_layer_check.py` 用实验室自己的绑定姿态和权重文件、按他们的公式算，和我们的层比，300 个 landmark 全部移动，另有一个必须失败的对照；结果存档在 `data/preview/landmark_layer_check.json`。最大距离 5.34×10⁻⁶ mm，对照（权重列错开一个 landmark）6.79 mm，施加的最大平移 16.1 mm。这说明我们的层等于实验室**公式**在实验室**数据**上的结果；不说明和 Maya 的 skinCluster 在 Ziva 结果上一致（要 D3），也不说明 AA 姿态该怎么读。
   - 没达到：最后一条验收（Ziva 的"只有物理"结果当输入，叠加后和 Ziva 的"最终形状"比），要 D3。
   - 加载版本的选择已进插件的加载函数；面板（运行按钮、进度、切换）不在这张卡里，归 T-13。

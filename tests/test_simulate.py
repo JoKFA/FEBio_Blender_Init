@@ -65,7 +65,7 @@ def weights_for(vertices: int) -> np.ndarray:
     return w / w.sum(axis=1, keepdims=True)
 
 
-def landmark_scene(folder, vertices_in_skin=None):
+def landmark_scene(folder, vertices_in_skin=None, scene_names=NAMES):
     """The cube scene with a `landmarks` section: three landmarks and a skin file in asrp-skin/1 (built here)."""
     c = cs.write(folder)
     v = len(c["display"]) if vertices_in_skin is None else vertices_in_skin
@@ -77,7 +77,7 @@ def landmark_scene(folder, vertices_in_skin=None):
     (folder / "skin_mm.json").write_text(json.dumps(skin), encoding="utf-8", newline="\n")
     s = scene_module.load(c["scene"])
     ref = scene_module.FileRef("skin_mm.json", tetmesh.file_sha256(folder / "skin_mm.json"))
-    s = dataclasses.replace(s, landmarks=scene_module.Landmarks(NAMES, [[0.0, 0.0, 0.0]] * 3, ref))
+    s = dataclasses.replace(s, landmarks=scene_module.Landmarks(list(scene_names), [[0.0, 0.0, 0.0]] * 3, ref))
     scene_module.write(c["scene"], s)
     return c, w
 
@@ -214,3 +214,10 @@ def test_weights_for_another_mesh_are_refused_in_words(tmp_path):
     landmark_scene(tmp_path / "box", vertices_in_skin=10)
     r = run(tmp_path / "box", landmark_motion(tmp_path / "box", ramp()), "rows")
     assert_failed_and_clean(r, "10 rows but the display mesh has")
+
+
+def test_a_scene_that_lists_the_landmarks_in_another_order_than_the_weights_is_refused(tmp_path):
+    """The weight columns follow the skin file's names; a scene with the same names reordered must not run through."""
+    landmark_scene(tmp_path / "box", scene_names=[NAMES[1], NAMES[0], NAMES[2]])
+    r = run(tmp_path / "box", landmark_motion(tmp_path / "box", ramp()), "order")
+    assert_failed_and_clean(r, "same landmarks in the same order")

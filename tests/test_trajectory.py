@@ -226,6 +226,13 @@ def test_a_trajectory_with_landmarks_round_trips_unchanged_and_one_frame_per_lin
     assert "\r" not in text
 
 
+def test_an_unknown_key_in_the_landmarks_section_survives_a_write(tmp_path):
+    data = with_landmarks()
+    data["landmarks"]["note"] = "fitted by hand"
+    trajectory.write(tmp_path / "a.json", trajectory.from_json(data))
+    assert trajectory.read(tmp_path / "a.json").landmarks["note"] == "fitted by hand"
+
+
 def test_landmark_translations_gives_frames_by_landmarks_by_xyz():
     traj = trajectory.from_json(with_landmarks())
     names, t = trajectory.landmark_translations(traj)

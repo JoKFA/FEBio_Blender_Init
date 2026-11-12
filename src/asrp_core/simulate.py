@@ -31,7 +31,8 @@ When the trajectory has a `landmarks` section (T-09) the landmark layer is appli
     final/display.npy             physics/display.*
     playback_final.pc2            its point cache; playback.json then names both caches under "versions"
 
-Without a `landmarks` section none of these exist and every other file is byte for byte what it was.
+Without a `landmarks` section none of these exist; playback.json, playback.pc2 and physics/ are byte for byte what
+they were, and run_report.json only gains `landmark_layer` (applied: false).
 The checks stay physics checks. run_report.json says whether the layer was applied, how many landmarks
 moved, the largest translation, and the largest difference between final and physics (with its frame).
 
@@ -261,9 +262,11 @@ def _landmark_layer(model: generate.Model, run_dir: Path, display: np.ndarray, r
     if skin.weights.shape[0] != display.shape[1]:
         raise skinning.SkinError(f"the landmark weights have {skin.weights.shape[0]} rows but the display mesh has "
                                  f"{display.shape[1]} vertices; import the asset again so they come from the same mesh")
-    if skin.weights.shape[1] != len(landmarks.names):
-        raise skinning.SkinError(f"the landmark weights have {skin.weights.shape[1]} columns but scene.json lists "
-                                 f"{len(landmarks.names)} landmarks; import the asset again")
+    if list(skin.names) != list(landmarks.names):  # the weight columns are in the skin file's order: never guess
+        raise skinning.SkinError(
+            f"the landmark weights list {len(skin.names)} landmarks and scene.json lists {len(landmarks.names)}, or "
+            "the same landmarks in another order; the two must name the same landmarks in the same order. Import "
+            "the asset again so both come from the same export")
     column = {n: i for i, n in enumerate(landmarks.names)}
     translations = np.zeros((display.shape[0], len(landmarks.names), 3))  # scene order; unnamed landmarks stay put
     for i, n in enumerate(names):

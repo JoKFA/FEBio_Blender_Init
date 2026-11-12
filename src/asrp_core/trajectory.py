@@ -320,6 +320,9 @@ def write(path, trajectory: Trajectory) -> None:
     lines = ["{"] + [f"  {json.dumps(k)}: {json.dumps(v, ensure_ascii=False)}," for k, v in data.items()]
     if landmarks is not None:  # one frame per line, like the drivers
         lines.append('  "landmarks": {')
+        for key, value in landmarks.items():  # keys this version does not know are kept, like the top-level ones
+            if key not in ("names", "translations_mm"):
+                lines.append(f"    {json.dumps(key)}: {json.dumps(value, ensure_ascii=False)},")
         lines.append(f'    "names": {json.dumps(landmarks["names"], ensure_ascii=False)},')
         lines.append('    "translations_mm": [')
         lines.append(",\n".join(f"      {json.dumps(row)}" for row in landmarks["translations_mm"]))

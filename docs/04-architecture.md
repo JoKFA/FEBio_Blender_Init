@@ -95,7 +95,7 @@ runs/2026-11-03_neutral-to-AA_001/
 3. `physics/display.json` + `physics/display.npy`：显示网格每帧的位置，第 0 帧是静止姿态；
 4. `physics/settled_frame{n}.json`（格式名 `asrp-settled/1`：`units`、`frame`、`time_s`、`tet_nodes`、`display`）和 `physics/settled_frame{n}.obj`（同一帧的显示网格，带面）。n 是运动文件的 `settle_until_frame`，原型机的代用运动 n = 14；
 5. 回放包：是显示网格本身（嘴唇 10,240 个顶点，不是四面体网格的表面，`node_ids` 为 null）；
-6. 运动文件有 `landmarks` 一节时：`final/display.json` + `final/display.npy`（格式名 `asrp-display/2`，和 `physics/display.*` 相同，内容是物理结果加 `weights @ translations`）和 `playback_final.pc2`；`playback.json` 多一个可选键 `versions`（5.3）。没有这一节时这些都不存在，别的文件和以前逐字节相同；
+6. 运动文件有 `landmarks` 一节时：`final/display.json` + `final/display.npy`（格式名 `asrp-display/2`，和 `physics/display.*` 相同，内容是物理结果加 `weights @ translations`）和 `playback_final.pc2`；`playback.json` 多一个可选键 `versions`（5.3）。没有这一节时这些都不存在，`playback.json`、`playback.pc2` 和 `physics/` 和以前逐字节相同，运行报告只多一个 `landmark_layer`（`applied` 为 `false`）；
 7. `run_report.json`。
 
 **运行报告的内容**（`run_report.json`，格式名 `asrp-run-report/1`，07 第 3 节），每个键写一次：

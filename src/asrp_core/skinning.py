@@ -100,6 +100,8 @@ def deform(base, weights, translations) -> np.ndarray:
         raise SkinError(f"base has {base.shape[0]} frames but translations has {t.shape[0]}; they must match")
     if t.ndim == 3 and base.ndim == 2:
         base = np.broadcast_to(base, (t.shape[0], v, 3))
+    if not t.any():  # nothing moves: the same bytes back (base + 0.0 would turn a -0.0 into +0.0)
+        return base.copy()
     # (V, K) @ (K, 3) and (V, K) @ (F, K, 3) both broadcast to (..., V, 3).
     return base + weights @ t
 

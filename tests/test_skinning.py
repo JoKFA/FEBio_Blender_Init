@@ -171,3 +171,10 @@ def test_our_result_matches_the_labs_own_formula_on_the_labs_own_files(check):
 
 def test_the_comparison_can_fail_lab_weights_shifted_by_one_landmark_miss_the_threshold(check):
     assert check["control_shifted_columns_max_mm"] > 1.0  # millimetres off, against the threshold of 1e-4
+
+
+def test_landmarks_at_zero_keep_a_negative_zero():
+    """base + 0.0 would turn -0.0 into +0.0 and change the bytes of the result."""
+    base = np.array([[-0.0, 1.0, -0.0], [2.0, -0.0, 3.0]])
+    out = skinning.deform(base, np.array([[1.0, 0.0], [0.5, 0.5]]), np.zeros((2, 3)))
+    assert out.tobytes() == base.tobytes() and out is not base
