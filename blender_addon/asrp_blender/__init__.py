@@ -139,7 +139,11 @@ class ASRP_OT_load_playback(bpy.types.Operator):
 
 TICK_S = 0.25
 CHECK_KEYS = ("a", "b", "b2", "c", "d")
-VERSION_WORDS = {"physics": "physics only", "final": "final shape"}
+VERSION_WORDS = {"physics": "physics only", "final": "final shape"}  # in the stored entry label
+VERSION_BUTTONS = {"physics": "Physics only", "final": "Final shape"}  # on the version rows of the Results panel
+# Short fixed names for the checks (the report's own names are long and get cut off in the side bar).
+CHECK_LABELS = {"a": "Motion completed", "b": "Hard attachments follow bones", "b2": "Spring anchors follow bodies",
+                "c": "Gravity sag", "d": "Tet mesh valid"}
 STATE_WORDS = {
     "running": "Running",
     "complete": "Complete",
@@ -188,7 +192,7 @@ def check_rows(report) -> list[tuple[str, str, str, str]] | None:
         return None
     checks = report["checks"]
     rows = []
-    for key in CHECK_KEYS:
+    for key in (*CHECK_KEYS, *[k for k in checks if k not in CHECK_KEYS]):  # an unknown key is listed after the five
         c = checks.get(key)
         if c is None:
             rows.append((key, key, "NOT RUN", "The report has no entry for this check"))
@@ -198,6 +202,53 @@ def check_rows(report) -> list[tuple[str, str, str, str]] | None:
         verdict = {True: "PASS", False: "FAIL"}.get(c.get("passed"), "NOT RUN")
         rows.append((key, str(c.get("name") or key), verdict, str(c.get("message") or "")))
     return rows
+
+
+def check_label(key: str, name: str) -> str:
+    """The row text of a check: "(b) Hard attachments follow bones". An unknown key shows the report's own name."""
+    return f"({key}) {CHECK_LABELS.get(key, name)}"
+
+
+def _count(value) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool)
+
+
+def surface_line(report) -> str | None:
+    """Reported only (not a check): the display surface at the last frame, final version if the report has one, else
+    physics. None when the report has no usable surface_health (an older run)."""
+    health = report.get("surface_health") if isinstance(report, dict) else None
+    if not isinstance(health, dict):
+        return None
+    for which in ("final", "physics"):
+        part = health.get(which)
+        last = part.get("last") if isinstance(part, dict) else None
+        if isinstance(last, dict) and all(_count(last.get(k)) for k in
+                                          ("flipped_faces", "edges_shorter_than_half", "edges_longer_than_double")):
+            return (f"Surface ({which}): {last['flipped_faces']} flipped faces, {last['edges_shorter_than_half']} edges < 0.5x, "
+                    f"{last['edges_longer_than_double']} edges > 2x")
+    return None
+
+
+def settle_line(report) -> str | None:
+    """Reported only: how far the tissue moved in the last frame of the settle. None for a report without it."""
+    settled = report.get("settled_shape") if isinstance(report, dict) else None
+    step = settled.get("tissue_step_max_mm") if isinstance(settled, dict) else None
+    if not isinstance(step, (int, float)) or isinstance(step, bool):
+        return None
+    return f"Settle: tissue moved {_mm(step)} in the last settle frame"
+
+
+def not_settled(report) -> bool:
+    settled = report.get("settled_shape") if isinstance(report, dict) else None
+    return isinstance(settled, dict) and settled.get("tissue_settled") is False
+
+
+def result_groups(scene) -> list[list[int]]:
+    """Entry indexes grouped by run folder, the groups in the order their runs were loaded."""
+    groups: dict = {}
+    for i, entry in enumerate(scene.asrp_results):
+        groups.setdefault(entry.run_dir, []).append(i)
+    return list(groups.values())
 
 
 def _mm(value) -> str:
@@ -516,10 +567,11 @@ class ASRP_PT_run(bpy.types.Panel):
         layout, scene = self.layout, context.scene
         col = layout.column(align=True)
         col.enabled = not SESSION.running
-        col.prop(scene, "asrp_scene_path", text="Scene")
-        col.prop(scene, "asrp_trajectory_path", text="Trajectory")
-        col.prop(scene, "asrp_runs_dir", text="Runs folder")
-        col.prop(scene, "asrp_run_name", text="Name")
+        # Each label on its own line above its field: neither competes with the path for the width of the side bar.
+        for label, prop in (("Scene", "asrp_scene_path"), ("Motion (trajectory.json)", "asrp_trajectory_path"),
+                            ("Runs folder", "asrp_runs_dir"), ("Run name", "asrp_run_name")):
+            col.label(text=label)
+            col.prop(scene, prop, text="")
         if not scene.asrp_runs_dir:
             layout.label(text="Empty runs folder = the project's runs")
         wrapped(context, layout, "Computes the whole motion, then replays it. Not frame-by-frame.")
@@ -570,17 +622,21 @@ class ASRP_PT_results(bpy.types.Panel):
         shown = scene.asrp_shown if shown_entry(scene) is not None else -1  # a deleted object is not "shown"
         if shown < 0:
             layout.label(text="No result is shown", icon="HIDE_ON")
-        for i, entry in enumerate(scene.asrp_results):
-            row = layout.row(align=True)
-            if not is_live(entry.obj):
-                row.alert = True
-                row.label(text=f"{entry.label} (object deleted)", icon="ERROR")
-            else:
-                op = row.operator(ASRP_OT_show_result.bl_idname, text=entry.label, depress=(i == shown),
-                                  icon="HIDE_OFF" if i == shown else "HIDE_ON")
-                op.index = i
-            rm = row.operator(ASRP_OT_remove_result.bl_idname, text="", icon="X")
-            rm.index = i
+        for indexes in result_groups(scene):
+            layout.label(text=scene.asrp_results[indexes[0]].run_name)  # the run's name once, then its versions
+            for i in indexes:
+                entry = scene.asrp_results[i]
+                word = VERSION_BUTTONS.get(entry.version, entry.version)
+                row = layout.row(align=True)
+                if not is_live(entry.obj):
+                    row.alert = True
+                    row.label(text=f"{word} (object deleted)", icon="ERROR")
+                else:
+                    op = row.operator(ASRP_OT_show_result.bl_idname, text=word, depress=(i == shown),
+                                      icon="HIDE_OFF" if i == shown else "HIDE_ON")
+                    op.index = i
+                rm = row.operator(ASRP_OT_remove_result.bl_idname, text="", icon="X")
+                rm.index = i
         layout.operator(ASRP_OT_load_run_folder.bl_idname, icon="FILE_FOLDER")
 
 
@@ -606,12 +662,22 @@ class ASRP_PT_checks(bpy.types.Panel):
         for key, name, verdict, message in rows:
             fail = verdict == "FAIL"
             box = layout.column(align=True)
-            row = box.row()
+            row = box.split(factor=0.8)  # the check on the left, its verdict on the right
             row.alert = fail
-            row.label(text=f"({key}) {name}: {verdict}", icon={"PASS": "CHECKMARK", "FAIL": "ERROR"}.get(verdict, "REMOVE"))
+            row.label(text=check_label(key, name))
+            right = row.row()
+            right.alignment = "RIGHT"
+            right.label(text=verdict)
             if message and (fail or verdict == "NOT RUN" or scene.asrp_show_messages):
-                wrapped(context, box, message, alert=fail)
+                # With the option on, the report's own (long) check name comes with the message of a passed check.
+                text = message if fail or verdict == "NOT RUN" or name == key else f"{name}. {message}"
+                wrapped(context, box, text, alert=fail)
         wrapped(context, layout, landmark_summary(report))
+        for line in (surface_line(report), settle_line(report)):
+            if line:
+                wrapped(context, layout, line)
+        if not_settled(report):
+            wrapped(context, layout, "Tissue not settled at the settle frame", "ERROR", alert=True)
         layout.prop(scene, "asrp_show_messages", text="Show every check's message")
 
 

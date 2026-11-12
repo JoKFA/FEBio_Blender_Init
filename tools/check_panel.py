@@ -29,6 +29,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import types
 from pathlib import Path
 
 sys.dont_write_bytecode = True  # keep the repo clean when run from the verify gate
@@ -411,6 +412,141 @@ def case_malformed_reports():
           "null name / message / numbers -> still rows and a summary; no exception")
 
 
+class Rec:
+    """A stand-in for a panel layout that records what is drawn: ('label', text, alert) and ('op', idname, text, depress, op)."""
+
+    def __init__(self, log, alert=False):
+        self.log, self.alert, self.alignment, self.enabled = log, alert, "EXPAND", True
+
+    def label(self, text="", icon="NONE"):
+        self.log.append(("label", text, self.alert))
+
+    def operator(self, idname, text="", icon="NONE", depress=False):
+        op = types.SimpleNamespace(index=-1)
+        self.log.append(("op", idname, text, depress, op))
+        return op
+
+    def prop(self, *args, **kw):
+        self.log.append(("prop", args[1] if len(args) > 1 else "", kw.get("text")))
+
+    def row(self, **kw):
+        return Rec(self.log, self.alert)
+
+    column = split = row
+
+
+def draw_panel(panel):
+    log = []
+    me = types.SimpleNamespace(layout=Rec(log))
+    for name in ("draw_running", "draw_outcome"):  # the Run panel's helper methods
+        if hasattr(panel, name):
+            setattr(me, name, types.MethodType(getattr(panel, name), me))
+    panel.draw(me, bpy.context)
+    return log
+
+
+def case_layout(run1, tmp):
+    """The Results panel groups the versions under one header per run; the Checks panel shows short fixed labels and the
+    two reported-only rows. Drives the panels' draw() with a recording layout, so it checks what is drawn."""
+    sc = bpy.context.scene
+    count = len(sc.asrp_results)
+    second = tmp / "second_run"
+    shutil.copytree(run1, second)
+    assert bpy.ops.asrp.load_run_folder(directory=str(second)) == {"FINISHED"}
+    assert len(sc.asrp_results) == count + 2
+
+    # the Run panel: the label above the field, the field without text
+    log = draw_panel(asrp_blender.ASRP_PT_run)
+    props = [r for r in log if r[0] == "prop"]
+    assert [r[1] for r in props] == ["asrp_scene_path", "asrp_trajectory_path", "asrp_runs_dir", "asrp_run_name"], props
+    assert all(r[2] == "" for r in props), props
+    texts = [r[1] for r in log if r[0] == "label"]
+    for label in ("Scene", "Motion (trajectory.json)", "Runs folder", "Run name"):
+        assert label in texts, (label, texts)
+    assert texts.index("Scene") < texts.index("Motion (trajectory.json)") < texts.index("Runs folder") < texts.index("Run name")
+
+    # the Results panel: two runs, two headers, each with its versions, one version shown
+    log = draw_panel(asrp_blender.ASRP_PT_results)
+    groups = asrp_blender.result_groups(sc)
+    assert len(groups) >= 2 and groups[-1] == [count, count + 1], groups
+    headers = [r[1] for r in log if r[0] == "label" and r[1] and "deleted" not in r[1] and r[1] != "No result is shown"]
+    assert headers == [sc.asrp_results[g[0]].run_name for g in groups], headers
+    shows = [r for r in log if r[0] == "op" and r[1] == "asrp.show_result"]
+    assert len(shows) == len(sc.asrp_results) and sum(1 for r in shows if r[3]) == 1, [(r[2], r[3]) for r in shows]
+    assert [r[2] for r in shows[-2:]] == ["Physics only", "Final shape"], [r[2] for r in shows]
+    assert all(r[2] in ("Physics only", "Final shape") for r in shows)
+    order = [r[1] if r[0] == "label" else r[2] for r in log if r[0] == "label" or (r[0] == "op" and r[1] == "asrp.show_result")]
+    head = sc.asrp_results[count].run_name
+    assert order[-3:] == [head, "Physics only", "Final shape"], order  # header, then its two versions
+    assert sc.asrp_results[count + 1].run_name == head and sum(1 for r in log if r[0] == "label" and r[1] == head) == 1
+    # switching and removing still work
+    assert bpy.ops.asrp.show_result(index=count) == {"FINISHED"} and visible() == [sc.asrp_results[count].obj.name]
+    shows = [r for r in draw_panel(asrp_blender.ASRP_PT_results) if r[0] == "op" and r[1] == "asrp.show_result"]
+    assert [i for i, r in enumerate(shows) if r[3]] == [count], [r[3] for r in shows]
+
+    # the Checks panel (the second run's second entry is shown): short labels, the unknown key falls back to the report's name
+    assert bpy.ops.asrp.show_result(index=count + 1) == {"FINISHED"}
+    path = second / "run_report.json"
+    original = json.loads(path.read_text(encoding="utf-8"))
+
+    def checks_log(report):
+        path.write_text(json.dumps(report), encoding="utf-8")
+        asrp_blender._REPORTS.clear()
+        return draw_panel(asrp_blender.ASRP_PT_checks)
+
+    def text_of(log):
+        return " ".join(r[1] for r in log if r[0] == "label")
+
+    log = checks_log(original)
+    texts = [r[1] for r in log if r[0] == "label"]
+    expect = ["(a) Motion completed", "(b) Hard attachments follow bones", "(b2) Spring anchors follow bodies",
+              "(c) Gravity sag", "(d) Tet mesh valid"]
+    assert [t for t in texts if t in expect] == expect, texts
+    assert not [t for t in texts if t.startswith(("(a)", "(b)", "(b2)", "(c)", "(d)")) and t not in expect], texts  # no long name
+    assert {"PASS", "FAIL", "NOT RUN"} & set(texts), texts  # the verdict is drawn
+    assert all(len(t) <= 38 for t in expect)
+    odd = json.loads(json.dumps(original))
+    odd["checks"]["z"] = {"name": "Zeta thing", "passed": True, "message": ""}
+    assert "(z) Zeta thing" in [r[1] for r in checks_log(odd) if r[0] == "label"]
+
+    # the reported-only rows: present when the report has the keys, absent when it has not, and the not-settled alert
+    full = json.loads(json.dumps(original))
+    full["surface_health"] = {"physics": {"last": {"flipped_faces": 7, "edges_shorter_than_half": 8, "edges_longer_than_double": 9}},
+                              "final": {"last": {"flipped_faces": 2, "edges_shorter_than_half": 3, "edges_longer_than_double": 4}}}
+    full["settled_shape"] = {"available": True, "tissue_step_max_mm": 0.0005, "tissue_settled": True}
+    log = checks_log(full)
+    text = text_of(log)
+    assert "Surface (final): 2 flipped faces, 3 edges < 0.5x, 4 edges > 2x" in text, text
+    assert "Settle: tissue moved 0.0005 mm in the last settle frame" in text, text
+    assert "Tissue not settled" not in text
+    full["surface_health"]["final"] = None
+    assert "Surface (physics): 7 flipped faces, 8 edges < 0.5x, 9 edges > 2x" in text_of(checks_log(full))
+    full["settled_shape"]["tissue_settled"] = False
+    log = checks_log(full)
+    alerts = " ".join(r[1] for r in log if r[0] == "label" and r[2])  # the alert-coloured lines (long text wraps to several)
+    assert "Tissue not settled at the settle frame" in alerts, alerts
+    assert "Tissue not settled" not in text_of(checks_log(full | {"settled_shape": {"tissue_step_max_mm": 0.1, "tissue_settled": None}}))
+    bare = json.loads(json.dumps(original))
+    bare.pop("surface_health", None)
+    bare["settled_shape"] = {"available": False, "frame": None}
+    text = text_of(checks_log(bare))
+    assert "Surface (" not in text and "Settle:" not in text and "Tissue not settled" not in text, text
+    bare.pop("settled_shape")
+    text = text_of(checks_log(bare))
+    assert "Surface (" not in text and "Settle:" not in text and "Tissue not settled" not in text, text
+    assert "Landmark layer" in text  # the rest of the panel is still drawn
+
+    # removing a run's entries removes its header
+    for index in (count + 1, count):
+        assert bpy.ops.asrp.remove_result(index=index) == {"FINISHED"}
+    assert len(sc.asrp_results) == count and len(asrp_blender.result_groups(sc)) == len(groups) - 1
+    assert second.name == "second_run" and "second_run" not in [r[1] for r in draw_panel(asrp_blender.ASRP_PT_results) if r[0] == "label"]
+    assert asrp_blender.check_label("z", "Zeta thing") == "(z) Zeta thing"
+    print(f"case 10 layout: Run fields {len(props)} labels above empty-text fields; Results {len(groups)} runs -> {len(groups)} headers, "
+          f"versions {[r[2] for r in shows[-2:]]}, one shown, switch and remove work; Checks {expect}, unknown key falls back to the "
+          f"report's name; Surface / Settle rows present with the keys, absent without; not-settled alert drawn")
+
+
 def case_deleted_object():
     sc = bpy.context.scene
     # What the viewport's X does: the object is unlinked from its collection but the list's pointer keeps it alive.
@@ -627,6 +763,7 @@ try:
     runs = tmp / "runs"
     case_english_only()
     run1 = case_complete(box, runs, tmp)
+    case_layout(run1, tmp)
     case_start_fails(box, runs, "complete")
     case_old_button(run1, tmp, box, runs)
     case_not_started(box, runs)
