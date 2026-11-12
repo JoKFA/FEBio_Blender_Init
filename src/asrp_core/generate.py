@@ -29,9 +29,10 @@ What it writes, all in mm, N, MPa, s (mass in tonnes):
   target's axes at frame 0, which is the rest pose) to anchor nodes δ away that join the target (δ is
   SPRING_OFFSET_EDGES median tet edges, times k), each
   of stiffness base × Σ_v w_v λ̂_vj with λ̂ = (λ̃ + 1/4) / 2 (`embed.spread`). FEBio gives one stiffness
-  per spring material, so the stiffnesses of a group are put into at most SPRING_LEVELS levels
-  (log-spaced between the group's smallest and largest; each level's stiffness is the mean of its
-  members, so the group's total stiffness is kept), one material per level.
+  per spring material, so the stiffnesses of a group are put into log-spaced levels between the
+  group's smallest and largest, as few as keep every node's binned stiffness within
+  SPRING_LEVEL_TOLERANCE (2 %) of its own value (each level's stiffness is the mean of its members,
+  so the group's total stiffness is kept), one material per level (cheap).
   Conflicts: a node held hard and wanted by a spring stays hard and loses its springs (counted); a
   node wanted hard by two different rigid bodies is an error. A node wanted by two spring groups
   gets the springs of both (counted, not an error).
@@ -51,6 +52,7 @@ same .feb gives the same positions to the last digit.
 """
 
 import math
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -61,7 +63,8 @@ from asrp_core.asset import coords
 
 FEBIO_GRAVITY_SIGN = -1.0  # docs/05 pit 1: FEBio's const body load acts opposite to the manual
 RHOI = 0.0
-SPRING_LEVELS = 16
+SPRING_LEVEL_TOLERANCE = 0.02  # each node's binned stiffness is within 2 % of its own value (T-06a review)
+MAX_SPRING_LEVELS = 5000  # a stop for the search for the level count; one FEBio material per level is cheap
 MAX_DISTANCE_EDGES = 2.0
 MAX_RETRIES = 8
 OPT_ITER = 10
@@ -140,6 +143,7 @@ class Model:
     node_count: int = 0
     feb_text: str = ""
     report: dict = field(default_factory=dict)
+    warnings: list = field(default_factory=list)  # from `asrp check`, carried into the run report
 
 
 def _num(v) -> str:
@@ -178,25 +182,39 @@ def _reference(s: scene_module.Scene, driver: str | None) -> np.ndarray:
     return np.zeros(3)
 
 
-def _levels(stiffness: dict, n_levels: int) -> tuple[list, dict, float]:
-    """Put node stiffnesses into at most n_levels log-spaced levels; each level gets its members' mean."""
-    nodes = sorted(stiffness)
-    values = np.array([stiffness[n] for n in nodes])
+def _bin(values: np.ndarray, n_levels: int) -> tuple[np.ndarray, np.ndarray, float]:
     lo, hi = float(values.min()), float(values.max())
-    if hi <= lo * (1 + 1e-12):
+    if n_levels == 1 or hi <= lo * (1 + 1e-12):
         which = np.zeros(len(values), dtype=int)
     else:
         edges = np.geomspace(lo, hi, n_levels + 1)
         which = np.clip(np.searchsorted(edges, values, side="right") - 1, 0, n_levels - 1)
     used = sorted(set(which.tolist()))
     renumber = {old: new for new, old in enumerate(used)}
-    levels = [float(values[which == old].mean()) for old in used]
-    level_of = {n: renumber[int(w)] for n, w in zip(nodes, which)}
-    error = max(abs(levels[level_of[n]] - stiffness[n]) / stiffness[n] for n in nodes)
-    return levels, level_of, float(error)
+    levels = np.array([values[which == old].mean() for old in used])
+    which = np.array([renumber[int(w)] for w in which])
+    return levels, which, float((np.abs(levels[which] - values) / values).max())
 
 
-def build(scene_path, trajectory_path, *, delta: float | None = None, n_levels: int = SPRING_LEVELS) -> Model:
+def _levels(stiffness: dict, tolerance: float = SPRING_LEVEL_TOLERANCE) -> tuple[list, dict, float]:
+    """Put node stiffnesses into log-spaced levels, as few as keep every node's level within `tolerance` (relative)
+    of its own value; each level gets its members' mean, so the total is kept. Returns (levels, node -> level, worst error)."""
+    nodes = sorted(stiffness)
+    values = np.array([stiffness[n] for n in nodes])
+    n = 1
+    while True:
+        levels, which, error = _bin(values, n)
+        if error <= tolerance:
+            break
+        n += 1
+        if n > MAX_SPRING_LEVELS:
+            raise GenerateError(f"{n} stiffness levels are not enough to keep every spring within {tolerance:.0%} of its "
+                                "value; the stiffnesses of this group spread too widely")
+    return levels.tolist(), {nd: int(w) for nd, w in zip(nodes, which)}, error
+
+
+def build(scene_path, trajectory_path, *, delta: float | None = None,
+          level_tolerance: float = SPRING_LEVEL_TOLERANCE) -> Model:
     """Read and check the scene and the trajectory, map the attachments and write the .feb text.
     `delta` is the spring offset in FEBio coordinates (default: SPRING_OFFSET_EDGES x the median tet edge x k)."""
     scene_path, trajectory_path = Path(scene_path), Path(trajectory_path)
@@ -288,12 +306,20 @@ def build(scene_path, trajectory_path, *, delta: float | None = None, n_levels: 
         others = set().union(*[set(o.stiffness) for o in spring_groups if o is not g])
         g.shared = len(set(g.stiffness) & others)
         if g.stiffness:
-            g.levels, g.level_of, g.max_level_error = _levels(g.stiffness, n_levels)
+            g.levels, g.level_of, g.max_level_error = _levels(g.stiffness, level_tolerance)
 
     model = Model(s, scene_path, traj, k, fps, substeps, traj.frames, mesh, display, faces, e, h,
                   SPRING_OFFSET_EDGES * h * k if delta is None else float(delta), bodies, groups,
                   {n: t for n, (t, _) in hard.items()}, [], list(s.solver.gravity_mm_per_s2.value))
+    model.warnings = list(checked.warnings)
     model.feb_text = _feb(model)
+    # docs/05 pit 16: FEBio reads "np.float64(0.1)" as 0 and says nothing
+    found = re.search(r"\bnp\.|float64", model.feb_text)
+    if found:
+        at = found.start()
+        raise GenerateError(f"the .feb text contains {found.group()!r} (near {model.feb_text[max(0, at - 30):at + 30]!r}): "
+                            "a numpy value was written with its repr instead of a plain float. FEBio would read it as 0 "
+                            "without a message (docs/05 pit 16); write every number through generate._num")
     model.report = _report(model)
     return model
 
@@ -494,7 +520,9 @@ def _report(m: Model) -> dict:
                   "base_stiffness_n_per_mm": g.base_stiffness,
                   "node_stiffness_n_per_mm": {"min": min(values), "max": max(values), "sum": sum(values)} if values else None,
                   "weight_sum": float(g.weights.sum()),
-                  "levels_n_per_mm": g.levels, "max_level_error": g.max_level_error}
+                  "level_count": len(g.levels), "levels_n_per_mm": g.levels, "max_level_error": g.max_level_error,
+                  "level_error_limit": SPRING_LEVEL_TOLERANCE,
+                  "binned_total_n_per_mm": float(sum(g.levels[g.level_of[n]] for n in g.stiffness))}
         groups.append(r)
     attached = {b.name for b in m.bodies.values()}
     return {

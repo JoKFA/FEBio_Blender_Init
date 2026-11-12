@@ -20,7 +20,7 @@ def print_check(report) -> None:
     for e in report.errors:
         print(f"ERROR  {e}")
     for w in report.warnings:
-        print(f"WARN   {w}")
+        print(f"WARNING  {w}")
 
 
 def cmd_check(args: argparse.Namespace) -> int:
@@ -143,10 +143,12 @@ def run_scene(args: argparse.Namespace, show) -> int:
           f"{g['hard_nodes']} hard nodes, {g['springs']} springs, display max distance {g['display_max_distance_mm']:.3f} mm "
           f"(limit {g['max_distance_limit_mm']:.3f})")
     for grp in g["groups"]:
-        extra = (f", {grp['spring_nodes']} spring nodes, {len(grp['levels_n_per_mm'])} levels, shared {grp['nodes_shared_with_other_spring_groups']}"
+        extra = (f", {grp['spring_nodes']} spring nodes, {grp['level_count']} levels (max error {grp['max_level_error']:.2%}), shared {grp['nodes_shared_with_other_spring_groups']}"
                  if grp["kind"] == "spring" else "")
         print(f"group      {grp['name']} ({grp['kind']} -> {grp['to']}): {grp['display_vertices']} vertices, {grp['nodes']} nodes, "
               f"{grp['clipped_coordinates']} clipped, {grp['conflicts']} conflicts, max distance {grp['max_distance_mm']:.3f} mm{extra}")
+    for w in r.get("warnings", []):
+        print(f"WARNING  {w}")
     for name, s in r.get("spring_slip", {}).items():
         print(f"slip       {name}: max|u|/delta = {s['ratio']:.2e}{'  FLAG: above 0.1, raise delta' if s['flag'] else ''}")
     for key, c in r["checks"].items():

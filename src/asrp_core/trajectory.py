@@ -105,6 +105,23 @@ def hinge_angle(transform, axis) -> float:
     return math.atan2(sum(x * y for x, y in zip(cross, a)), dot)
 
 
+HINGE_TOLERANCE = 1e-6  # how far a parent's frame may be from a pure turn about its hinge before a warning
+
+
+def hinge_deviation(transforms, pivot_mm, axis) -> tuple[float, int]:
+    """How far a motion is from a pure rotation about the hinge (`pivot_mm`, `axis`): the largest absolute
+    difference of any of the 16 numbers from the pure turn by the same angle about the axis, and the frame
+    where it is largest. Translation (mm) and off-axis rotation both show up; this is what a derived
+    driver (`blend_transforms`) drops."""
+    worst, where = 0.0, 0
+    for i, m in enumerate(transforms):
+        pure = hinge_transforms(pivot_mm, axis, [hinge_angle(m, axis)])[0]
+        d = max(abs(a - b) for a, b in zip(m, pure))
+        if d > worst:
+            worst, where = d, i
+    return worst, where
+
+
 def blend_transforms(parent_transforms, pivot_mm, axis, factor) -> list[list[float]]:
     """A derived driver's transforms (docs/04 section 5.1): for each of the parent's frames, a turn
     about the parent's own hinge (`pivot_mm`, `axis`) by `factor` times the parent's angle. factor 0

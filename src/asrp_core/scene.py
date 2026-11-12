@@ -858,6 +858,20 @@ def _check_trajectory(scene: Scene, path: Path, report: Report) -> None:
             f"trajectory: driver {d!r} is derived from {derived[d].blend.of!r} in the scene, so its own motion "
             "in the trajectory is ignored"
         )
+    by_name = {d.name: d for d in scene.drivers}
+    for name in sorted(derived):
+        parent = by_name.get(derived[name].blend.of)
+        if parent is None or parent.hinge is None or parent.name not in traj.drivers:
+            continue
+        deviation, frame = trajectory_module.hinge_deviation(traj.drivers[parent.name], parent.hinge.pivot_mm,
+                                                             parent.hinge.axis)
+        if deviation > trajectory_module.HINGE_TOLERANCE:
+            report.warnings.append(
+                f"trajectory: driver {parent.name!r} is not a pure rotation about the scene's hinge "
+                f"(translation or off-axis rotation of {deviation:.2e} at frame {frame}, limit "
+                f"{trajectory_module.HINGE_TOLERANCE:g}); the derived driver {name!r} (a blend of it) keeps only the "
+                f"angle about the hinge and drops the rest, so the lip-corner anchor does not follow that part"
+            )
     for d in sorted(set(traj.drivers) - used - set(derived)):
         report.warnings.append(f"trajectory: driver {d!r} moves no bone in this scene; its motion is ignored")
 

@@ -324,7 +324,7 @@ def test_asrp_check_fails_on_an_error_and_passes_on_a_warning(tmp_path, capsys):
     folder = copy_s1(tmp_path)
     edit_scene(folder, lambda d: d.update(attachments=[]))
     assert cli.main(["check", str(folder / "scene.json")]) == 0
-    assert "WARN   soft tissue 'tissue' has no attachment" in capsys.readouterr().out
+    assert "WARNING  soft tissue 'tissue' has no attachment" in capsys.readouterr().out
     (folder / "jaw.obj").unlink()
     assert cli.main(["check", str(folder / "scene.json")]) == 1
     out = capsys.readouterr().out
@@ -353,6 +353,32 @@ def test_a_scene_with_an_anchor_on_a_derived_driver_reads_back_and_checks_with_t
     assert [(a.name, a.driver) for a in s.anchors] == [("corner_anchor", "corner_blend")]
     scene.write(tmp_path / "again.json", s)  # the writer keeps the new fields
     assert scene.load(tmp_path / "again.json") == s
+
+
+def test_a_jaw_that_is_not_a_pure_hinge_turn_makes_the_blend_warn(tmp_path, capsys):
+    from asrp_core import trajectory
+    folder = copy_s1(tmp_path)
+    path = edit_scene(folder, with_anchor)
+    pivot, axis = [5.0, -30.0, 0.0], [1.0, 0.0, 0.0]
+    clean = trajectory.hinge_transforms(pivot, axis, [0.0, 0.1, 0.2])
+    t = trajectory.read(folder / "trajectory.json")
+    t.frames = 3
+    t.drivers = {"jaw_hinge": clean}
+    trajectory.write(folder / "pure.json", t)
+    assert not [w for w in scene.check(path, folder / "pure.json").warnings if "pure rotation" in w]
+    slid = [list(m) for m in clean]
+    slid[2][3] += 0.5  # the jaw also slides 0.5 mm along x
+    t.drivers = {"jaw_hinge": slid}
+    trajectory.write(folder / "slid.json", t)
+    report = scene.check(path, folder / "slid.json")
+    [w] = [w for w in report.warnings if "pure rotation" in w]
+    assert report.ok and "corner_blend" in w and "frame 2" in w and "drops the rest" in w
+    off_axis = trajectory.hinge_transforms(pivot, [0.0, 1.0, 0.0], [0.0, 0.0, 0.1])  # a turn about y
+    t.drivers = {"jaw_hinge": [clean[0], clean[1], off_axis[2]]}
+    trajectory.write(folder / "off.json", t)
+    assert [w for w in scene.check(path, folder / "off.json").warnings if "pure rotation" in w]
+    assert cli.main(["check", str(path), str(folder / "slid.json")]) == 0
+    assert "WARNING  trajectory: driver 'jaw_hinge' is not a pure rotation" in capsys.readouterr().out
 
 
 def test_a_scene_without_anchors_is_written_without_the_field():

@@ -93,6 +93,14 @@ def test_k_one_is_the_unscaled_model_byte_for_byte(tmp_path):
     assert all(nodes2[i + 1].tolist() == (2 * p).tolist() for i, p in enumerate(a["nodes"]))
 
 
+def test_a_numpy_repr_in_the_feb_text_stops_the_generator(tmp_path, monkeypatch):
+    c = cs.write(tmp_path / "box", attachments=[("top", "plate", "spring", 1.0, at_z(10.0))])
+    traj = cs.motion(tmp_path / "box", cs.turn(5, 4, -0.2, (5, -10, 10), (1, 0, 0)))
+    monkeypatch.setattr(generate, "_num", lambda v: repr(np.float64(v)))  # pit 16 comes back
+    with pytest.raises(generate.GenerateError, match="pit 16"):
+        generate.build(c["scene"], traj)
+
+
 def test_numbers_reach_the_feb_as_plain_floats(tmp_path):
     c = cs.write(tmp_path / "box", attachments=[("top", "plate", "spring", 1.0, at_z(10.0))])
     m = generate.build(c["scene"], cs.motion(tmp_path / "box", cs.turn(5, 4, -0.2, (5, -10, 10), (1, 0, 0))))
@@ -154,6 +162,9 @@ def test_spring_stiffness_is_base_times_weight_shares_and_keeps_the_total(tmp_pa
     assert min(g.stiffness.values()) >= 2.0 / 8 - 1e-12
     by_level = sum(g.levels[g.level_of[n]] for n in g.stiffness)
     assert by_level == pytest.approx(sum(g.stiffness.values()), rel=1e-12)  # levels keep the group's total
+    assert g.max_level_error <= generate.SPRING_LEVEL_TOLERANCE  # every node within 2 % of its own value
+    assert all(abs(g.levels[g.level_of[n]] - v) <= 0.02 * v for n, v in g.stiffness.items())
+    assert len(g.levels) > 1 and m.report["groups"][0]["level_count"] == len(g.levels)
     assert len(m.springs) == 3 * len(g.stiffness) and m.feb_text.count("<delem>") == len(m.springs)
 
 
@@ -279,6 +290,8 @@ def test_stiffer_springs_converge_to_the_hard_result(hard_plate, tmp_path):
         r = run(c["scene"].parent, TURN, f"spring{K:g}")
         assert r.status == "complete" and r.report["generator"]["groups"][0]["clipped_coordinates"] > 0
         assert not r.report["spring_slip"]["top"]["flag"]
+        b2 = r.report["checks"]["b2"]  # the spring anchors ride the turning plate (review: not only the lips on the skull)
+        assert b2["passed"] and b2["numbers"]["anchor_nodes"] > 0 and b2["numbers"]["max_deviation_mm"] < 1e-6, b2
         diffs.append(float(np.linalg.norm(display(r.run_dir) - reference, axis=2).max()))
     assert diffs[0] > diffs[1] > diffs[2], diffs
     assert diffs[0] > 0.1 and diffs[2] < 1e-3, diffs
@@ -386,6 +399,23 @@ def test_check_c_fails_when_the_gravity_flip_is_lost(tmp_path, monkeypatch):
     c = bad.report["checks"]["c"]
     assert bad.status == "complete" and c["passed"] is False and c["numbers"]["mean_sag_along_gravity_mm"] < 0
     assert not bad.passed
+
+
+def test_check_b2_fails_when_an_anchor_leaves_its_rigid_body_or_the_angle_is_wrong():
+    rng = np.random.default_rng(2)
+    rest = rng.normal(size=(12, 3))
+    motion = cs.turn(6, 5, 0.3, (0, 0, 0), (0, 1, 1))
+    pos = np.stack([np.array([trajectory.apply(m, p) for p in rest]) for m in motion])
+    pos[:, 8:] = rest[8:]  # the last four are on the fixed skull
+    targets = ["plate"] * 8 + ["skull"] * 4
+    check = plausibility.anchors_follow_bodies(rest, targets, pos, {"plate": motion})
+    assert check.passed and check.numbers["anchor_nodes"] == 12 and check.numbers["per_body"]["skull"]["anchor_nodes"] == 4
+    wrong = cs.turn(6, 5, 0.3 * 1.01, (0, 0, 0), (0, 1, 1))  # a prescribed angle 1 % off in the comparison
+    assert not plausibility.anchors_follow_bodies(rest, targets, pos, {"plate": wrong}).passed
+    bad = pos.copy()
+    bad[4, 10] += [0.002, 0.0, 0.0]  # a node on the fixed body drifts
+    assert not plausibility.anchors_follow_bodies(rest, targets, bad, {"plate": motion}).passed
+    assert plausibility.anchors_follow_bodies(rest[:0], [], pos[:, :0], {}).numbers["anchor_nodes"] == 0
 
 
 def test_check_c_wants_frames_10_to_14_and_scales_its_range_with_k():

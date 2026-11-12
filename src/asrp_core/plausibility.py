@@ -8,6 +8,10 @@ Three checks, each a function of plain arrays so that a test can make it fail on
     display vertex (through the embedding), sits where that body's transform puts its rest position,
     within HARD_TOLERANCE_MM. Spring attachments are only reported (largest and mean deviation of their
     display vertices from the same place); they are meant to give.
+(b2) `anchors_follow_bodies`: on every frame, each spring anchor node (the nodes joined to the jaw and to the
+    lip-corner anchor rigid bodies, and to any other body a spring group goes to) sits where its rigid body's
+    transform puts its rest position, within ANCHOR_TOLERANCE_MM (geometric mm, after dividing by k). This is
+    the real-data check of the rigid motion itself: (b) only covers the lips that are on the fixed skull.
 (c) `gravity_sag`: the display vertices no attachment holds, averaged over frames 10-14 (the end of the
     gravity-only settle; one frame alone aliases the undamped ringing, docs/05 pit 2), have moved along
     the scene's gravity direction by SAG_RANGE_MM at k = 1. docs/07 section 3: in geometric mm the sag
@@ -22,6 +26,7 @@ from dataclasses import dataclass, field
 import numpy as np
 
 HARD_TOLERANCE_MM = 1e-3
+ANCHOR_TOLERANCE_MM = 1e-3
 SAG_RANGE_MM = (0.1, 10.0)  # at k = 1, docs/07 section 3 (provisional, T-06b tightens it)
 SAG_FRAMES = range(10, 15)
 
@@ -92,6 +97,32 @@ def follows_bones(groups: list[dict], rest_nodes: np.ndarray, node_frames: np.nd
                  f"{worst_vertex:.2e} mm from where their bone puts them (limit {tolerance:g} mm)", numbers)
 
 
+def anchors_follow_bodies(rest: np.ndarray, targets: list[str], frames_pos: np.ndarray, transforms: dict,
+                          tolerance: float = ANCHOR_TOLERANCE_MM) -> Check:
+    """(b2). rest (a, 3): the anchor nodes' rest positions, geometric mm; targets: the rigid body each is joined to;
+    frames_pos (F, a, 3): where FEBio put them (geometric mm); transforms: body -> per-frame transforms (None: fixed)."""
+    frames = len(frames_pos)
+    numbers = {"anchor_nodes": int(len(rest)), "frames": frames, "tolerance_mm": tolerance,
+               "bodies": sorted(set(targets))}
+    if not len(rest):
+        return Check("spring anchors follow their rigid bodies", True, "no spring anchor in this scene; nothing to check",
+                     numbers)
+    target = np.array(targets)
+    per_body = {}
+    for body in sorted(set(targets)):
+        idx = np.flatnonzero(target == body)
+        motion = transforms.get(body) or [IDENTITY] * frames
+        dev = max(float(np.linalg.norm(frames_pos[f][idx] - _moved(motion[f], rest[idx]), axis=1).max())
+                  for f in range(frames))
+        per_body[body] = {"anchor_nodes": int(len(idx)), "max_deviation_mm": dev}
+    worst = max(v["max_deviation_mm"] for v in per_body.values())
+    numbers |= {"max_deviation_mm": worst, "per_body": per_body}
+    detail = "; ".join(f"{b}: {v['anchor_nodes']} nodes, {v['max_deviation_mm']:.2e} mm" for b, v in per_body.items())
+    return Check("spring anchors follow their rigid bodies", worst < tolerance,
+                 f"on all {frames} frames the {len(rest)} spring anchor nodes are at most {worst:.2e} mm from where their "
+                 f"rigid body puts them (limit {tolerance:g} mm; {detail})", numbers)
+
+
 def gravity_sag(rest_display: np.ndarray, display_frames: np.ndarray, free: np.ndarray, gravity, k: float,
                 frames=SAG_FRAMES, band=SAG_RANGE_MM) -> Check:
     """(c). free: display vertex indices no attachment holds; gravity: the scene's physical gravity vector."""
@@ -110,4 +141,5 @@ def gravity_sag(rest_display: np.ndarray, display_frames: np.ndarray, free: np.n
     ok = lo <= sag <= hi
     direction = "along gravity (down)" if sag > 0 else "against gravity (up)"
     return Check("gravity sag", ok, f"free vertices moved {abs(sag):.4f} mm {direction} on average over frames "
-                 f"{frames.start}-{frames.stop - 1}; expected {lo:.3g} to {hi:.3g} mm down (07 section 3 x k = {k:g})", numbers)
+                 f"{frames.start}-{frames.stop - 1}; expected {lo:.3g} to {hi:.3g} mm down (07 section 3 x k = {k:g}); this check only catches a "
+                 "sign error or an error of about 100x", numbers)

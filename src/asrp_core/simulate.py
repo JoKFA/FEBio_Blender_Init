@@ -48,8 +48,9 @@ GENERATOR_SETTINGS = [
     ("generator.gravity_from", 0.0, "gravity is on at full strength from t = 0, like the lab's frames 0-14"),
     ("generator.spring_offset_delta", f"{generate.SPRING_OFFSET_EDGES:g} x median tet edge x k", "docs/05 section 3: the anchors sit delta away along x, y, z "
      "(FEBio coordinates); delta must stay >= 10 x the slip, see max|u|/delta"),
-    ("generator.spring_levels", generate.SPRING_LEVELS, "at most this many stiffness levels per spring group, log-spaced, "
-     "each the mean of its members (one FEBio spring material per level)"),
+    ("generator.spring_level_tolerance", generate.SPRING_LEVEL_TOLERANCE, "stiffness levels per spring group: log-spaced, as "
+     "few as keep every node's binned stiffness within this fraction of its own value, each the mean of its members "
+     "(one FEBio spring material per level); the level count and the largest error are in the generator report"),
     ("generator.max_distance_edges", generate.MAX_DISTANCE_EDGES, "a display vertex farther than this x the median tet edge "
      "from its tet stops the run (docs/05 section 3 rule 5)"),
     ("generator.max_retries", generate.MAX_RETRIES, "adaptive stepping as in spikes/s2_lips_febio.py"),
@@ -164,6 +165,7 @@ def run_scene(scene_path, trajectory_path, runs_dir: Path, exe: Path, name: str 
         "frames": model.frames,
         "parameters": _parameters(model, trajectory_path),
         "attachments_not_built": NOT_BUILT,
+        "warnings": model.warnings,
         "generator": model.report,
         "checks": {},
         "timing": {},
@@ -173,6 +175,7 @@ def run_scene(scene_path, trajectory_path, runs_dir: Path, exe: Path, name: str 
         checks["a"] = plausibility.motion_completed(result.status, model.frames, [], retries,
                                                     result.failure.message if result.failure else None)
         checks["b"] = plausibility.Check("hard attachments follow their bones", None, "the run did not complete")
+        checks["b2"] = plausibility.Check("spring anchors follow their rigid bodies", None, "the run did not complete")
         checks["c"] = plausibility.Check("gravity sag", None, "the run did not complete")
     else:
         positions = run.read_positions(run_dir / run.POSITIONS)
@@ -190,6 +193,16 @@ def run_scene(scene_path, trajectory_path, runs_dir: Path, exe: Path, name: str 
                   for g in model.groups]
         transforms = {name: b.transforms for name, b in model.bodies.items()}
         checks["b"] = plausibility.follows_bones(groups, model.mesh.nodes, node_frames, model.display, display, transforms)
+        rest_febio = generate.node_rest_febio(model)
+        anchor_ids = [sp.anchor for sp in model.springs]
+        anchor_rest = np.array([rest_febio[a] for a in anchor_ids]).reshape(-1, 3) / model.k
+        anchor_frames = np.empty((model.frames, len(anchor_ids), 3))
+        anchor_frames[0] = anchor_rest
+        for f, frame in zip(logged, positions["positions"]):
+            if 0 < f < model.frames:
+                anchor_frames[f] = np.asarray(frame)[[index[a] for a in anchor_ids]]
+        checks["b2"] = plausibility.anchors_follow_bodies(
+            anchor_rest, [{g.name: g.target for g in model.groups}[sp.group] for sp in model.springs], anchor_frames, transforms)
         attached = np.unique(np.concatenate([g.vertices for g in model.groups])) if model.groups else np.zeros(0, int)
         free = np.setdiff1d(np.arange(len(model.display)), attached)
         checks["c"] = plausibility.gravity_sag(model.display, display, free, model.gravity, model.k)
