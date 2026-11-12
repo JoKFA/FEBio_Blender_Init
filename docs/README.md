@@ -82,6 +82,8 @@ asrp/
 │  │                          待开发：compare.py……
 │
 ├─ blender_addon/asrp_blender/  Blender 插件，只管界面，不用第三方库
+│  ├─ __init__.py             面板（英文）：Load result、Check backend、Run、Results、Checks
+│  └─ session.py              一次 asrp run 的子进程：读输出、进度、取消（不含 bpy）
 ├─ tests/                     自动测试（pytest）
 │  ├─ fixtures/s1/            S1 写成的示例 scene.json、trajectory.json，由同目录的 build.py 生成
 │  ├─ cube_scene.py           生成器测试用的方块场景（有教科书答案）
@@ -108,7 +110,8 @@ asrp/
 │  ├─ audit_attachment.py     审计（E-09）：嘴角锚的比例、弹簧刚度各改一档，比形状
 │  ├─ audit_skin_identity.py  审计（E-09）：landmark 蒙皮数据能不能直接用（四项核对）
 │  ├─ audit_head_shake.py     审计（E-09）：甩头时嘴唇相对头晃多少
-│  └─ audit_aa_fit.py         审计（E-09）：只靠蒙皮够不够到 AA 目标、目标里嘴唇跟不跟下颌
+│  ├─ audit_aa_fit.py         审计（E-09）：只靠蒙皮够不够到 AA 目标、目标里嘴唇跟不跟下颌
+│  └─ blender_background_run.py  试验：Blender 面板能不能在后台跑 asrp run、显示进度、取消
 │
 ├─ tools/                     迁移、检查、渲染工具，不是产品代码
 │  ├─ verify.py               "完成"的定义：ruff + 测试 + doctor + 插件 + 回放检查
@@ -120,6 +123,8 @@ asrp/
 │  ├─ prototype_numbers.py    从存档的参考运行写出 15 里的数字表（--write 重写，--check 核对，验证门会跑）
 │  ├─ render_prototype.py     在 Blender 里加载原型机的回放包、逐帧核对、渲染侧视图和逐帧动画
 │  ├─ check_blender_addon.py  check_playback.py  render_playback.py
+│  ├─ check_panel.py          面板的运行、结果、检查，对真实 asrp run 进程（命令行下的 Blender，验证门会跑）
+│  ├─ panel_windowed_check.py 面板的定时器路径，带窗口的 Blender，手动跑，不在验证门里
 │  ├─ mb_inventory.py  asset_report.py     不开 Maya 读 .mb，打印 03 里的数字（含粘连权重的读法）
 │  ├─ maya_export.py  check_lab_export.py  本机 Maya 导出网格、权重、关节并逐点核对
 │  ├─ blender_import_preview.py            导出结果进 Blender，渲染预览

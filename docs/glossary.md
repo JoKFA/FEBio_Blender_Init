@@ -30,7 +30,7 @@
 | **Alembic（.abc）** | 存放"每一帧的网格形状"的开放格式，Ziva 参考结果用它导出 |
 | **OBJ / FBX / Alembic（.abc）** | 通用的 3D 文件格式。OBJ 存单个静态网格；FBX 能带关节和动画；Alembic 擅长存每帧都在变的网格 |
 | **.feb** | FEBio 的输入文件，描述要算的模型 |
-| **回放包（playback.json + playback.pc2）** | 一次运行交给 Blender 的结果：`playback.json` 存嘴唇显示网格的静止顶点和面，`playback.pc2` 存每一帧每个顶点的位置。插件的"加载结果"读它（04 第 5.3 节，ADR-09） |
+| **回放包（playback.json + playback.pc2）** | 一次运行交给 Blender 的结果：`playback.json` 存嘴唇显示网格的静止顶点和面，`playback.pc2` 存每一帧每个顶点的位置。插件的 Load result 按钮读它（04 第 5.3 节，ADR-09） |
 | **PC2（点缓存）** | 一种简单的文件格式，存"每一帧每个顶点在哪"。Blender 用它播放我们的结果 |
 | **JSON** | 一种常见的纯文本数据格式，人和程序都能读 |
 | **运动文件（`combined_checkpoints.pkl`）** | 实验室钢琴界面运行时读的运动数据：每帧一个 3,603 个数的向量，是 landmark 和下颌相对起始位置的累计偏移（03 第 7 节）。不在源码仓库里，在 Ziva 机器上取（11 的 D2）。和我们自己的运动文件 `trajectory.json` 不是一回事 |

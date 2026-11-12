@@ -50,7 +50,7 @@
 
 ## 3. 真实资产上的合理性检查（第 4 层）
 
-每次用实验室资产运行，`asrp run` 都自动做下面的检查，结果写进运行报告。任何一项不通过，运行报告标红，Blender 面板上给出提示。前几项实现在 `src/asrp_core/plausibility.py`（T-06a；(a)(b)(b2)(c)(d) 五个函数），写进 `run_report.json` 的 `checks`，有不通过的 `asrp run` 以 1 退出（Blender 面板的提示还没做，T-13）；"往下"取场景里重力的方向，所以写入 FEBio 时漏了反号（坑 1）这一项一定失败（`test_check_c_fails_when_the_gravity_flip_is_lost`）。
+每次用实验室资产运行，`asrp run` 都自动做下面的检查，结果写进运行报告。任何一项不通过，运行报告标红，Blender 面板上给出提示。前几项实现在 `src/asrp_core/plausibility.py`（T-06a；(a)(b)(b2)(c)(d) 五个函数），写进 `run_report.json` 的 `checks`，有不通过的 `asrp run` 以 1 退出（Blender 面板的 Checks 小节读 `run_report.json`，列出五项 PASS / FAIL / NOT RUN，不通过的标红，T-13；真实的不通过运行通过面板显示的样子还没看过，见 [06](06-ui.md) 第 6 节"还没验证的"）；"往下"取场景里重力的方向，所以写入 FEBio 时漏了反号（坑 1）这一项一定失败（`test_check_c_fails_when_the_gravity_flip_is_lost`）。
 
 | 检查 | 通过标准 | 能发现什么问题 |
 |---|---|---|
