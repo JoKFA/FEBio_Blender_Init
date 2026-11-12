@@ -141,7 +141,8 @@ def run_scene(args: argparse.Namespace, show) -> int:
 
     try:
         result = simulate.run_scene(Path(args.scene), Path(args.trajectory), Path(args.runs_dir), febio_exe(),
-                                    args.name, show, None, args.timeout, args.threads)
+                                    args.name, show, None, args.timeout, args.threads,
+                                    on_start=lambda d: print(f"run folder {d}", flush=True))
     except (simulate.SceneRunError, run.RunError, FileNotFoundError) as e:
         print(f"ERROR  {e}")
         print("run NOT STARTED")

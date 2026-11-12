@@ -139,6 +139,15 @@ def test_a_tampered_input_is_noticed(tmp_path):
     assert provenance.mismatches(result.run_dir) == ["model.feb"]
 
 
+def test_on_start_receives_the_run_folder_before_any_progress(tmp_path):
+    order = []
+    result = execute(make_feb(tmp_path / "a.feb"), tmp_path / "runs",
+                     on_start=lambda d: order.append(("start", d, d.is_dir())),
+                     on_progress=lambda p: order.append(("progress", p.done)))
+    assert order[0] == ("start", result.run_dir, True) and sum(o[0] == "start" for o in order) == 1
+    assert len(order) > 1  # progress did follow, so "before the first progress" is not vacuous
+
+
 def test_progress_is_readable_while_the_run_goes(tmp_path):
     feb = make_feb(tmp_path / "long.feb", time_steps=20000)  # far longer than the test waits
     seen = []
