@@ -180,7 +180,7 @@ def test_no_attachment_at_all_is_only_a_warning(tmp_path):
 @pytest.mark.parametrize(
     "change, message",
     [
-        (lambda d: d["attachments"][0].update(to="cranium"), "goes to 'cranium', which is not an object"),
+        (lambda d: d["attachments"][0].update(to="cranium"), "goes to 'cranium', which is not a bone, an anchor or a soft tissue"),
         (lambda d: d["attachments"][0].update({"from": "jaw"}), "starts from 'jaw', which is not a soft tissue"),
         (lambda d: d["bones"][1].update(driver="jaw02"), "follows driver 'jaw02', which the scene does not list"),
     ],
@@ -324,8 +324,206 @@ def test_asrp_check_fails_on_an_error_and_passes_on_a_warning(tmp_path, capsys):
     folder = copy_s1(tmp_path)
     edit_scene(folder, lambda d: d.update(attachments=[]))
     assert cli.main(["check", str(folder / "scene.json")]) == 0
-    assert "WARN   soft tissue 'tissue' has no attachment" in capsys.readouterr().out
+    assert "WARNING  soft tissue 'tissue' has no attachment" in capsys.readouterr().out
     (folder / "jaw.obj").unlink()
     assert cli.main(["check", str(folder / "scene.json")]) == 1
     out = capsys.readouterr().out
     assert "ERROR  bone 'jaw': file jaw.obj is missing" in out and "check FAILED: 1 errors" in out
+
+
+# --- the lip corner anchor: a derived driver and an anchor body (T-06a, docs/04 section 5.1) -------
+
+
+def with_anchor(data, factor=0.5, of="jaw_hinge", driver="corner_blend", stiffness=2.0):
+    """S1 plus a derived driver, an anchor that follows it, and a spring attachment to the anchor."""
+    data["drivers"].append({"name": "corner_blend", "hinge": None,
+                            "blend": {"of": of, "factor": {"value": factor, "source": "ours"}}})
+    data["anchors"] = [{"name": "corner_anchor", "driver": driver}]
+    data["attachments"].append({"name": "corner", "from": "tissue", "to": "corner_anchor", "kind": "spring",
+                                "stiffness": {"value": stiffness, "source": "ours"}, "weights": [[0, 1.0]]})
+
+
+def test_a_scene_with_an_anchor_on_a_derived_driver_reads_back_and_checks_with_the_s1_trajectory(tmp_path):
+    folder = copy_s1(tmp_path)
+    path = edit_scene(folder, with_anchor)
+    report = scene.check(path, folder / "trajectory.json")  # no motion for corner_blend in trajectory.json
+    assert report.ok, report.errors
+    s = report.scene
+    assert s.drivers[1].blend.of == "jaw_hinge" and s.drivers[1].blend.factor.value == 0.5
+    assert [(a.name, a.driver) for a in s.anchors] == [("corner_anchor", "corner_blend")]
+    scene.write(tmp_path / "again.json", s)  # the writer keeps the new fields
+    assert scene.load(tmp_path / "again.json") == s
+
+
+def test_a_jaw_that_is_not_a_pure_hinge_turn_makes_the_blend_warn(tmp_path, capsys):
+    from asrp_core import trajectory
+    folder = copy_s1(tmp_path)
+    path = edit_scene(folder, with_anchor)
+    pivot, axis = [5.0, -30.0, 0.0], [1.0, 0.0, 0.0]
+    clean = trajectory.hinge_transforms(pivot, axis, [0.0, 0.1, 0.2])
+    t = trajectory.read(folder / "trajectory.json")
+    t.frames = 3
+    t.drivers = {"jaw_hinge": clean}
+    trajectory.write(folder / "pure.json", t)
+    assert not [w for w in scene.check(path, folder / "pure.json").warnings if "pure rotation" in w]
+    slid = [list(m) for m in clean]
+    slid[2][3] += 0.5  # the jaw also slides 0.5 mm along x
+    t.drivers = {"jaw_hinge": slid}
+    trajectory.write(folder / "slid.json", t)
+    report = scene.check(path, folder / "slid.json")
+    [w] = [w for w in report.warnings if "pure rotation" in w]
+    assert report.ok and "corner_blend" in w and "frame 2" in w and "drops the rest" in w
+    off_axis = trajectory.hinge_transforms(pivot, [0.0, 1.0, 0.0], [0.0, 0.0, 0.1])  # a turn about y
+    t.drivers = {"jaw_hinge": [clean[0], clean[1], off_axis[2]]}
+    trajectory.write(folder / "off.json", t)
+    assert [w for w in scene.check(path, folder / "off.json").warnings if "pure rotation" in w]
+    assert cli.main(["check", str(path), str(folder / "slid.json")]) == 0
+    assert "WARNING  trajectory: driver 'jaw_hinge' is not a pure rotation" in capsys.readouterr().out
+
+
+def test_a_scene_without_anchors_is_written_without_the_field():
+    assert "anchors" not in scene.load(S1 / "scene.json").to_json()
+
+
+def test_an_anchor_whose_driver_is_unknown_is_an_error(tmp_path):
+    folder = copy_s1(tmp_path)
+    report, text = errors_of(edit_scene(folder, lambda d: with_anchor(d, driver="nowhere")))
+    assert not report.ok and "anchor 'corner_anchor' follows driver 'nowhere', which the scene does not list" in text
+
+
+def test_a_derived_driver_whose_source_is_unknown_is_an_error(tmp_path):
+    folder = copy_s1(tmp_path)
+    report, text = errors_of(edit_scene(folder, lambda d: with_anchor(d, of="jaw02")))
+    assert not report.ok and "driver 'corner_blend' is derived from driver 'jaw02', which the scene does not list" in text
+
+
+@pytest.mark.parametrize("alpha", [-0.01, 1.01, 2])
+def test_a_blend_factor_outside_zero_to_one_is_an_error(tmp_path, alpha):
+    folder = copy_s1(tmp_path)
+    report, text = errors_of(edit_scene(folder, lambda d: with_anchor(d, factor=alpha)))
+    assert not report.ok and "blend.factor must be between 0 and 1" in text
+
+
+@pytest.mark.parametrize("alpha", [0, 1])
+def test_a_blend_factor_of_exactly_zero_or_one_is_allowed(tmp_path, alpha):
+    folder = copy_s1(tmp_path)
+    assert scene.check(edit_scene(folder, lambda d: with_anchor(d, factor=alpha))).ok
+
+
+def test_a_derived_driver_of_a_driver_without_a_hinge_or_of_another_derived_one_is_an_error(tmp_path):
+    folder = copy_s1(tmp_path)
+
+    def no_hinge(d):
+        d["drivers"][0]["hinge"] = None
+        with_anchor(d)
+
+    report, text = errors_of(edit_scene(folder, no_hinge))
+    assert not report.ok and "which has no hinge" in text
+
+    folder = copy_s1(tmp_path / "chain")
+
+    def chain(d):
+        with_anchor(d)
+        d["drivers"].append({"name": "second", "hinge": None,
+                             "blend": {"of": "corner_blend", "factor": {"value": 0.5, "source": "ours"}}})
+
+    report, text = errors_of(edit_scene(folder, chain))
+    assert not report.ok and "itself derived" in text
+
+
+def test_a_driver_with_both_a_hinge_and_a_blend_is_an_error(tmp_path):
+    folder = copy_s1(tmp_path)
+
+    def both(d):
+        with_anchor(d)
+        d["drivers"][1]["hinge"] = dict(d["drivers"][0]["hinge"])
+
+    report, text = errors_of(edit_scene(folder, both))
+    assert not report.ok and "either derived ('blend') or has its own hinge" in text
+
+
+def test_a_spring_attachment_without_a_stiffness_is_an_error(tmp_path):
+    folder = copy_s1(tmp_path)
+
+    def no_stiffness(d):
+        with_anchor(d)
+        d["attachments"][-1]["stiffness"]["value"] = None
+
+    report, text = errors_of(edit_scene(folder, no_stiffness))
+    assert not report.ok and "a spring attachment needs a stiffness value" in text
+
+
+def test_a_derived_drivers_source_must_have_motion_in_the_trajectory(tmp_path):
+    folder = copy_s1(tmp_path)
+    traj = json.loads((folder / "trajectory.json").read_text())
+    traj["drivers"] = {"head": traj["drivers"]["jaw_hinge"]}
+    (folder / "trajectory.json").write_text(json.dumps(traj))
+    report, text = errors_of(edit_scene(folder, with_anchor), folder / "trajectory.json")
+    assert "anchor 'corner_anchor' follows driver 'corner_blend', derived from 'jaw_hinge'" in text
+
+
+def test_a_motion_written_for_a_derived_driver_is_ignored_with_a_warning(tmp_path):
+    folder = copy_s1(tmp_path)
+    traj = json.loads((folder / "trajectory.json").read_text())
+    traj["drivers"]["corner_blend"] = traj["drivers"]["jaw_hinge"]
+    (folder / "trajectory.json").write_text(json.dumps(traj))
+    report = scene.check(edit_scene(folder, with_anchor), folder / "trajectory.json")
+    assert report.ok and any("'corner_blend' is derived from 'jaw_hinge'" in w for w in report.warnings)
+
+
+def test_driver_motion_gives_the_derived_driver_half_the_jaw_angle_about_the_same_hinge(tmp_path):
+    from asrp_core import trajectory
+
+    folder = copy_s1(tmp_path)
+    path = edit_scene(folder, with_anchor)
+    report = scene.check(path, folder / "trajectory.json")
+    motion = scene.driver_motion(report.scene, report.trajectory)
+    assert set(motion) == {"jaw_hinge", "corner_blend"}
+    angles = [trajectory.hinge_angle(m, (1, 0, 0)) for m in motion["jaw_hinge"]]
+    assert max(abs(a) for a in angles) > 0.05  # the S1 jaw really opens, so this is not a check on nothing
+    hinge = report.scene.drivers[0].hinge
+    expected = trajectory.hinge_transforms(hinge.pivot_mm, hinge.axis, [a / 2 for a in angles])
+    assert all(abs(a - b) < 1e-12 for got, want in zip(motion["corner_blend"], expected)
+               for a, b in zip(got, want))
+
+
+# --- scene names go into the FEBio input (PR #8 review) ------------------------------------------
+
+
+def test_a_name_with_a_character_the_febio_input_cannot_hold_is_an_error(tmp_path):
+    folder = copy_s1(tmp_path)
+    path = folder / "scene.json"
+    path.write_text(path.read_text().replace('"skull"', '"skull&jaw"'))
+    report, text = errors_of(path)
+    assert not report.ok and "bone name 'skull&jaw'" in text and "FEBio input" in text
+
+
+# --- derived drivers nothing uses (PR #8 review) -------------------------------------------------
+
+
+def _second_hinge(data, used):
+    data["drivers"].append({"name": "other_hinge", "hinge": {
+        "pivot_mm": [0.0, 0.0, 0.0], "axis": [1.0, 0.0, 0.0], "source": "ours"}})
+    data["drivers"].append({"name": "spare_blend", "hinge": None,
+                            "blend": {"of": "other_hinge", "factor": {"value": 0.5, "source": "ours"}}})
+    if used:
+        data["anchors"] = [{"name": "corner_anchor", "driver": "spare_blend"}]
+        data["attachments"].append({"name": "corner", "from": "tissue", "to": "corner_anchor", "kind": "spring",
+                                    "stiffness": {"value": 2.0, "source": "ours"}, "weights": [[0, 1.0]]})
+
+
+def test_an_unused_derived_driver_without_source_motion_is_skipped_but_a_used_one_still_fails(tmp_path):
+    from asrp_core import trajectory
+    folder = copy_s1(tmp_path)
+    traj = trajectory.read(folder / "trajectory.json")
+    assert "other_hinge" not in traj.drivers
+    path = edit_scene(folder, lambda d: _second_hinge(d, used=False))
+    assert scene.check(path, folder / "trajectory.json").ok
+    motion = scene.driver_motion(scene.load(path), traj)  # raised ValueError before the fix
+    assert "spare_blend" not in motion and "jaw_hinge" in motion
+
+    folder2 = copy_s1(tmp_path / "used")
+    path2 = edit_scene(folder2, lambda d: _second_hinge(d, used=True))
+    assert not scene.check(path2, folder2 / "trajectory.json").ok
+    with pytest.raises(ValueError, match="no motion for its source 'other_hinge'"):
+        scene.driver_motion(scene.load(path2), trajectory.read(folder2 / "trajectory.json"))

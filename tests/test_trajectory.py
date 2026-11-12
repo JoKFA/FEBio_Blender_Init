@@ -101,3 +101,38 @@ def test_a_translation_is_a_valid_frame(tmp_path):
     data["drivers"]["jaw_hinge"][3] = [1, 0, 0, 4.5, 0, 1, 0, -2, 0, 0, 1, 0.25, 0, 0, 0, 1]
     t = trajectory.read(write(tmp_path, data))
     assert apply(t.drivers["jaw_hinge"][3], (1, 1, 1)) == (5.5, -1, 1.25)
+
+
+# --- derived (blended) drivers: a fraction of a hinge turn (T-06a, docs/04 section 5.1) ------------
+
+PIVOT, AXIS = (3.0, -121.7, -54.65), (1.0, 0.0, 0.0)
+POINTS = [(0.0, 0.0, 0.0), (10.0, -80.0, 40.0), (-25.0, 140.0, -30.0), (3.0, -121.7, -54.65)]
+
+
+def max_gap(ms_a, ms_b):
+    return max(abs(p - q) for a, b in zip(ms_a, ms_b) for pt in POINTS for p, q in zip(apply(a, pt), apply(b, pt)))
+
+
+def test_blend_factor_zero_is_the_identity_and_one_is_the_parent():
+    jaw = hinge_transforms(PIVOT, AXIS, [math.radians(a) for a in (0, 5, 12, -3, 20)])
+    ident = [[1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]] * len(jaw)
+    assert max_gap(trajectory.blend_transforms(jaw, PIVOT, AXIS, 0.0), ident) < 1e-9
+    assert max_gap(trajectory.blend_transforms(jaw, PIVOT, AXIS, 1.0), jaw) < 1e-9
+    assert max_gap(jaw, ident) > 1.0  # the jaw really moves the points, so the two checks above can fail
+
+
+def test_blend_factor_half_at_20_degrees_turns_10_degrees_about_the_same_pivot_and_axis():
+    [jaw] = hinge_transforms(PIVOT, AXIS, [math.radians(20)])
+    [half] = trajectory.blend_transforms([jaw], PIVOT, AXIS, 0.5)
+    [by_hand] = hinge_transforms(PIVOT, AXIS, [math.radians(10)])
+    assert max_gap([half], [by_hand]) < 1e-9
+    assert abs(trajectory.hinge_angle(half, AXIS) - math.radians(10)) < 1e-12
+    assert max_gap([half], [jaw]) > 1.0  # and it is not the 20 degree turn
+    assert all(abs(a - b) < 1e-9 for a, b in zip(apply(half, PIVOT), PIVOT))  # the pivot stays
+
+
+def test_hinge_angle_is_signed_and_works_for_a_tilted_axis():
+    axis = (1.0, 2.0, -0.5)
+    for deg in (-35, -1, 0, 7, 90, 170):
+        [m] = hinge_transforms((1, 2, 3), axis, [math.radians(deg)])
+        assert abs(trajectory.hinge_angle(m, axis) - math.radians(deg)) < 1e-12, deg

@@ -241,9 +241,18 @@ def test_a_missing_feb_or_a_non_english_path_is_refused_in_plain_words(tmp_path)
         run.require_ascii(tmp_path / "运行")
 
 
-def test_run_without_feb_says_what_to_do(capsys):
-    assert cli.main(["run", "scene.json", "traj.json"]) == 2
-    assert "T-06a" in capsys.readouterr().out
+def test_run_with_half_the_arguments_says_what_to_do(capsys):
+    assert cli.main(["run", "scene.json"]) == 2
+    assert "<scene.json> <trajectory.json>" in capsys.readouterr().out
+    assert cli.main(["run"]) == 2
+
+
+def test_run_of_a_missing_scene_starts_nothing(tmp_path, capsys):
+    assert cli.main(["run", str(tmp_path / "scene.json"), str(tmp_path / "traj.json"), "--runs-dir",
+                     str(tmp_path / "runs")]) == 1
+    out = capsys.readouterr().out
+    assert "does not exist" in out and "run NOT STARTED" in out
+    assert not (tmp_path / "runs").exists()
 
 
 def test_the_installed_entry_point_works(tmp_path):

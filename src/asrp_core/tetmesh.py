@@ -177,10 +177,17 @@ def _join_shared(cells: np.ndarray, facets: tuple[tuple[int, ...], ...], keep=No
 
 def boundary_faces(tets) -> np.ndarray:
     """Faces that belong to exactly one tet, wound outward."""
+    return boundary_faces_and_tets(tets)[0]
+
+
+def boundary_faces_and_tets(tets) -> tuple[np.ndarray, np.ndarray]:
+    """Faces that belong to exactly one tet, wound outward, and the index of that tet."""
     tets = np.asarray(tets)
     faces = np.concatenate([tets[:, list(f)] for f in _OPPOSITE_FACES])
+    owner = np.tile(np.arange(len(tets)), len(_OPPOSITE_FACES))
     _, inverse, counts = np.unique(np.sort(faces, axis=1), axis=0, return_inverse=True, return_counts=True)
-    return faces[counts[inverse] == 1]
+    keep = counts[inverse.ravel()] == 1
+    return faces[keep], owner[keep]
 
 
 def tet_components(tets) -> int:
@@ -383,6 +390,14 @@ def slice_positions(points, step_mm: float = 0.25) -> np.ndarray:
 
 def inside_any_tet(nodes, tets, points, tol=1e-9) -> np.ndarray:
     """Whether each point lies in some tet (barycentric coordinates all >= 0)."""
+    return containing_tets(nodes, tets, points, tol) >= 0
+
+
+def containing_tets(nodes, tets, points, tol=1e-9) -> np.ndarray:
+    """For each point, the index of a tet that contains it (barycentric coordinates all >= -tol),
+    or -1. A point on a face shared by several tets gets the one it is deepest in (the largest
+    smallest barycentric coordinate; the lowest index on a tie), so the answer does not depend on
+    the order the tets are tested in."""
     corners = nodes[tets]  # (t, 4, 3)
     a = corners[:, 0]
     inv = np.linalg.inv(np.stack([corners[:, k] - a for k in (1, 2, 3)], axis=2))
@@ -399,7 +414,7 @@ def inside_any_tet(nodes, tets, points, tol=1e-9) -> np.ndarray:
                 for k in range(f[2], l[2] + 1):
                     grid.setdefault((i, j, k), []).append(t)
     cells = np.floor((np.asarray(points) - origin) / size).astype(int)
-    found = np.zeros(len(points), dtype=bool)
+    found = np.full(len(points), -1, dtype=np.int64)
     for n, (p, cell) in enumerate(zip(points, cells.tolist())):
         near = np.array(grid.get(tuple(cell), []), dtype=int)
         if len(near) == 0:
@@ -407,12 +422,19 @@ def inside_any_tet(nodes, tets, points, tol=1e-9) -> np.ndarray:
         near = near[((lo[near] <= p) & (p <= hi[near])).all(axis=1)]
         local = np.einsum("tij,tj->ti", inv[near], p - a[near])
         bary = np.concatenate([1 - local.sum(axis=1, keepdims=True), local], axis=1)
-        found[n] = (bary >= -tol).all(axis=1).any()
+        depth = bary.min(axis=1)
+        if len(depth) and depth.max() >= -tol:
+            found[n] = near[int(np.argmax(depth))]  # argmax takes the first of equal values
     return found
 
 
 def _distance_exact(points, tri) -> np.ndarray:
     """Shortest distance from each point to a set of triangles (n, 3, 3), all pairs."""
+    return _distances_exact(points, tri).min(axis=1)
+
+
+def _distances_exact(points, tri) -> np.ndarray:
+    """Distance from each point to each of a set of triangles (n, 3, 3): (points, triangles)."""
     a, b, c = tri[:, 0], tri[:, 1], tri[:, 2]
     n = np.cross(b - a, c - a)
     n /= np.linalg.norm(n, axis=1, keepdims=True)
@@ -427,27 +449,48 @@ def _distance_exact(points, tri) -> np.ndarray:
     for u, v in ((a, b), (b, c), (c, a)):
         s = np.clip(np.einsum("ptj,tj->pt", p - u, v - u) / np.einsum("tj,tj->t", v - u, v - u), 0, 1)
         d = np.minimum(d, np.linalg.norm(p - (u + s[..., None] * (v - u)), axis=2))
-    return d.min(axis=1)
+    return d
 
 
 def distance_to_triangles(points, tri) -> np.ndarray:
-    """Shortest distance from each point to a set of triangles (n, 3, 3).
+    """Shortest distance from each point to a set of triangles (n, 3, 3)."""
+    return nearest_triangles(points, tri)[0]
 
-    The nearest triangle corner bounds the answer from above, so only triangles whose bounding
-    box is that close need the exact test.
+
+def nearest_triangles(points, tri) -> tuple[np.ndarray, np.ndarray]:
+    """For each point, the shortest distance to a set of triangles (n, 3, 3) and the index of the
+    nearest triangle (the lowest index on a tie).
+
+    Triangles are filed in a grid of cells by their bounding boxes. A point first tests the
+    triangles filed in its own cell and the 26 around it; if the nearest of those is no farther than
+    one cell, no other triangle can be nearer (its bounding box would reach into those cells), so
+    the answer is exact. Otherwise the point tests every triangle.
     """
     points = np.asarray(points, dtype=float)
-    corners = tri.reshape(-1, 3)
+    tri = np.asarray(tri, dtype=float)
     lo, hi = tri.min(axis=1), tri.max(axis=1)
+    size = max(float(np.median((hi - lo).max(axis=1))), 1e-9)
+    origin = lo.min(axis=0)
+    first, last = np.floor((lo - origin) / size).astype(int), np.floor((hi - origin) / size).astype(int)
+    grid: dict[tuple, list[int]] = {}
+    for t, (f, l) in enumerate(zip(first.tolist(), last.tolist())):
+        for i in range(f[0], l[0] + 1):
+            for j in range(f[1], l[1] + 1):
+                for k in range(f[2], l[2] + 1):
+                    grid.setdefault((i, j, k), []).append(t)
+    cells = np.floor((points - origin) / size).astype(int)
+    around = [(i, j, k) for i in (-1, 0, 1) for j in (-1, 0, 1) for k in (-1, 0, 1)]
     best = np.empty(len(points))
-    for start in range(0, len(points), 128):
-        chunk = points[start : start + 128]
-        bound = np.sqrt(((chunk[:, None, :] - corners[None]) ** 2).sum(axis=2).min(axis=1))
-        for k, (p, ub) in enumerate(zip(chunk, bound)):
-            gap = np.maximum(np.maximum(lo - p, p - hi), 0.0)
-            near = (gap * gap).sum(axis=1) <= ub * ub + 1e-12
-            best[start + k] = _distance_exact(p[None], tri[near])[0]
-    return best
+    which = np.empty(len(points), dtype=np.int64)
+    for n, (p, (ci, cj, ck)) in enumerate(zip(points, cells.tolist())):
+        near = sorted({t for di, dj, dk in around for t in grid.get((ci + di, cj + dj, ck + dk), ())})
+        d = _distances_exact(p[None], tri[near])[0] if near else np.zeros(0)
+        if not near or d.min() > size:
+            near = list(range(len(tri)))
+            d = _distances_exact(p[None], tri)[0]
+        i = int(np.argmin(d))
+        best[n], which[n] = d[i], near[i]
+    return best, which
 
 
 # Far below the smallest tet a mesh may have (MIN_TET_VOLUME_MM3); only tells flat from solid.

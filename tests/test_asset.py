@@ -6,7 +6,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from asrp_core import cli, scene
+from asrp_core import cli, scene, tetmesh
 from asrp_core.asset import coords, lab
 
 REPO = Path(__file__).resolve().parents[1]
@@ -110,12 +110,15 @@ def test_the_scene_has_the_roles_of_docs_03(imported):
         "jaw": ("prescribed", "jaw01"), "teeth_lower": ("prescribed", "jaw01"),
         "skull": ("fixed", None), "teeth_upper": ("fixed", None),
     }
-    [jaw01] = s.drivers
+    jaw01, blend = s.drivers
+    assert blend.name == "lip_corner_blend" and blend.hinge is None
+    assert blend.blend.of == "jaw01" and blend.blend.factor.value == 0.5 and blend.blend.factor.source == "ours"
+    assert [(a.name, a.driver) for a in s.anchors] == [("lip_corner_anchor", "lip_corner_blend")]
     assert jaw01.name == "jaw01" and np.allclose(jaw01.hinge.pivot_mm, [0.0, -121.7126, -54.6536], atol=1e-3)
     assert np.allclose(jaw01.hinge.axis, [1, 0, 0], atol=1e-9)  # left-right
     raw = json.loads((out / "scene.json").read_text())
-    assert raw["units"]["physics_length_scale"] == {"value": 1.0, "source": "ours",
-                                                    "note": "ADR-31: real-person size is k = 0.67, which T-06a writes; 1.0 until then"}
+    k = raw["units"]["physics_length_scale"]
+    assert k["value"] == 0.67 and k["source"] == "ours" and "ADR-31" in k["note"]
     assert raw["units"]["mm_per_scene_unit"]["value"] == 0.962
     assert len(s.landmarks.names) == 300
     # Each OBJ is named with its sha256, as T-02 asks.
@@ -125,18 +128,59 @@ def test_the_scene_has_the_roles_of_docs_03(imported):
 
 
 @needs_export
-def test_the_scene_passes_the_check_with_only_the_missing_attachments_warning(imported):
+def test_the_scene_passes_the_check_with_no_warning(imported):
     out, result = imported
     report = scene.check(out / "scene.json")
     assert report.ok, report.errors
-    assert len(report.warnings) == 1 and "soft tissue 'lips' has no attachment" in report.warnings[0]
-    assert result.report["missing"][0] == report.warnings[0]
+    assert report.warnings == []
+    assert not any("no attachment" in m for m in result.report["missing"])
+
+
+@needs_export
+def test_the_four_lip_attachments_are_in_the_scene_as_docs_05_section_3_says(imported):
+    out, result = imported
+    s = scene.load(out / "scene.json")
+    by_name = {a.name: a for a in s.attachments}
+    assert {n: (a.target, a.kind, len(a.weights)) for n, a in by_name.items()} == {
+        "upper_lip_on_skull": ("skull", "hard", 74),
+        "lower_lip_on_jaw": ("jaw", "spring", 76),
+        "left_corner_on_anchor": ("lip_corner_anchor", "spring", 348),
+        "right_corner_on_anchor": ("lip_corner_anchor", "spring", 309),
+    }
+    assert by_name["upper_lip_on_skull"].stiffness.value is None
+    springs = [a.stiffness for a in by_name.values() if a.kind == "spring"]
+    assert len({p.value for p in springs}) == 1 and springs[0].value > 0
+    assert all(p.source == "ours" and "provisional" in p.note for p in springs)
+    # The weights are the file's, vertex for vertex.
+    groups = {g["attachment"]: g for g in json.loads((EXPORT / "lip_attachments.json").read_text())["groups"]}
+    assert by_name["lower_lip_on_jaw"].weights == groups["zAttachment2"]["vertices"]
+    # The stiffness is T-07's rule: 100 x E x h, h = median tet edge x k.
+    mesh, _ = tetmesh.load(TET)
+    h = tetmesh.quality(mesh).median_edge_mm * 0.67
+    assert springs[0].value == pytest.approx(100 * 0.015 * h, rel=5e-3)
+    assert result.report["attachments_file"] == {
+        "name": "lip_attachments.json",
+        "sha256": hashlib.sha256((EXPORT / "lip_attachments.json").read_bytes()).hexdigest()}
+    assert [a["kind"] for a in result.report["attachments"]] == ["hard", "spring", "spring", "spring"]
+    assert any(m.startswith("Attachments (A-33)") and "provisional" in m for m in result.report["missing"])
+
+
+@needs_export
+def test_an_attachments_file_for_another_mesh_is_refused(tmp_path):
+    export = tmp_path / "export"
+    shutil.copytree(EXPORT, export, ignore=shutil.ignore_patterns("manual_maya_obj"))
+    data = json.loads((export / "lip_attachments.json").read_text())
+    data["groups"][0]["vertices"] = data["groups"][0]["vertices"][:-1]
+    (export / "lip_attachments.json").write_text(json.dumps(data))
+    with pytest.raises(lab.AssetError, match="zAttachment1 with 74 vertices, found 73"):
+        lab.import_asset(export, tmp_path / "out", TET)
 
 
 @needs_export
 def test_the_report_calls_the_geometry_scale_settled_and_k_the_open_part(imported):
     out, result = imported
-    text = " ".join(result.report["missing"]) + json.dumps(result.report["units"])
+    text = " ".join(m for m in result.report["missing"] if not m.startswith("Attachments")) \
+        + json.dumps(result.report["units"])
     assert "provisional" not in text and "Q3" not in text
     [units_line] = [m for m in result.report["missing"] if m.startswith("Physical scale")]
     assert "ADR-31" in units_line and "0.67" in units_line
@@ -148,7 +192,7 @@ def test_the_report_names_the_factor_the_axes_and_every_parameter_source(importe
     r = result.report
     assert r["units"]["mm_per_scene_unit"] == 0.962 and r["units"]["axes"] == coords.AXES
     where = {p["where"]: p["source"] for p in r["parameters"]}
-    assert len(where) == 13
+    assert len(where) == 18  # 13 before the attachments, plus alpha and four stiffnesses
     assert where["solver.fps"] == "lab_setting"
     assert where["soft_tissues[lips].material.E_mpa"] == "ours"
     assert all(s in scene.SOURCES for s in where.values())
@@ -216,8 +260,8 @@ def test_asrp_import_asset_runs_end_to_end(tmp_path, capsys):
     out = tmp_path / "lab"
     assert cli.main(["import-asset", str(EXPORT), str(out)]) == 0
     text = capsys.readouterr().out
-    assert "import PASSED: scene check 0 errors, 1 warnings" in text
-    assert "missing    soft tissue 'lips' has no attachment" in text
+    assert "import PASSED: scene check 0 errors, 0 warnings" in text
+    assert "no attachment" not in text
     assert cli.main(["check", str(out / "scene.json")]) == 0
 
 

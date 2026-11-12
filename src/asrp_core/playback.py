@@ -2,7 +2,8 @@
 
 The bundle is a directory with:
 - playback.json: surface vertices (rest, mm), faces, per-face material, and for each
-  vertex the FEBio node id it came from;
+  vertex the FEBio node id it came from (null for a display mesh carried by the tet
+  mesh, `write_surface_bundle`, T-06a);
 - playback.pc2: per-frame surface vertex positions in the same order, read by
   Blender's Mesh Cache modifier.
 Data stays in mm here; the add-on converts to Blender units at the boundary.
@@ -76,4 +77,36 @@ def write_bundle(
     write_pc2(out / "playback.pc2", [[frame[n] for n in node_ids] for frame in frames])
     path = out / "playback.json"
     path.write_text(json.dumps(manifest))
+    return path
+
+
+def write_surface_bundle(
+    out: Path,
+    vertices: Sequence[Sequence[float]],
+    faces: Sequence[Sequence[int]],
+    frames: Sequence[Sequence[Sequence[float]]],
+    fps: float,
+    feb: Path,
+    material: str,
+    surface: str,
+) -> Path:
+    """The same bundle for a display mesh carried by the tet mesh (T-06a, asrp_core.embed): the surface is
+    that mesh as it is (its own faces, triangles or quads), so there is no FEBio node per vertex and
+    `node_ids` is null. `surface` names the mesh file it came from."""
+    manifest = {
+        "format": FORMAT,
+        "units": "mm",
+        "fps": fps,
+        "frame_count": len(frames),
+        "node_ids": None,
+        "vertices": [[float(c) for c in v] for v in vertices],
+        "faces": [[int(i) for i in f] for f in faces],
+        "face_materials": [0] * len(faces),
+        "materials": [material],
+        "cache": "playback.pc2",
+        "source": {"feb": feb.name, "feb_sha256": hashlib.sha256(feb.read_bytes()).hexdigest(), "surface": surface},
+    }
+    write_pc2(out / "playback.pc2", frames)
+    path = out / "playback.json"
+    path.write_text(json.dumps(manifest), encoding="utf-8", newline="\n")
     return path

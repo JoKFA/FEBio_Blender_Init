@@ -20,7 +20,7 @@ def print_check(report) -> None:
     for e in report.errors:
         print(f"ERROR  {e}")
     for w in report.warnings:
-        print(f"WARN   {w}")
+        print(f"WARNING  {w}")
 
 
 def cmd_check(args: argparse.Namespace) -> int:
@@ -92,16 +92,17 @@ def cmd_run(args: argparse.Namespace) -> int:
     from asrp_core import run
     from asrp_core.doctor import febio_exe
 
-    if args.scene or args.trajectory:
-        print("ERROR  Running from a scene and a trajectory is not built yet (T-06a). "
-              "For now use: asrp run --feb <existing .feb>")
-        return 2
-    if not args.feb:
-        print("ERROR  Give --feb <existing .feb>.")
-        return 2
-
     def show(p: run.Progress) -> None:
         print(f"progress   frame {p.done} / {p.total if p.total is not None else '?'}", flush=True)
+
+    if args.scene or args.trajectory:
+        if args.feb or not (args.scene and args.trajectory):
+            print("ERROR  Give either <scene.json> <trajectory.json>, or --feb <existing .feb>.")
+            return 2
+        return run_scene(args, show)
+    if not args.feb:
+        print("ERROR  Give <scene.json> <trajectory.json>, or --feb <existing .feb>.")
+        return 2
 
     try:
         prepared = run.standin(Path(args.feb))
@@ -118,6 +119,55 @@ def cmd_run(args: argparse.Namespace) -> int:
         return 2
     f = result.failure
     print(f"ERROR  {f'frame {f.frame}' if f.frame is not None else 'before the first frame'}: {f.message}")
+    print("run FAILED: no results written")
+    return 1
+
+
+def run_scene(args: argparse.Namespace, show) -> int:
+    from pathlib import Path
+
+    from asrp_core import run, simulate
+    from asrp_core.doctor import febio_exe
+
+    try:
+        result = simulate.run_scene(Path(args.scene), Path(args.trajectory), Path(args.runs_dir), febio_exe(),
+                                    args.name, show, None, args.timeout)
+    except (simulate.SceneRunError, run.RunError, FileNotFoundError) as e:
+        print(f"ERROR  {e}")
+        print("run NOT STARTED")
+        return 1
+    r = result.report
+    g = r["generator"]
+    print(f"run folder {result.run_dir}")
+    print(f"generator  k {g['physics_length_scale_k']}, {g['febio_nodes']['tissue']} tet nodes, {g['tets']} tets, "
+          f"{g['hard_nodes']} hard nodes, {g['springs']} springs, display max distance {g['display_max_distance_mm']:.3f} mm "
+          f"(limit {g['max_distance_limit_mm']:.3f})")
+    for grp in g["groups"]:
+        extra = (f", {grp['spring_nodes']} spring nodes, {grp['level_count']} levels (max error {grp['max_level_error']:.2%}), shared {grp['nodes_shared_with_other_spring_groups']}"
+                 if grp["kind"] == "spring" else "")
+        print(f"group      {grp['name']} ({grp['kind']} -> {grp['to']}): {grp['display_vertices']} vertices, {grp['nodes']} nodes, "
+              f"{grp['clipped_coordinates']} clipped, {grp['conflicts']} conflicts, max distance {grp['max_distance_mm']:.3f} mm{extra}")
+    for w in r.get("warnings", []):
+        print(f"WARNING  {w}")
+    for name, s in r.get("spring_slip", {}).items():
+        print(f"slip       {name}: max|u|/delta = {s['ratio']:.2e}{'  FLAG: above 0.1, raise delta' if s['flag'] else ''}")
+    for key, c in r["checks"].items():
+        verdict = {True: "PASS", False: "FAIL", None: "NOT RUN"}[c["passed"]]
+        print(f"check {key}    [{verdict}] {c['name']}: {c['message']}")
+    t = r["timing"]
+    if t.get("febio_s_per_frame") is not None:
+        print(f"timing     FEBio {t['febio_s']} s, {t['febio_s_per_frame']} s per frame (budget {t['budget_s_per_frame']}, "
+              f"reported only); generate {t['generate_s']} s, post {t['post_s']} s")
+    print(f"report     {result.run_dir / simulate.REPORT}")
+    if result.status == "complete":
+        skipped = r.get("not_run", {})
+        note = f" ({len(skipped)} not run: {'; '.join(f'{k}: {m}' for k, m in skipped.items())})" if skipped else ""
+        print(f"run COMPLETE: {r['frames']} frames; plausibility {'PASSED' if result.passed else 'FAILED'}{note}")
+        return 0 if result.passed else 1
+    if result.status == "cancelled":
+        print("run CANCELLED; FEBio stopped, no results written")
+        return 2
+    print(f"ERROR  {r['checks']['a']['message']}")
     print("run FAILED: no results written")
     return 1
 
@@ -144,12 +194,12 @@ def main(argv: list[str] | None = None) -> int:
     imp.add_argument("--tetmesh", help="the lip tet mesh (default: <export>/../tetmesh/lips.json)")
     imp.set_defaults(func=cmd_import_asset)
 
-    r = sub.add_parser("run", help="run FEBio once and keep everything in a run folder")
-    r.add_argument("scene", nargs="?", help="path of scene.json (not built yet, T-06a)")
-    r.add_argument("trajectory", nargs="?", help="path of trajectory.json (not built yet, T-06a)")
+    r = sub.add_parser("run", help="run a scene with a motion (or a ready .feb) once, everything in a run folder")
+    r.add_argument("scene", nargs="?", help="path of scene.json")
+    r.add_argument("trajectory", nargs="?", help="path of trajectory.json")
     r.add_argument("--feb", help="stand-in mode: run this existing .feb as is")
     r.add_argument("--runs-dir", default="runs", help="where run folders go (default: runs; English-only path)")
-    r.add_argument("--name", help="name for the run folder (default: the .feb's name)")
+    r.add_argument("--name", help="name for the run folder (default: the trajectory's or the .feb's name)")
     r.add_argument("--timeout", type=float, default=3600, help="stop FEBio after this many seconds")
     r.set_defaults(func=cmd_run)
 

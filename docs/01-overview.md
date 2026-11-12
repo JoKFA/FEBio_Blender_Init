@@ -34,7 +34,7 @@ FEBio 是一个专门为生物力学开发、经过同行评审的开源有限�
 - 逐项、逐点复刻 Ziva 的行为。两者的算法不同，Ziva 的参数很可能也只是默认值，对齐它的意义不大。
 - 任何医学结论。
 
-## 现在做到哪了（2026-11-10）
+## 现在做到哪了（2026-11-11）
 
 | 已完成 | 证据 |
 |---|---|
@@ -54,8 +54,9 @@ FEBio 是一个专门为生物力学开发、经过同行评审的开源有限�
 | 嘴唇的四组粘连顶点集已导出（T-03）：74、76、348、309 个顶点，位置核对通过（上唇贴颅骨、下唇贴下颌） | `uv run python tools/lip_attachments.py --inventory ...`，[09](09-roadmap-and-tasks.md) T-03 |
 | `asrp run --feb` 能跑现成的 `.feb`：运行文件夹、溯源、进度、取消、出错处理，位置除以 k 后才写入（T-08） | `uv run pytest tests/test_run.py -q`，[09](09-roadmap-and-tasks.md) T-08 |
 | 被哈希的数据在任何电脑上检出都逐字节相同（`.gitattributes`） | 打开 `core.autocrlf` 克隆后跑测试，[08](08-engineering-standards.md) 第 10 节 |
+| **原型机（T-06a）**：真实嘴唇被下颌带动（代用运动，张开 12°）、算完 51 帧（含第 0 帧，FEBio 算 50 步；0.90 秒/帧，重试 0 次），四项合理性检查通过，第 14 帧沉降后的形状单独存下，回放包在 Blender 里逐帧对得上；同一份输入两次的回放文件逐位相同。材料、粘连刚度、k 都是标明来源的临时值 | `uv run asrp import-asset data/lab_export <out>`、`uv run python tools/placeholder_jaw_motion.py <out>/scene.json <out>/placeholder_jaw.json`、`uv run asrp run <out>/scene.json <out>/placeholder_jaw.json`；图在 `data/preview/prototype_*.png`；[09](09-roadmap-and-tasks.md) T-06a 的结果 |
 
-下一步是原型机 T-06a：它的前置 T-03、T-07（第 1、2 步）、T-08 的外壳都已完成，见 [09 路线图与任务](09-roadmap-and-tasks.md) 第 1 节。
+原型机已经跑通（T-06a，2026-11-11）。下一步：T-06b（应变能、k 的对比、网格敏感性报告）；拿到 Ziva 设置和运动文件以后换掉临时值（T-12）、做 landmark 段（M3），见 [09 路线图与任务](09-roadmap-and-tasks.md) 第 1 节。
 
 ## 谁参与、各自负责什么
 
@@ -70,6 +71,6 @@ FEBio 是一个专门为生物力学开发、经过同行评审的开源有限�
 
 1. **约 Ziva 机器，趁许可还有效拿到只有它能给的数据**（ADR-35）：Ziva 的完整设置和权重表、一条运动的参考结果、Ziva 存的各物体网格（尤其嘴角链条上的）。许可哪天到期（Q5）要先问清楚，现有的两条线索都没有核实。步骤见 [12 导出清单](12-lab-export-checklist.md) 第二部分；第二阶段要的多网格、多运动，脚本也已支持（T-19），可以同一次做。
 2. **把 5 个问题发给实验室，并要运动文件**：可以直接转发的一页在 [12](12-lab-export-checklist.md) 第三部分；运动文件 `combined_checkpoints.pkl` 不在源码仓库里（D2）。
-3. **原型机**：定义已确认（11 的 P-05），目标日期 2026-11-17；前置 T-03、T-07（第 1、2 步）、T-08 已完成，下一步是 T-06a（09 第 1 节）。这几张卡都不等实验室。
+3. **原型机给实验室看**：T-06a 已跑通（2026-11-11，目标日期 2026-11-17），可以拿 `data/preview/prototype_*.png` 和回放包给研究员看下唇跟下颌、嘴角拉长是否合理；参数都是临时值（09 T-06a 卡）。
 
 第二阶段投入之前还有一道关：T-17、T-18 复核 FEBio 撑不撑得起第二阶段（ADR-26）；它们随时可以做，不挡 M3。

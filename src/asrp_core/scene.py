@@ -33,8 +33,11 @@ scene.json only names them and records their hash.
       "drivers": [{
         "name": str,                                  # the key in trajectory.json (e.g. jaw01)
         "hinge": null | {"pivot_mm": [x, y, z], "axis": [x, y, z],   # optional note (ADR-21):
-                         "source": SOURCE_TAG, "note": str}          #   stand-in motion, checks
-      }],
+                         "source": SOURCE_TAG, "note": str},         #   stand-in motion, checks
+        "blend": {"of": str, "factor": PARAM}         # optional (T-06a): a derived driver with no
+      }],                                             #   motion of its own; docs/04 section 5.1
+      "anchors": [{"name": str, "driver": str, "note": str}],   # optional (T-06a): invisible rigid
+                                                      #   bodies with no mesh; attachments may go to one
       "attachments": [{
         "name": str,
         "from": str,                                  # a soft tissue; weights are on its surface
@@ -65,6 +68,7 @@ and what to do.
 
 import hashlib
 import json
+import re
 import math
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -197,12 +201,42 @@ class Hinge:
 
 
 @dataclass
+class Blend:
+    """A derived driver: `factor` times the rotation of driver `of`, about that driver's hinge."""
+
+    of: str
+    factor: Param
+
+    def to_json(self) -> dict:
+        return {"of": self.of, "factor": self.factor.to_json()}
+
+
+@dataclass
 class Driver:
     name: str
     hinge: Hinge | None = None
+    blend: Blend | None = None  # set: no motion of its own, computed from driver `blend.of`
 
     def to_json(self) -> dict:
-        return {"name": self.name, "hinge": None if self.hinge is None else self.hinge.to_json()}
+        d = {"name": self.name, "hinge": None if self.hinge is None else self.hinge.to_json()}
+        if self.blend is not None:
+            d["blend"] = self.blend.to_json()
+        return d
+
+
+@dataclass
+class Anchor:
+    """An invisible rigid body with no mesh that moves like a driver (docs/04 section 5.1)."""
+
+    name: str
+    driver: str
+    note: str = ""
+
+    def to_json(self) -> dict:
+        d = {"name": self.name, "driver": self.driver}
+        if self.note:
+            d["note"] = self.note
+        return d
 
 
 @dataclass
@@ -257,9 +291,10 @@ class Scene:
     attachments: list[Attachment]
     landmarks: Landmarks | None
     solver: Solver
+    anchors: list[Anchor] = field(default_factory=list)
 
     def to_json(self) -> dict:
-        return {
+        d = {
             "format_version": FORMAT_VERSION,
             "origin": self.origin,
             "units": self.units.to_json(),
@@ -270,6 +305,23 @@ class Scene:
             "landmarks": None if self.landmarks is None else self.landmarks.to_json(),
             "solver": self.solver.to_json(),
         }
+        if self.anchors:  # absent when empty, so scenes without an anchor are written as before
+            d["anchors"] = [a.to_json() for a in self.anchors]
+        return d
+
+
+def parameters(node, where=""):
+    """(location, PARAM json) for every parameter in a scene's JSON, e.g. ("solver.fps", {...})."""
+    if isinstance(node, dict):
+        if "value" in node and "source" in node:
+            yield where, node
+            return
+        for k, v in node.items():
+            yield from parameters(v, f"{where}.{k}" if where else k)
+    elif isinstance(node, list):
+        for i, v in enumerate(node):
+            label = v.get("name", i) if isinstance(v, dict) else i
+            yield from parameters(v, f"{where}[{label}]")
 
 
 def write(path, scene: Scene) -> None:
@@ -439,10 +491,26 @@ def _bone(d: dict, where: str) -> Bone:
     return Bone(d["name"], _file(d, "mesh", where), _source_obj(d, where), mass, motion, driver)
 
 
+def _blend(d: dict, where: str) -> Blend | None:
+    raw = d.get("blend")
+    if raw is None:
+        return None
+    raw = _dict(raw, f"{where}.blend")
+    factor = _number_param(raw, "factor", f"{where}.blend")
+    if not 0 <= factor.value <= 1:
+        raise _Bad(f"{where}.blend.factor must be between 0 and 1 (0 stays with the skull, 1 follows "
+                   f"{raw.get('of')!r}), got {factor.value}")
+    return Blend(_str(_get(raw, "of", f"{where}.blend"), f"{where}.blend.of"), factor)
+
+
 def _driver(d: dict, where: str) -> Driver:
+    blend = _blend(d, where)
     raw = d.get("hinge")
     if raw is None:
-        return Driver(d["name"], None)
+        return Driver(d["name"], None, blend)
+    if blend is not None:
+        raise _Bad(f"{where}: a driver is either derived ('blend') or has its own hinge, not both; "
+                   "remove one of them")
     raw = _dict(raw, f"{where}.hinge")
     axis = _vec3(_get(raw, "axis", f"{where}.hinge"), f"{where}.hinge.axis")
     if not any(axis):
@@ -471,6 +539,13 @@ def _attachment(d: dict, where: str) -> Attachment:
         raise _Bad(f"{where}.weights must be a list of [vertex index, weight] pairs")
     return Attachment(d["name"], _str(_get(d, "from", where), f"{where}.from"),
                       _str(_get(d, "to", where), f"{where}.to"), kind, stiffness, weights)
+
+
+def _anchor(d: dict, where: str) -> Anchor:
+    note = d.get("note", "")
+    if not isinstance(note, str):
+        raise _Bad(f"{where}.note must be text, got {note!r}")
+    return Anchor(d["name"], _str(_get(d, "driver", where), f"{where}.driver"), note)
 
 
 def _landmarks(data: dict) -> Landmarks | None:
@@ -546,10 +621,11 @@ def parse(data, report: Report | None = None) -> Report:
     bones = _named_list(data, "bones", report, _bone)
     drivers = _named_list(data, "drivers", report, _driver)
     attachments = _named_list(data, "attachments", report, _attachment)
+    anchors = _named_list(data, "anchors", report, _anchor) if "anchors" in data else []
     if report.errors:
         return report
     report.scene = Scene(origin, parts["units"], tissues, bones, drivers, attachments, parts["landmarks"],
-                         parts["solver"])
+                         parts["solver"], anchors)
     return report
 
 
@@ -632,12 +708,28 @@ def _check_tet_mesh(base: Path, tissue: SoftTissue, units: Units, report: Report
         )
 
 
+NAME_OK = re.compile(r"[A-Za-z0-9_.-]+")
+
+
+def _check_names(scene: Scene, report: Report) -> None:
+    """Names go into the FEBio input (node sets, rigid bodies, load curves), so they stay plain ASCII."""
+    kinds = (("soft tissue", scene.soft_tissues), ("bone", scene.bones), ("anchor", scene.anchors),
+             ("driver", scene.drivers), ("attachment", scene.attachments))
+    for kind, items in kinds:
+        for i in items:
+            if not NAME_OK.fullmatch(i.name):
+                report.errors.append(
+                    f"{kind} name {i.name!r} has characters outside ASCII letters, digits, _ - and .; names go into "
+                    "the FEBio input file, where other characters (for example & < > or a space) break it. Rename it")
+
+
 def _check_references(scene: Scene, base: Path, report: Report) -> None:
-    names = [o.name for o in scene.soft_tissues] + [o.name for o in scene.bones]
+    _check_names(scene, report)
+    names = [o.name for o in scene.soft_tissues] + [o.name for o in scene.bones] + [o.name for o in scene.anchors]
     seen = set()
     for n in names:
         if n in seen:
-            report.errors.append(f"two objects are called {n!r}; every soft tissue and bone needs its own name")
+            report.errors.append(f"two objects are called {n!r}; every soft tissue, bone and anchor needs its own name")
         seen.add(n)
     for kind, items in (("driver", scene.drivers), ("attachment", scene.attachments)):
         listed = [i.name for i in items]
@@ -654,15 +746,45 @@ def _check_references(scene: Scene, base: Path, report: Report) -> None:
         _check_file(base, b.mesh, f"bone {b.name!r}", report)
 
     drivers = {d.name for d in scene.drivers}
+    listed_drivers = f"drivers: {', '.join(sorted(drivers)) or 'none'}"
+    by_name = {d.name: d for d in scene.drivers}
     followed = set()
     for b in scene.bones:
         if b.motion == "prescribed":
             if b.driver not in drivers:
                 report.errors.append(
                     f"bone {b.name!r} follows driver {b.driver!r}, which the scene does not list; add it to "
-                    f"'drivers' or fix the name (drivers: {', '.join(sorted(drivers)) or 'none'})"
+                    f"'drivers' or fix the name ({listed_drivers})"
                 )
             followed.add(b.driver)
+    for a in scene.anchors:
+        if a.driver not in drivers:
+            report.errors.append(
+                f"anchor {a.name!r} follows driver {a.driver!r}, which the scene does not list; add it to "
+                f"'drivers' or fix the name ({listed_drivers})"
+            )
+        followed.add(a.driver)
+    for d in scene.drivers:
+        if d.blend is None:
+            continue
+        parent = by_name.get(d.blend.of)
+        if parent is None:
+            report.errors.append(
+                f"driver {d.name!r} is derived from driver {d.blend.of!r}, which the scene does not list; "
+                f"add it to 'drivers' or fix the name ({listed_drivers})"
+            )
+        elif parent.blend is not None:
+            report.errors.append(
+                f"driver {d.name!r} is derived from {parent.name!r}, which is itself derived; derive it from "
+                f"{parent.blend.of!r} directly (derived drivers do not chain)"
+            )
+        elif parent.hinge is None:
+            report.errors.append(
+                f"driver {d.name!r} is derived from {parent.name!r}, which has no hinge; a derived driver "
+                "turns about its source's hinge, so give the source a hinge (docs/04 section 5.1)"
+            )
+        if d.name in followed:
+            followed.add(d.blend.of)  # the source is in use through the driver derived from it
     for d in sorted(drivers - followed):
         report.warnings.append(f"driver {d!r} moves no bone; it is unused")
 
@@ -676,7 +798,8 @@ def _check_references(scene: Scene, base: Path, report: Report) -> None:
                 "the soft tissue whose vertices are attached"
             )
         if a.target not in seen:
-            report.errors.append(f"{what} goes to {a.target!r}, which is not an object in this scene")
+            report.errors.append(f"{what} goes to {a.target!r}, which is not a bone, an anchor or a soft "
+                                 "tissue in this scene")
         if a.target == a.source:
             report.errors.append(f"{what} attaches {a.source!r} to itself")
         attached.update({a.source, a.target})
@@ -723,14 +846,50 @@ def _check_trajectory(scene: Scene, path: Path, report: Report) -> None:
             f"trajectory: {traj.fps} frames per second, the scene's solver runs at {scene.solver.fps.value}; "
             "they must match"
         )
-    for b in scene.bones:
-        if b.motion == "prescribed" and b.driver not in traj.drivers:
+    derived = {d.name: d for d in scene.drivers if d.blend is not None}
+    have = ', '.join(sorted(traj.drivers)) or 'none'
+
+    def need(who: str, driver: str) -> None:
+        d = derived.get(driver)
+        if d is not None:  # computed from its source, which is the one that needs a motion
+            if d.blend.of not in traj.drivers:
+                report.errors.append(
+                    f"trajectory: {who} follows driver {driver!r}, derived from {d.blend.of!r}, but the "
+                    f"trajectory has no motion for {d.blend.of!r} (it has: {have})"
+                )
+        elif driver not in traj.drivers:
             report.errors.append(
-                f"trajectory: bone {b.name!r} follows driver {b.driver!r}, but the trajectory has no motion for "
-                f"it (it has: {', '.join(sorted(traj.drivers)) or 'none'})"
+                f"trajectory: {who} follows driver {driver!r}, but the trajectory has no motion for "
+                f"it (it has: {have})"
             )
-    used = {b.driver for b in scene.bones if b.motion == "prescribed"}
-    for d in sorted(set(traj.drivers) - used):
+
+    for b in scene.bones:
+        if b.motion == "prescribed":
+            need(f"bone {b.name!r}", b.driver)
+    for a in scene.anchors:
+        need(f"anchor {a.name!r}", a.driver)
+    used = {b.driver for b in scene.bones if b.motion == "prescribed"} | {a.driver for a in scene.anchors}
+    used |= {derived[d].blend.of for d in used if d in derived}
+    for d in sorted(set(traj.drivers) & set(derived)):
+        report.warnings.append(
+            f"trajectory: driver {d!r} is derived from {derived[d].blend.of!r} in the scene, so its own motion "
+            "in the trajectory is ignored"
+        )
+    by_name = {d.name: d for d in scene.drivers}
+    for name in sorted(derived):
+        parent = by_name.get(derived[name].blend.of)
+        if parent is None or parent.hinge is None or parent.name not in traj.drivers:
+            continue
+        deviation, frame = trajectory_module.hinge_deviation(traj.drivers[parent.name], parent.hinge.pivot_mm,
+                                                             parent.hinge.axis)
+        if deviation > trajectory_module.HINGE_TOLERANCE:
+            report.warnings.append(
+                f"trajectory: driver {parent.name!r} is not a pure rotation about the scene's hinge "
+                f"(translation or off-axis rotation of {deviation:.2e} at frame {frame}, limit "
+                f"{trajectory_module.HINGE_TOLERANCE:g}); the derived driver {name!r} (a blend of it) keeps only the "
+                f"angle about the hinge and drops the rest, so the lip-corner anchor does not follow that part"
+            )
+    for d in sorted(set(traj.drivers) - used - set(derived)):
         report.warnings.append(f"trajectory: driver {d!r} moves no bone in this scene; its motion is ignored")
 
 
@@ -749,3 +908,31 @@ def check(scene_path, trajectory_path=None) -> Report:
     if trajectory_path is not None:
         _check_trajectory(report.scene, Path(trajectory_path), report)
     return report
+
+
+def driver_motion(scene: Scene, traj: trajectory_module.Trajectory) -> dict[str, list[list[float]]]:
+    """Every driver's 4x4 transform per frame: the trajectory's own, plus each derived driver
+    computed from its source's motion and hinge (docs/04 section 5.1). Raises ValueError if the
+    scene and trajectory do not fit; run `check` first for a readable list of what is wrong."""
+    out = {}
+    by_name = {d.name: d for d in scene.drivers}
+    # A derived driver is computed only when something uses it: a prescribed bone, or an anchor that an
+    # attachment refers to. An unused one with no source motion is skipped (the trajectory check accepts it).
+    referenced = {x for a in scene.attachments for x in (a.source, a.target)}
+    used = {b.driver for b in scene.bones if b.motion == "prescribed"} | {
+        a.driver for a in scene.anchors if a.name in referenced}
+    for d in scene.drivers:
+        if d.blend is None:
+            if d.name in traj.drivers:
+                out[d.name] = traj.drivers[d.name]
+            continue
+        if d.name not in used:
+            continue
+        parent = by_name.get(d.blend.of)
+        if parent is None or parent.hinge is None or parent.blend is not None:
+            raise ValueError(f"driver {d.name!r}: its source {d.blend.of!r} is missing, derived or has no hinge")
+        if d.blend.of not in traj.drivers:
+            raise ValueError(f"driver {d.name!r}: the trajectory has no motion for its source {d.blend.of!r}")
+        out[d.name] = trajectory_module.blend_transforms(
+            traj.drivers[d.blend.of], parent.hinge.pivot_mm, parent.hinge.axis, d.blend.factor.value)
+    return out

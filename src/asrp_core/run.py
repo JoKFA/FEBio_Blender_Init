@@ -182,7 +182,8 @@ def execute(
         "inputs": provenance.hash_files(run_dir, input_names),
         # The FEBio arguments (-noconfig, fixed names) are part of the recipe: they decide what FEBio reads.
         "parameters": {**prepared.parameters, "length_scale": prepared.length_scale, "total_frames": total, "timeout_s": timeout,
-                       "febio_args": febio.command(FEB_NAME, LOG_NAME, PLOT_NAME, Path("febio4"))[1:]},
+                       "febio_args": febio.command(FEB_NAME, LOG_NAME, PLOT_NAME, Path("febio4"))[1:],
+                       "febio_env": febio.ENV},
         "software": provenance.software(None),
         "outputs": {},
         "failure": None,
