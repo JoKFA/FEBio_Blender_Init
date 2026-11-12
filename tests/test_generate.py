@@ -3,6 +3,7 @@ textbook answers (T-06a; docs/05 sections 2-3, docs/07 sections 2-3, ADR-36). Re
 
 import json
 import math
+import warnings
 from pathlib import Path
 
 import cube_scene as cs
@@ -558,8 +559,21 @@ def test_check_d_fails_on_an_inverted_tet_and_reports_the_volume_ratios():
     zero_rest = rest.copy()
     zero_rest[3] = zero_rest[0]  # a rest tet of zero volume: its ratio is inf or NaN
     degenerate = plausibility.tet_mesh_valid(zero_rest, tets, frames)
-    assert degenerate.numbers["max_volume_ratio"] is None  # inf
+    assert degenerate.passed is False and degenerate.numbers["inverted_tets"] == len(frames)  # tet 0 on every frame, not inf
     json.dumps(degenerate.numbers, allow_nan=False)
+
+
+def test_check_d_fails_on_a_flat_rest_tet_and_raises_no_numpy_warning():
+    rest = np.array([[0.0, 0, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1], [1, 1, 1]])
+    tets = np.array([[0, 1, 2, 3], [1, 2, 3, 4]])
+    flat_rest = rest.copy()
+    flat_rest[3] = flat_rest[0]  # tet 0 has zero rest volume: its ratio is inf (moved) or NaN (still flat)
+    moved = rest * 2.0
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")  # a RuntimeWarning from numpy would raise here
+        check = plausibility.tet_mesh_valid(flat_rest, tets, np.stack([flat_rest, moved]))
+    assert check.passed is False and check.numbers["inverted_tets"] >= 2  # tet 0 on both frames
+    json.dumps(check.numbers, allow_nan=False)
 
 
 def test_a_display_header_that_is_not_json_or_lacks_a_key_is_refused_in_a_sentence(tmp_path):

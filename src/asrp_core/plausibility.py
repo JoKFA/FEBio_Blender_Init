@@ -200,14 +200,17 @@ def gravity_sag(rest_display: np.ndarray, display_frames: np.ndarray, free: np.n
 
 def tet_mesh_valid(rest_nodes: np.ndarray, tets: np.ndarray, node_frames: np.ndarray) -> Check:
     """(d). rest_nodes (n, 3), tets (t, 4), node_frames (F, n, 3), geometric mm. Per frame, each tet's signed volume
-    over its rest signed volume; the check fails if any ratio is not above 0 on any frame (a missing, NaN position
-    fails too)."""
+    over its rest signed volume; the check fails if any ratio is not above 0 on any frame. A ratio that is not a
+    finite number fails too (a missing or NaN position, or a tet whose rest volume is zero or not finite, which
+    makes the ratio inf or NaN) and is counted in `inverted_tets`. Computed under `np.errstate`, so a flat rest tet
+    gives a failed check, not a numpy RuntimeWarning."""
     rest = tetmesh.signed_volumes(rest_nodes, tets)
     lowest, lowest_frame, highest = np.inf, 0, -np.inf
     inverted, frames_with = 0, 0
     for f in range(len(node_frames)):
-        ratio = tetmesh.signed_volumes(node_frames[f], tets) / rest
-        ratio = np.where(np.isnan(ratio), -np.inf, ratio)  # a missing position counts as inverted
+        with np.errstate(all="ignore"):
+            ratio = tetmesh.signed_volumes(node_frames[f], tets) / rest
+        ratio = np.where(np.isfinite(ratio), ratio, -np.inf)  # NaN, inf (flat rest tet) or missing: counts as inverted
         bad = int((ratio <= 0).sum())
         inverted += bad
         frames_with += bad > 0
