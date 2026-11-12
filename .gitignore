@@ -34,3 +34,6 @@ data/*
 
 # Blender
 *.blend1
+
+# Worktrees of work in progress (each is a checkout of its own branch)
+.claude/worktrees/

@@ -5,16 +5,19 @@ Writes into an output folder:
     scene.json           asrp-scene/1 (asrp_core.scene); passes `asrp check`
     meshes/<name>.obj    the five meshes in mm, Z up (asrp_core.asset.coords), faces as exported
     meshes/lips_tet.json a byte copy of the committed lip tet mesh (data/tetmesh/lips.json, ADR-20)
-    landmarks/skin_skinCluster7.json   a byte copy of the exported landmark skin weights
+    landmarks/skin_mm.json   the landmark skin converted to mm, Z up, column vectors (asrp-skin/1,
+                         asrp_core.asset.skin); the raw export is not copied, its sha256 is inside
     import_report.json   units, axes, meshes, every parameter and its source, what is missing, and
                          the result of the scene check
 
-Roles follow docs/03 sections 3 and 4: the lips are the soft tissue; skull and upper teeth are
+Roles follow docs/03 sections 3 and 4: the lips are the soft tissue; skull and upper teeth follow
+the driver head (T-28), which is at rest whenever a trajectory leaves it out, so they are then
 fixed; jaw and lower teeth both follow the driver jaw01, the joint that moves them in Maya. The
 Ziva attribute list has not arrived (docs/12 item 2), so material, solver settings and bone masses
 are placeholders marked "ours". The four lip attachments come from T-03's lip_attachments.json
 (docs/05 section 3): upper lip hard on the skull, lower lip a spring to the jaw, the two lip
-corners springs to an anchor that turns half as far as the jaw (T-06a). Their stiffness and the
+corners springs to an anchor that moves half as far as the jaw relative to the head (T-06a, T-28).
+Their stiffness and the
 blend factor are provisional values marked "ours". `asrp check` passes with no warning.
 """
 
@@ -28,6 +31,7 @@ import numpy as np
 
 from asrp_core import __version__, scene, tetmesh
 from asrp_core.asset import coords
+from asrp_core.asset import skin as skin_module
 
 DEFAULT_MM_PER_SCENE_UNIT = 0.962  # paper appendix V, same as the lab controller (ADR-31); still a setting
 LIPS = "middleres_OrbicularisOris"
@@ -37,17 +41,21 @@ SIMPLIFICATIONS = [
     "the 6 muscles around the mouth attached to the lips (zAttachment to zTissue around the orbicularis): not built in "
     "phase 1, ADR-32",
     "the 9 skin attachments to the lips (zCloth): not built in phase 1, ADR-32 (skin is phase 2, T-18)",
-    "the chain mouth-corner node -> zTissue2/3 -> skull and jaw: replaced by the lip-corner anchor that turns alpha x the "
-    "jaw angle (A-35, docs/05 section 3)",
+    "the chain mouth-corner node -> zTissue2/3 -> skull and jaw: replaced by the lip-corner anchor that moves alpha x the "
+    "jaw's motion relative to the head (A-35, docs/05 section 3)",
 ]
+# T-28: the skull and the upper teeth follow a head driver. A trajectory that leaves it out keeps the head at rest
+# (absent_means_rest), and the generator then writes the skull as a fixed body, exactly as before T-28.
+HEAD_DRIVER = "head"
 # name in scene.json -> (Maya mesh name, motion, driver); docs/03 sections 3 and 4.
 BONES = {
     "jaw": ("middleres_Jaw", "prescribed", JAW_DRIVER),
-    "skull": ("middleres_skull", "fixed", None),
-    "teeth_upper": ("middleres_TeethUp", "fixed", None),
+    "skull": ("middleres_skull", "prescribed", HEAD_DRIVER),
+    "teeth_upper": ("middleres_TeethUp", "prescribed", HEAD_DRIVER),
     "teeth_lower": ("middleres_TeethDown", "prescribed", JAW_DRIVER),
 }
-SKIN = "skin_skinCluster7.json"
+SKIN = "skin_skinCluster7.json"  # the lab export's name
+SKIN_MM = "skin_mm.json"  # the converted file in the scene folder
 ATTACHMENTS = "lip_attachments.json"
 PHYSICS_LENGTH_SCALE = 0.67  # skull width 216.6 mm -> about 145 mm, a real person (ADR-31); ours
 # T-06a: the lip corner anchor turns this fraction of the jaw's angle (docs/05 section 3); ours.
@@ -215,8 +223,10 @@ def import_asset(export: Path, out: Path, tet_mesh: Path,
         )),
         scene.Driver(CORNER_DRIVER, None, scene.Blend(JAW_DRIVER, ours(
             CORNER_BLEND,
-            "alpha: the lip corner anchor turns this fraction of the jaw's angle about jaw01's hinge "
-            "(docs/05 section 3, A-35); 0 follows the skull, 1 the jaw. Provisional")))
+            "alpha: the lip corner anchor moves this fraction of the jaw's motion relative to the head (for the jaw "
+            "turning about jaw01's hinge, alpha x its angle; docs/05 section 3, A-35); 0 follows the skull, 1 the "
+            "jaw. Provisional"), HEAD_DRIVER)),
+        scene.Driver(HEAD_DRIVER, None, None, True),
     ]
     anchors = [scene.Anchor(CORNER_ANCHOR, CORNER_DRIVER,
                             "stands for the mouth corner node of the Ziva model (zTissue4/5): no mesh, "
@@ -267,11 +277,19 @@ def import_asset(export: Path, out: Path, tet_mesh: Path,
     if missing:
         raise AssetError(f"joints.json lacks {len(missing)} landmarks named in {SKIN} (e.g. {missing[0]}); re-export")
     rest = coords.to_mm_zup([joints[n]["world_position"] for n in names], mm_per_scene_unit)
-    shutil.copyfile(skin_file, out / "landmarks" / SKIN)
+    try:
+        converted = skin_module.convert(skin, joints, mm_per_scene_unit)
+    except skin_module.SkinConvertError as e:
+        raise AssetError(str(e)) from e
+    converted["source"] = {"file": SKIN, "sha256": _sha256(skin_file)}
+    skin_target = out / "landmarks" / SKIN_MM
+    skin_target.write_text(json.dumps(converted, separators=(",", ":"), ensure_ascii=False) + "\n",
+                           encoding="utf-8", newline="\n")
     landmarks = scene.Landmarks(
-        names, rest.tolist(), scene.FileRef(f"landmarks/{SKIN}", _sha256(out / "landmarks" / SKIN)),
-        "weights index the lips' vertices; the file is a byte copy of the export, so its matrices are "
-        "still in scene units, Maya order (T-09 reads them)",
+        names, rest.tolist(), scene.FileRef(f"landmarks/{SKIN_MM}", _sha256(skin_target)),
+        "weights index the lips' vertices; the file is the export converted to mm, Z up, column vectors "
+        "(asrp-skin/1: names, rest_world, bind_pre, geom, weights; the raw export's sha256 is in 'source'); "
+        "read it with asrp_core.skinning.load",
     )
 
     # Folder and file names plus hashes, not the paths as typed: the same export imported on
@@ -328,7 +346,9 @@ def import_asset(export: Path, out: Path, tet_mesh: Path,
         "meshes": meshes_report,
         "landmarks": len(names),
         "drivers": {JAW_DRIVER: {"pivot_mm": pivot.tolist(), "axis": axis.tolist(),
-                                 "moves": [b.name for b in bones if b.driver == JAW_DRIVER]}},
+                                 "moves": [b.name for b in bones if b.driver == JAW_DRIVER]},
+                    HEAD_DRIVER: {"absent_means_rest": True,
+                                  "moves": [b.name for b in bones if b.driver == HEAD_DRIVER]}},
         "parameters": [{"where": w, **p} for w, p in scene.parameters(model.to_json())],
         "missing": [*check.warnings, *STILL_MISSING],
         "check": {"errors": check.errors, "warnings": check.warnings},

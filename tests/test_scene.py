@@ -1,3 +1,4 @@
+import hashlib
 import importlib.util
 import json
 import shutil
@@ -541,3 +542,45 @@ def test_an_unused_derived_driver_without_source_motion_is_skipped_but_a_used_on
     assert not scene.check(path2, folder2 / "trajectory.json").ok
     with pytest.raises(ValueError, match="no motion for its source 'other_hinge'"):
         scene.driver_motion(scene.load(path2), trajectory.read(folder2 / "trajectory.json"))
+
+
+# --- landmarks in the trajectory (T-09) ------------------------------------------------------------------------
+
+
+def trajectory_with_landmarks(folder, names):
+    traj = json.loads((folder / "trajectory.json").read_text())
+    traj["landmarks"] = {"names": names, "translations_mm": [[[0.0, 0.0, 0.1]] * len(names)] * traj["frames"]}
+    (folder / "trajectory.json").write_text(json.dumps(traj))
+
+
+def give_scene_landmarks(folder, names):
+    (folder / "skin.json").write_text("{}")
+    digest = hashlib.sha256((folder / "skin.json").read_bytes()).hexdigest()
+
+    def add(data):
+        data["landmarks"] = {"names": names, "rest_positions_mm": [[0.0, 0.0, 0.0]] * len(names),
+                             "weights": {"path": "skin.json", "sha256": digest}}
+    return edit_scene(folder, add)
+
+
+def test_a_trajectory_that_moves_landmarks_the_scene_lists_passes(tmp_path):
+    folder = copy_s1(tmp_path)
+    trajectory_with_landmarks(folder, ["oor_01"])
+    path = give_scene_landmarks(folder, ["oor_01", "oor_02"])
+    report, text = errors_of(path, folder / "trajectory.json")
+    assert report.ok, text  # oor_02 is not named by the trajectory: it just does not move
+
+
+def test_a_trajectory_that_moves_landmarks_the_scene_does_not_list_is_an_error(tmp_path):
+    folder = copy_s1(tmp_path)
+    trajectory_with_landmarks(folder, ["oor_01", "oor_99"])
+    path = give_scene_landmarks(folder, ["oor_01", "oor_02"])
+    report, text = errors_of(path, folder / "trajectory.json")
+    assert not report.ok and "'oor_99'" in text and "not in the scene" in text
+
+
+def test_a_trajectory_that_moves_landmarks_in_a_scene_without_any_is_an_error(tmp_path):
+    folder = copy_s1(tmp_path)
+    trajectory_with_landmarks(folder, ["oor_01"])
+    report, text = errors_of(folder / "scene.json", folder / "trajectory.json")
+    assert not report.ok and "the scene lists none" in text

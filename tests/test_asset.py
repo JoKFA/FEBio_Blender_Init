@@ -108,11 +108,13 @@ def test_the_scene_has_the_roles_of_docs_03(imported):
     assert [t.name for t in s.soft_tissues] == ["lips"]
     assert {b.name: (b.motion, b.driver) for b in s.bones} == {
         "jaw": ("prescribed", "jaw01"), "teeth_lower": ("prescribed", "jaw01"),
-        "skull": ("fixed", None), "teeth_upper": ("fixed", None),
+        "skull": ("prescribed", "head"), "teeth_upper": ("prescribed", "head"),
     }
-    jaw01, blend = s.drivers
+    jaw01, blend, head = s.drivers
+    assert head.name == "head" and head.hinge is None and head.blend is None and head.absent_means_rest  # T-28
     assert blend.name == "lip_corner_blend" and blend.hinge is None
     assert blend.blend.of == "jaw01" and blend.blend.factor.value == 0.5 and blend.blend.factor.source == "ours"
+    assert blend.blend.relative_to == "head"
     assert [(a.name, a.driver) for a in s.anchors] == [("lip_corner_anchor", "lip_corner_blend")]
     assert jaw01.name == "jaw01" and np.allclose(jaw01.hinge.pivot_mm, [0.0, -121.7126, -54.6536], atol=1e-3)
     assert np.allclose(jaw01.hinge.axis, [1, 0, 0], atol=1e-9)  # left-right
@@ -126,6 +128,23 @@ def test_the_scene_has_the_roles_of_docs_03(imported):
     lips_obj = EXPORT / "mesh_middleres_OrbicularisOris.obj"
     assert s.soft_tissues[0].source_obj.file == lips_obj.name
     assert s.soft_tissues[0].source_obj.sha256 == hashlib.sha256(lips_obj.read_bytes()).hexdigest()
+
+
+@needs_export
+def test_the_landmark_skin_is_written_converted_and_the_raw_export_is_not_copied(imported):
+    from asrp_core import skinning
+    out, _ = imported
+    s = scene.load(out / "scene.json")
+    assert s.landmarks.weights.path == "landmarks/skin_mm.json"
+    assert not (out / "landmarks" / lab.SKIN).exists()
+    raw = json.loads((out / "landmarks" / "skin_mm.json").read_text())
+    assert raw["format"] == "asrp-skin/1" and raw["axes"] == coords.AXES and raw["units"] == "mm"
+    assert raw["source"] == {"file": lab.SKIN, "sha256": hashlib.sha256((EXPORT / lab.SKIN).read_bytes()).hexdigest()}
+    skin = skinning.load(out / "landmarks" / "skin_mm.json")
+    assert skin.names == s.landmarks.names and skin.weights.shape == (10240, 300)
+    # The scene's rest positions and the skin's rest matrices are the same points in the same coordinates.
+    assert np.allclose(skin.rest_world[:, :3, 3], s.landmarks.rest_positions_mm, atol=1e-9)
+    assert b"\r" not in (out / "landmarks" / "skin_mm.json").read_bytes()
 
 
 @needs_export

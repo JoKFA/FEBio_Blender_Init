@@ -9,6 +9,10 @@ meshes (the jaw moved by its driver's transform from trajectory.json on each fra
 views: rest (frame 0), settled (the settled frame) and jaw fully open (the frame where the jaw's angle is largest) to
 <out>/prototype_rest.png, prototype_settled.png, prototype_open.png (default out: data/preview).
 
+With --version final (a run that has a landmark layer) it loads and checks the final version (physics +
+landmarks, <run_dir>/final/display.npy) instead of the physics one. With --last <name> it renders only the last
+frame, from the side and from the front, to <out>/<name>_side.png and <out>/<name>_front.png (docs/15 section 8).
+
 With --frames-dir <dir> [--frames-size <px>] it also renders every frame of the same side view to
 <dir>/frame_000.png ... (default 560 px square), for assembling an animation (docs/15).
 """
@@ -30,6 +34,8 @@ from mathutils import Matrix  # noqa: E402
 args = sys.argv[sys.argv.index("--") + 1:]
 run_dir = Path(args[0]).resolve()
 check_only = "--check-only" in args
+version = args[args.index("--version") + 1] if "--version" in args else "physics"
+last_name = args[args.index("--last") + 1] if "--last" in args else None
 out = Path(args[args.index("--out") + 1]).resolve() if "--out" in args else REPO / "data" / "preview"
 
 report = json.loads((run_dir / "run_report.json").read_text(encoding="utf-8"))
@@ -42,13 +48,14 @@ settled = settled_shape["frame"]
 for obj in list(bpy.data.objects):
     bpy.data.objects.remove(obj)
 asrp_blender.register()
-assert bpy.ops.asrp.load_playback(directory=str(run_dir)) == {"FINISHED"}
+assert bpy.ops.asrp.load_playback(directory=str(run_dir), version=version) == {"FINISHED"}
 lips = bpy.context.view_layer.objects.active
 scene = bpy.context.scene
 
-display_header = json.loads((run_dir / "physics" / "display.json").read_text())  # header; the numbers are in .npy
-display = np.load(run_dir / "physics" / display_header["array"], allow_pickle=False)
-assert list(display.shape) == display_header["shape"], "physics/display.json and its array do not belong together"
+display_dir = run_dir / ("final" if version == "final" else "physics")
+display_header = json.loads((display_dir / "display.json").read_text())  # header; the numbers are in .npy
+display = np.load(display_dir / display_header["array"], allow_pickle=False)
+assert list(display.shape) == display_header["shape"], f"{display_dir.name}/display.json and its array do not belong together"
 motion = json.loads((run_dir / "trajectory.json").read_text())
 scene_json = json.loads((run_dir / "scene.json").read_text())
 jaw = next(b for b in scene_json["bones"] if b["name"] == "jaw")
@@ -72,7 +79,7 @@ for f in frames:
         worst = max(worst, math.dist(v.co, p))
         moved = max(moved, math.dist(v.co, display[0][v.index]))
     ev.to_mesh_clear()
-assert worst < 1e-4, f"Blender's lips are {worst} mm off physics/display.json"
+assert worst < 1e-4, f"Blender's lips are {worst} mm off {display_dir.name}/display.json"
 assert moved > 1.0, f"the lips barely move in Blender ({moved} mm): is the cache applied?"
 print(f"{len(display[0])} vertices at frames {frames}: max error vs display.json {worst:.2e} mm, max motion {moved:.2f} mm")
 print("PROTOTYPE PLAYBACK CHECK PASSED")
@@ -128,6 +135,22 @@ scene.world.color = (1.0, 1.0, 1.0)
 scene.render.resolution_x = scene.render.resolution_y = 720
 scene.render.image_settings.file_format = "PNG"
 out.mkdir(parents=True, exist_ok=True)
+
+if last_name:
+    front = bpy.data.objects.new("front", cam_data.copy())
+    front.data.ortho_scale = 0.14
+    front.location = (centre[0], centre[1] + 0.4, centre[2] - 0.005)
+    front.rotation_euler = (math.pi / 2, 0, math.pi)  # look along -Y at the face, Z up
+    scene.collection.objects.link(front)
+    scene.frame_set(len(display) - 1)
+    m = jaw_motion[len(display) - 1]
+    jaw_obj.matrix_world = Matrix.Scale(0.001, 4) @ Matrix([m[0:4], m[4:8], m[8:12], m[12:16]])
+    for view, camera in (("side", cam), ("front", front)):
+        scene.camera = camera
+        scene.render.filepath = str(out / f"{last_name}_{view}.png")
+        bpy.ops.render.render(write_still=True)
+        print(f"rendered the last frame ({len(display) - 1}), {view} view: {scene.render.filepath}")
+    sys.exit(0)
 
 for label, f in (("rest", 0), ("settled", settled), ("open", open_frame)):
     scene.frame_set(f)

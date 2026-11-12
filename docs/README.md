@@ -4,7 +4,7 @@
 
 ## 接下来做什么
 
-原型机（真实嘴唇被下颌带动，由 FEBio 算出）已经跑通。**下一个里程碑是原型机二**：在它上面加 landmark 层，做中性到 AA 和甩头两个动作，再来回 10 次（定义见 [09](09-roadmap-and-tasks.md) 第 1 节）。**第一个任务是 T-09**（landmark 层，第 2 节）。需要项目负责人拍板的事都列在 [11](11-risks-and-questions.md) 第 1 节（P-06 到 P-10）；只能到 Ziva 机器上才能知道的事，在 [12](12-lab-export-checklist.md) 第二部分。
+原型机（真实嘴唇被下颌带动，由 FEBio 算出）已经跑通。**下一个里程碑是原型机二**：在它上面加 landmark 层，做中性到 AA 和甩头两个动作，再来回 10 次（定义见 [09](09-roadmap-and-tasks.md) 第 1 节）。原型机二的任务和现在的顺序、每个任务做到哪了，都在 [09](09-roadmap-and-tasks.md) 第 2 节和任务卡里。需要项目负责人拍板的事都列在 [11](11-risks-and-questions.md) 第 1 节（P-06、P-07、P-09、P-10）；只能到 Ziva 机器上才能知道的事，在 [12](12-lab-export-checklist.md) 第二部分。
 
 ## 先读哪几份
 
@@ -70,15 +70,20 @@ asrp/
 │  │  ├─ generate.py          生成器：scene + trajectory → FEBio 输入 .feb（真实大小、× k，粘连）
 │  │  ├─ embed.py             把显示网格嵌进四面体网格，算出每帧显示顶点位置
 │  │  ├─ simulate.py          asrp run 的整条流程：生成 → FEBio → ÷ k → 嵌入 → 检查 → 回放包
+│  │  ├─ skinning.py          landmark 层：deform = base + weights @ translations，读 skin_mm.json
+│  │  ├─ final_shape.py       训练接口：final_shape(下颌转动, landmark 位置)，不经过 Maya（T-31 第一版）
 │  │  ├─ plausibility.py      合理性检查 (a)(b)(b2)(c)(d)
 │  │  ├─ run.py               运行外壳：运行文件夹、进度、取消、出错处理
 │  │  ├─ provenance.py        溯源记录 provenance.json
 │  │  └─ asset/               资产导入（asrp import-asset）
 │  │     ├─ lab.py            读实验室导出，写 scene.json 和检查报告
-│  │     └─ coords.py         唯一的一份坐标换算
-│  │                          待开发：skinning.py、compare.py……
+│  │     ├─ coords.py         唯一的一份坐标换算
+│  │     └─ skin.py           把 landmark 蒙皮换算成毫米、Z 轴朝上，写 landmarks/skin_mm.json
+│  │                          待开发：compare.py……
 │
 ├─ blender_addon/asrp_blender/  Blender 插件，只管界面，不用第三方库
+│  ├─ __init__.py             面板（英文）：Load result、Check backend、Run、Results、Checks
+│  └─ session.py              一次 asrp run 的子进程：读输出、进度、取消（不含 bpy）
 ├─ tests/                     自动测试（pytest）
 │  ├─ fixtures/s1/            S1 写成的示例 scene.json、trajectory.json，由同目录的 build.py 生成
 │  ├─ cube_scene.py           生成器测试用的方块场景（有教科书答案）
@@ -105,7 +110,8 @@ asrp/
 │  ├─ audit_attachment.py     审计（E-09）：嘴角锚的比例、弹簧刚度各改一档，比形状
 │  ├─ audit_skin_identity.py  审计（E-09）：landmark 蒙皮数据能不能直接用（四项核对）
 │  ├─ audit_head_shake.py     审计（E-09）：甩头时嘴唇相对头晃多少
-│  └─ audit_aa_fit.py         审计（E-09）：只靠蒙皮够不够到 AA 目标、目标里嘴唇跟不跟下颌
+│  ├─ audit_aa_fit.py         审计（E-09）：只靠蒙皮够不够到 AA 目标、目标里嘴唇跟不跟下颌
+│  └─ blender_background_run.py  试验：Blender 面板能不能在后台跑 asrp run、显示进度、取消
 │
 ├─ tools/                     迁移、检查、渲染工具，不是产品代码
 │  ├─ verify.py               "完成"的定义：ruff + 测试 + doctor + 插件 + 回放检查
@@ -113,9 +119,12 @@ asrp/
 │  ├─ lip_attachments.py      导出嘴唇的四组粘连顶点集 data/lab_export/lip_attachments.json（T-03）
 │  ├─ lip_attachments_preview.py  把四组粘连画在真实网格上，给人看
 │  ├─ placeholder_jaw_motion.py   写代用的下颌运动 trajectory.json（张开 12°，没有实验室运动时用）
+│  ├─ landmark_layer_check.py 我们的 landmark 层对实验室自己的公式和数据（需要实验室自己的文件），写 data/preview/landmark_layer_check.json
 │  ├─ prototype_numbers.py    从存档的参考运行写出 15 里的数字表（--write 重写，--check 核对，验证门会跑）
 │  ├─ render_prototype.py     在 Blender 里加载原型机的回放包、逐帧核对、渲染侧视图和逐帧动画
 │  ├─ check_blender_addon.py  check_playback.py  render_playback.py
+│  ├─ check_panel.py          面板的运行、结果、检查，对真实 asrp run 进程（命令行下的 Blender，验证门会跑）
+│  ├─ panel_windowed_check.py 面板的定时器路径，带窗口的 Blender，手动跑，不在验证门里
 │  ├─ mb_inventory.py  asset_report.py     不开 Maya 读 .mb，打印 03 里的数字（含粘连权重的读法）
 │  ├─ maya_export.py  check_lab_export.py  本机 Maya 导出网格、权重、关节并逐点核对
 │  ├─ blender_import_preview.py            导出结果进 Blender，渲染预览
@@ -131,7 +140,8 @@ asrp/
 │  │                          （提交 e24ff1b，原在 src/resources/）。只作参考，见 12 第一部分
 │  ├─ preview/           ✅   Blender 预览图和 asset_preview.blend；原型机的动图 prototype_motion.gif、
 │  │                          三张侧视图 prototype_{rest,settled,open}.png、参考运行的
-│  │                          prototype_run_report.json 和 prototype_provenance.json（15 的数字来源）
+│  │                          prototype_run_report.json 和 prototype_provenance.json（15 的数字来源）；
+│  │                          landmark_layer_check.json（T-09 对照实验室公式的存档结果）
 │  ├─ briefing/          ✅   新成员讲解页 asrp-briefing.html
 │  ├─ tetmesh/           ✅   嘴唇四面体网格 lips.json，由 tools/build_tetmesh.py 生成一次（ADR-20）
 │  ├─ asset_inventory*.json  🚫  .mb 的完整清单，约 40 MB，能重新生成

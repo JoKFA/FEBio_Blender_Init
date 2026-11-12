@@ -70,7 +70,7 @@ def test_the_whole_motion_runs_and_all_five_checks_pass(prototype):
         assert not any(s["flag"] for s in r.report["spring_slip"].values()), r.report["spring_slip"]
         assert {k: c["passed"] for k, c in checks.items()} == {"a": True, "b": True, "b2": True, "c": True, "d": True}
         assert checks["d"]["numbers"]["inverted_tets"] == 0 and checks["d"]["numbers"]["min_volume_ratio"] > 0
-        assert r.report["settled_shape"] == {"available": True, "frame": 14}
+        assert {k: r.report["settled_shape"][k] for k in ("available", "frame")} == {"available": True, "frame": 14}  # + reported-only tissue_step keys
         back = r.report["return_to_settled"]  # the jaw is closed again at frame 50 only
         assert back["frames"] == [50] and 0 < back["max_mm"] < 0.1 and back["mean_mm"] <= back["max_mm"]
 

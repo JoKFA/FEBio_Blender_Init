@@ -1,0 +1,14 @@
+{
+  "vertices": 10240,
+  "landmarks": 300,
+  "limit_mm": 0.0001,
+  "conversion_rest_max_mm": 4.673641897668157e-07,
+  "deform_vs_deform_matrices_max_mm": 7.420410445819464e-14,
+  "ours_vs_lab_formula_max_mm": 5.339397595345882e-06,
+  "ours_vs_lab_formula_mean_mm": 1.0701938665914233e-06,
+  "control_shifted_columns_max_mm": 6.793231868149696,
+  "max_translation_applied_mm": 16.066541438947915,
+  "seed": 0,
+  "lab_commit": "506cd69",
+  "command": "uv run python tools/landmark_layer_check.py"
+}

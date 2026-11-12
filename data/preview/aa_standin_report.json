@@ -1,0 +1,404 @@
+{
+  "format": "asrp-aa-standin-report/1",
+  "note": "numbers and verdicts only. A stand-in for D2 (the lab's landmark motion); replaced by the T-10 conversion once D2 arrives. Variant A is expected to miss the target (docs/09 T-27, ADR-40); the fit guarantees reaching the target only for B and does not show the physics is right.",
+  "command_line": "uv run python tools/aa_standin.py --work <work>",
+  "lab_repo_commit": "506cd69",
+  "counts": {
+    "vertices": 10240,
+    "landmarks": 300,
+    "frames": 51,
+    "settle_until_frame": 14,
+    "ramp_frames": 36
+  },
+  "jaw": {
+    "angle_degrees": 5.737652774494219,
+    "rigid_fit_residual_mm": 5.17431170414256e-06,
+    "target_start_vs_rest_mm": 8.294937847362725e-10
+  },
+  "ridge": {
+    "value": 0.001,
+    "meaning": "times the mean diagonal of W^T W"
+  },
+  "anchor_fraction_default": 0.5,
+  "target_moves_from_rest_mm": {
+    "max": 8.434961028875335,
+    "mean": 0.7455209641144259
+  },
+  "distance_to_target": {
+    "physics_only": {
+      "max_mm": 14.361934822277961,
+      "mean_mm": 5.731145642949776
+    },
+    "a": {
+      "max_mm": 14.80206446977173,
+      "mean_mm": 5.582734796362589
+    },
+    "b": {
+      "max_mm": 3.0254804886112114,
+      "mean_mm": 0.23831060181419056
+    }
+  },
+  "normalised_distance": null,
+  "normalised_distance_reason": "the lab term is the euclidean distance to the target divided by the euclidean distance at the start, taken over the lab's sampled control vertices (evaluator.py:336-340, :1092-1112; MeshDistanceCalculator in utils/distance_calculator.py); the vertex set is a concatenation of the lab's sampled lists and the start state is the payload's s_next, neither of which is pinned down here, so the exact value is not reported",
+  "normalised_distance_all_vertices": {
+    "definition": "sqrt(sum |target - shape|^2) / sqrt(sum |target - rest|^2) over all vertices (same form, every vertex)",
+    "physics_only": 3.5719408865646463,
+    "a": 3.7102803257805657,
+    "b": 0.17819843874441604
+  },
+  "landmark_translations": {
+    "a": {
+      "max_mm": 9.688005131531561,
+      "mean_mm": 1.6093316460047626,
+      "histogram": {
+        "0-1": 204,
+        "1-2": 23,
+        "2-5": 30,
+        "5-10": 43,
+        "10-20": 0,
+        ">20": 0
+      }
+    },
+    "b": {
+      "max_mm": 14.699946028916456,
+      "mean_mm": 6.18298952255452,
+      "histogram": {
+        "0-1": 44,
+        "1-2": 21,
+        "2-5": 42,
+        "5-10": 132,
+        "10-20": 61,
+        ">20": 0
+      }
+    }
+  },
+  "ridge_effect": {
+    "a": {
+      "max_landmark_mm_with_ridge": 9.688005131531561,
+      "max_landmark_mm_ridge0": 24.62244507244212,
+      "residual_ridge0": {
+        "max_mm": 1.1785566630008122,
+        "mean_mm": 0.06867486229859535
+      },
+      "residual_ridge": {
+        "max_mm": 1.1804189891070385,
+        "mean_mm": 0.06866681971100215
+      }
+    },
+    "b": {
+      "max_landmark_mm_with_ridge": 14.699946028916456,
+      "max_landmark_mm_ridge0": 28.213205927420415,
+      "residual_ridge0": {
+        "max_mm": 3.0243058671782177,
+        "mean_mm": 0.23839146474437206
+      },
+      "residual_ridge": {
+        "max_mm": 3.025480488611213,
+        "mean_mm": 0.23831060181419056
+      }
+    }
+  },
+  "follow_ratio": {
+    "upper lip": {
+      "vertices": 74,
+      "riding_mm": 12.443416302162218,
+      "target": -0.041908406115416234,
+      "physics_only": 1.00197021566144e-12,
+      "a_final": -0.042019310919457854,
+      "b_final": -0.043353960168833965,
+      "target_moves_mm": 0.5339059734881085
+    },
+    "lower lip": {
+      "vertices": 76,
+      "riding_mm": 13.174914126533,
+      "target": 0.08774207744249204,
+      "physics_only": 0.9999481158838667,
+      "a_final": 1.0852088502650608,
+      "b_final": 0.09094653502230003,
+      "target_moves_mm": 1.2383077069260593
+    },
+    "corners": {
+      "vertices": 657,
+      "riding_mm": 10.610811596895044,
+      "target": -2.6075864271559885e-13,
+      "physics_only": 0.49999492676696816,
+      "a_final": 0.4999568400732652,
+      "b_final": 0.0005965237916967937,
+      "target_moves_mm": 4.654966180464218e-10
+    },
+    "vertices no attachment holds": {
+      "vertices": 9433,
+      "riding_mm": 12.206962262566448,
+      "target": -0.010326183336334213,
+      "physics_only": 0.4563886901094682,
+      "a_final": 0.43835617585171677,
+      "b_final": -0.010143630692891722,
+      "target_moves_mm": 0.7951356137455093
+    },
+    "all vertices": {
+      "vertices": 10240,
+      "riding_mm": 12.113445754094322,
+      "target": -0.009204089458475168,
+      "physics_only": 0.4598038011514925,
+      "a_final": 0.44337167193775057,
+      "b_final": -0.008987254770568219,
+      "target_moves_mm": 0.7455209641144259
+    }
+  },
+  "anchor_sweep": {
+    "0": {
+      "physics_only": {
+        "max_mm": 14.428574122014103,
+        "mean_mm": 3.8422829863665364
+      },
+      "a": {
+        "final": {
+          "max_mm": 14.887443762182757,
+          "mean_mm": 3.6855846181334697
+        },
+        "landmarks": {
+          "max_mm": 9.688005131531561,
+          "mean_mm": 1.6093316460047622,
+          "histogram": {
+            "0-1": 204,
+            "1-2": 23,
+            "2-5": 30,
+            "5-10": 43,
+            "10-20": 0,
+            ">20": 0
+          }
+        }
+      },
+      "b": {
+        "final": {
+          "max_mm": 2.8995691743398937,
+          "mean_mm": 0.23827256873887398
+        },
+        "landmarks": {
+          "max_mm": 14.786080253982288,
+          "mean_mm": 4.968020742805819,
+          "histogram": {
+            "0-1": 87,
+            "1-2": 36,
+            "2-5": 40,
+            "5-10": 86,
+            "10-20": 51,
+            ">20": 0
+          }
+        }
+      },
+      "checks": {
+        "a": true,
+        "b": true,
+        "b2": true,
+        "c": true,
+        "d": true
+      },
+      "all_checks_passed": true
+    },
+    "0.25": {
+      "physics_only": {
+        "max_mm": 14.399246528911274,
+        "mean_mm": 4.767636690477031
+      },
+      "a": {
+        "final": {
+          "max_mm": 14.848702310357876,
+          "mean_mm": 4.615404210405106
+        },
+        "landmarks": {
+          "max_mm": 9.688005131531561,
+          "mean_mm": 1.6093316460047626,
+          "histogram": {
+            "0-1": 204,
+            "1-2": 23,
+            "2-5": 30,
+            "5-10": 43,
+            "10-20": 0,
+            ">20": 0
+          }
+        }
+      },
+      "b": {
+        "final": {
+          "max_mm": 2.957953452918653,
+          "mean_mm": 0.23206724822036193
+        },
+        "landmarks": {
+          "max_mm": 14.747278629290323,
+          "mean_mm": 5.544479519139908,
+          "histogram": {
+            "0-1": 49,
+            "1-2": 25,
+            "2-5": 83,
+            "5-10": 88,
+            "10-20": 55,
+            ">20": 0
+          }
+        }
+      },
+      "checks": {
+        "a": true,
+        "b": true,
+        "b2": true,
+        "c": true,
+        "d": true
+      },
+      "all_checks_passed": true
+    },
+    "0.5": {
+      "physics_only": {
+        "max_mm": 14.361934822277961,
+        "mean_mm": 5.731145642949776
+      },
+      "a": {
+        "final": {
+          "max_mm": 14.80206446977173,
+          "mean_mm": 5.582734796362589
+        },
+        "landmarks": {
+          "max_mm": 9.688005131531561,
+          "mean_mm": 1.6093316460047626,
+          "histogram": {
+            "0-1": 204,
+            "1-2": 23,
+            "2-5": 30,
+            "5-10": 43,
+            "10-20": 0,
+            ">20": 0
+          }
+        }
+      },
+      "b": {
+        "final": {
+          "max_mm": 3.0254804886112114,
+          "mean_mm": 0.23831060181419056
+        },
+        "landmarks": {
+          "max_mm": 14.699946028916456,
+          "mean_mm": 6.18298952255452,
+          "histogram": {
+            "0-1": 44,
+            "1-2": 21,
+            "2-5": 42,
+            "5-10": 132,
+            "10-20": 61,
+            ">20": 0
+          }
+        }
+      },
+      "checks": {
+        "a": true,
+        "b": true,
+        "b2": true,
+        "c": true,
+        "d": true
+      },
+      "all_checks_passed": true
+    },
+    "0.75": {
+      "physics_only": {
+        "max_mm": 14.316595587794772,
+        "mean_mm": 6.702538461557218
+      },
+      "a": {
+        "final": {
+          "max_mm": 14.748176219358399,
+          "mean_mm": 6.55728346457496
+        },
+        "landmarks": {
+          "max_mm": 9.688005131531561,
+          "mean_mm": 1.6093316460047624,
+          "histogram": {
+            "0-1": 204,
+            "1-2": 23,
+            "2-5": 30,
+            "5-10": 43,
+            "10-20": 0,
+            ">20": 0
+          }
+        }
+      },
+      "b": {
+        "final": {
+          "max_mm": 3.1088193641908246,
+          "mean_mm": 0.2539929934267621
+        },
+        "landmarks": {
+          "max_mm": 14.644261162933056,
+          "mean_mm": 6.831452081115006,
+          "histogram": {
+            "0-1": 40,
+            "1-2": 23,
+            "2-5": 32,
+            "5-10": 138,
+            "10-20": 67,
+            ">20": 0
+          }
+        }
+      },
+      "checks": {
+        "a": true,
+        "b": true,
+        "b2": true,
+        "c": true,
+        "d": true
+      },
+      "all_checks_passed": true
+    },
+    "1": {
+      "physics_only": {
+        "max_mm": 14.263581739275752,
+        "mean_mm": 7.677636859502504
+      },
+      "a": {
+        "final": {
+          "max_mm": 14.688011547862615,
+          "mean_mm": 7.535186551375146
+        },
+        "landmarks": {
+          "max_mm": 9.688005131531561,
+          "mean_mm": 1.6093316460047624,
+          "histogram": {
+            "0-1": 204,
+            "1-2": 23,
+            "2-5": 30,
+            "5-10": 43,
+            "10-20": 0,
+            ">20": 0
+          }
+        }
+      },
+      "b": {
+        "final": {
+          "max_mm": 3.2223700779627897,
+          "mean_mm": 0.2771879659870585
+        },
+        "landmarks": {
+          "max_mm": 14.580889542575934,
+          "mean_mm": 7.485940218194822,
+          "histogram": {
+            "0-1": 32,
+            "1-2": 27,
+            "2-5": 32,
+            "5-10": 89,
+            "10-20": 120,
+            ">20": 0
+          }
+        }
+      },
+      "checks": {
+        "a": true,
+        "b": true,
+        "b2": true,
+        "c": true,
+        "d": true
+      },
+      "all_checks_passed": true
+    }
+  },
+  "asrp_check_passed": {
+    "a": true,
+    "b": true
+  }
+}

@@ -5,7 +5,8 @@
 Runs, in order: the lint check (`ruff check .`; it does not enforce line length and nothing is
 reformatted), the test suite (with ASRP_SLOW=1, so the real-lip run in tests/test_prototype.py is
 included; it takes several minutes), `asrp doctor`, Blender's own validation of the add-on
-manifest, the Blender add-on round trip, and the FEBio -> Blender playback check. The two
+manifest, the Blender add-on round trip, the FEBio -> Blender playback check, and the panel check (real
+`asrp run` processes: complete, cannot start, cancelled). The three
 Blender scripts load the add-on from source, which skips packaging, so only the manifest
 step would notice an add-on that cannot be built. Blender is found the same way
 `asrp doctor` finds it ($ASRP_BLENDER, PATH, default install location), so nothing is tied
@@ -40,7 +41,7 @@ def main() -> None:
         sys.exit(f"verify FAILED: Blender {blender.how}")
     step("add-on manifest", [str(blender.path), "--factory-startup", "--command", "extension", "validate",
                              str(REPO / "blender_addon" / "asrp_blender")])
-    for check in ("check_blender_addon.py", "check_playback.py"):
+    for check in ("check_blender_addon.py", "check_playback.py", "check_panel.py"):
         step(check, [str(blender.path), "--background", "--factory-startup", "--python-exit-code", "1",
                      "--python", str(REPO / "tools" / check)])
     print("\nverify PASSED")

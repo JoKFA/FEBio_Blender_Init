@@ -39,7 +39,7 @@ FEBio 是一个专门为生物力学开发、经过同行评审的开源有限�
 | 已完成 | 证据 |
 |---|---|
 | 地基：代码仓库（GitHub 私有，ADR-14）、开发环境、任何电脑都能运行的自动检查；FEBio 能在本机算动力学，结果能逐帧放回 Blender（T-00）；被哈希的数据在任何电脑上检出都逐字节相同（`.gitattributes`，08 第 10 节） | `uv run python tools/verify.py`；`spikes/s1_dynamic_jaw.py`、`tools/check_playback.py`；[09](09-roadmap-and-tasks.md) T-00 |
-| 实验室资产：完整盘点；网格、landmark 权重和关节已导出（网格和 `.mb` 逐点核对过，权重和关节目前只有 Maya 自检）；真实资产已进 Blender，下颌能绕真实铰链转动（`data/preview/`）；一条命令导入成场景描述（T-02，里程碑 M1）；嘴唇的四组粘连顶点集（T-03，粘连权重的读法已更正，ADR-32） | [03](03-asset.md) 第 6、12 节；`uv run asrp import-asset data/lab_export <输出文件夹>`；09 的 T-02、T-03。一处缺口：landmark 蒙皮矩阵还没换算成毫米和 Z 轴朝上，归 T-09 |
+| 实验室资产：完整盘点；网格、landmark 权重和关节已导出（网格和 `.mb` 逐点核对过，权重和关节目前只有 Maya 自检）；真实资产已进 Blender，下颌能绕真实铰链转动（`data/preview/`）；一条命令导入成场景描述（T-02，里程碑 M1）；嘴唇的四组粘连顶点集（T-03，粘连权重的读法已更正，ADR-32） | [03](03-asset.md) 第 6、12 节；`uv run asrp import-asset data/lab_export <输出文件夹>`；09 的 T-02、T-03。landmark 蒙皮矩阵导入时换算成毫米和 Z 轴朝上（T-09） |
 | 读完实验室控制器源码和论文：landmark 和物理的关系、优化时物理不在环（部分验证，11 的 Q20）、Hill 模型的位置、各实验怎么做、运动文件的格式、目标姿态；对照论文做了需求审计 | [03](03-asset.md) 第 13 节；[02](02-requirements.md) 第 4 节；[10](10-decisions.md) ADR-21 到 ADR-35；[13](13-explanations.md) E-04、E-05 |
 | 场景和运动的格式定稿，`asrp check` 查错（T-05）；运行命令、运行文件夹、溯源（T-08） | `uv run asrp check tests/fixtures/s1/scene.json tests/fixtures/s1/trajectory.json`；[04](04-architecture.md) 第 4、5 节 |
 | **原型机（T-06a）**，以及审计后的小修（T-22）和二进制结果（T-25）：真实嘴唇被下颌带动，五项合理性检查通过，回放包在 Blender 里逐帧对得上，同一份输入两次相同；材料、粘连刚度、k 都是标明来源的临时值 | [15](15-prototype.md)；[09](09-roadmap-and-tasks.md) T-06a、T-22、T-25；`data/preview/prototype_*.png` |
@@ -51,7 +51,7 @@ FEBio 是一个专门为生物力学开发、经过同行评审的开源有限�
 
 **第二轮审计（2026-11-12，[13](13-explanations.md) E-09）**查出一件要紧的事：实验室的 AA 目标形状里，嘴唇几乎不跟着下颌走，而我们的物理让下唇完全跟着走。所以原型机二的"中性到 AA"两种拼法都做、并排报告（ADR-40）；哪一种当正式结果，等项目负责人定（11 的 P-07）。
 
-下一步是**原型机二**（ADR-39、ADR-40）：landmark 层（T-09）→ 中性到 AA（T-27）→ 甩头（T-28）→ 来回 10 次（T-29）；然后是几个互不依赖的试验（T-17 软粘软、T-23 主动收缩、T-24 "landmark 进物理"、T-30 逐帧接着算、T-20 规则格子），再定 `asrp-scene/2`（T-26）。拿到 Ziva 设置和运动文件以后换掉临时值（T-12）。顺序和理由见 [09 路线图与任务](09-roadmap-and-tasks.md) 第 1、2 节。等项目负责人拍板的五件事（P-06 到 P-10）只列在 [11](11-risks-and-questions.md) 第 1 节。
+下一步是**原型机二**（ADR-39、ADR-40）：landmark 层（T-09）→ 中性到 AA（T-27）→ 甩头（T-28）→ 来回 10 次（T-29）；然后是几个互不依赖的试验（T-17 软粘软、T-23 主动收缩、T-24 "landmark 进物理"、T-30 逐帧接着算、T-20 规则格子），再定 `asrp-scene/2`（T-26）。拿到 Ziva 设置和运动文件以后换掉临时值（T-12）。顺序和理由见 [09 路线图与任务](09-roadmap-and-tasks.md) 第 1、2 节。等项目负责人拍板的四件事（P-06、P-07、P-09、P-10）只列在 [11](11-risks-and-questions.md) 第 1 节。
 
 ## 谁参与、各自负责什么
 

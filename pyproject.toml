@@ -33,6 +33,7 @@ pythonpath = ["spikes", "tools"]
 [tool.ruff]
 target-version = "py313"
 line-length = 100
+extend-exclude = [".claude/worktrees"]  # other branches' checkouts are linted by their own gate
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]

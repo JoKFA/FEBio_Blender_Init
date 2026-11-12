@@ -1,0 +1,843 @@
+{
+  "format": "asrp-run-report/1",
+  "run_id": "2026-11-12_shake-demo_001",
+  "status": "complete",
+  "frames": 87,
+  "parameters": [
+    {
+      "where": "scene.units.mm_per_scene_unit",
+      "value": 0.962,
+      "source": "ours",
+      "note": "paper appendix V's 0.962, also the lab controller's conversion (ADR-31)"
+    },
+    {
+      "where": "scene.units.physics_length_scale",
+      "value": 0.67,
+      "source": "ours",
+      "note": "meeting conclusion (ADR-31): skull width 216.6 mm becomes about 145 mm, a real person; not Ziva's scale"
+    },
+    {
+      "where": "scene.soft_tissues[lips].material.E_mpa",
+      "value": 0.015,
+      "source": "ours",
+      "note": "15 kPa; T-06a's temporary value: guessed to be close to Ziva's default, not checked, waits for D6 (the Ziva attribute list, docs/12 item 2, Q4)"
+    },
+    {
+      "where": "scene.soft_tissues[lips].material.nu",
+      "value": 0.45,
+      "source": "ours",
+      "note": "T-06a's temporary value: guessed to be close to Ziva's default, not checked, waits for D6 (the Ziva attribute list, docs/12 item 2, Q4)"
+    },
+    {
+      "where": "scene.soft_tissues[lips].material.density_t_per_mm3",
+      "value": 1.06e-09,
+      "source": "ours",
+      "note": "1060 kg/m3; T-06a's temporary value: guessed to be close to Ziva's default, not checked, waits for D6 (the Ziva attribute list, docs/12 item 2, Q4)"
+    },
+    {
+      "where": "scene.bones[jaw].mass_t",
+      "value": null,
+      "source": "ours",
+      "note": "unknown; unused while the bone is fixed or its motion fully given"
+    },
+    {
+      "where": "scene.bones[skull].mass_t",
+      "value": null,
+      "source": "ours",
+      "note": "unknown; unused while the bone is fixed or its motion fully given"
+    },
+    {
+      "where": "scene.bones[teeth_upper].mass_t",
+      "value": null,
+      "source": "ours",
+      "note": "unknown; unused while the bone is fixed or its motion fully given"
+    },
+    {
+      "where": "scene.bones[teeth_lower].mass_t",
+      "value": null,
+      "source": "ours",
+      "note": "unknown; unused while the bone is fixed or its motion fully given"
+    },
+    {
+      "where": "scene.drivers[lip_corner_blend].blend.factor",
+      "value": 0.5,
+      "source": "ours",
+      "note": "alpha: the lip corner anchor moves this fraction of the jaw's motion relative to the head (for the jaw turning about jaw01's hinge, alpha x its angle; docs/05 section 3, A-35); 0 follows the skull, 1 the jaw. Provisional"
+    },
+    {
+      "where": "scene.attachments[upper_lip_on_skull].stiffness",
+      "value": null,
+      "source": "ours",
+      "note": "hard: the vertices join the target, no stiffness"
+    },
+    {
+      "where": "scene.attachments[lower_lip_on_jaw].stiffness",
+      "value": 2.43,
+      "source": "ours",
+      "note": "provisional (T-07 rule): 100 x E x h = 100 x 0.015 MPa x 1.621 mm, h = median tet edge 2.419 mm x k 0.67; to be set from the first run's force and the lower lip's follow ratio (docs/05 section 3, Q17)"
+    },
+    {
+      "where": "scene.attachments[left_corner_on_anchor].stiffness",
+      "value": 2.43,
+      "source": "ours",
+      "note": "provisional (T-07 rule): 100 x E x h = 100 x 0.015 MPa x 1.621 mm, h = median tet edge 2.419 mm x k 0.67; to be set from the first run's force and the lower lip's follow ratio (docs/05 section 3, Q17)"
+    },
+    {
+      "where": "scene.attachments[right_corner_on_anchor].stiffness",
+      "value": 2.43,
+      "source": "ours",
+      "note": "provisional (T-07 rule): 100 x E x h = 100 x 0.015 MPa x 1.621 mm, h = median tet edge 2.419 mm x k 0.67; to be set from the first run's force and the lower lip's follow ratio (docs/05 section 3, Q17)"
+    },
+    {
+      "where": "scene.solver.fps",
+      "value": 30,
+      "source": "lab_setting",
+      "note": "the lab's zSolver runs at 30 frames per second (docs/03 section 5)"
+    },
+    {
+      "where": "scene.solver.substeps_per_frame",
+      "value": 1,
+      "source": "ours",
+      "note": "one step per frame; placeholder: the Ziva attribute list has not arrived (docs/12 item 2, Q4)"
+    },
+    {
+      "where": "scene.solver.damping",
+      "value": 45.0,
+      "source": "ours",
+      "note": "T-28 demonstration only, ours, not the lab's (D6): zeta about 0.05 for a 14 ms lip mode (2 x 0.05 x 2 pi / 0.014 s = 45 /s)"
+    },
+    {
+      "where": "scene.solver.gravity_mm_per_s2",
+      "value": [
+        0.0,
+        0.0,
+        -9810.0
+      ],
+      "source": "ours",
+      "note": "9.81 m/s2 down, physical direction; placeholder: the Ziva attribute list has not arrived (docs/12 item 2, Q4)"
+    },
+    {
+      "where": "scene.solver.numerical_damping_rhoi",
+      "value": 0.5,
+      "source": "ours",
+      "note": "T-28 demonstration only, ours: one of the values of spikes/audit_head_shake.py"
+    },
+    {
+      "where": "generator.rhoi",
+      "value": 0.5,
+      "source": "ours",
+      "note": "generalized-alpha spectral radius at infinity, from the scene's solver.numerical_damping_rhoi: 0 is FEBio's strongest damping of fast modes; numerical, not physical damping. Used by T-07's runs (spikes/s3_attachment.py); docs/05 pit 2, T-28"
+    },
+    {
+      "where": "generator.gravity_sign_in_febio",
+      "value": -1.0,
+      "source": "ours",
+      "note": "docs/05 pit 1 (ADR-10): FEBio's const body load acts opposite to the manual, so the scene's physical gravity is written negated"
+    },
+    {
+      "where": "generator.gravity_from",
+      "value": 0.0,
+      "source": "ours",
+      "note": "gravity is on at full strength from t = 0, like the lab's frames 0-14"
+    },
+    {
+      "where": "generator.spring_offset_delta",
+      "value": "5 x median tet edge x k",
+      "source": "ours",
+      "note": "docs/05 section 3: the anchors sit delta away along x, y, z (FEBio coordinates); delta must stay >= 10 x the slip, see max|u|/delta"
+    },
+    {
+      "where": "generator.spring_level_tolerance",
+      "value": 0.02,
+      "source": "ours",
+      "note": "stiffness levels per spring group: log-spaced, as few as keep every node's binned stiffness within this fraction of its own value, each the mean of its members (one FEBio spring material per level); the level count and the largest error are in the generator report"
+    },
+    {
+      "where": "generator.max_distance_edges",
+      "value": 2.0,
+      "source": "ours",
+      "note": "a display vertex farther than this x the median tet edge from its tet stops the run (docs/05 section 3 rule 5)"
+    },
+    {
+      "where": "generator.max_retries",
+      "value": 8,
+      "source": "ours",
+      "note": "adaptive stepping as in spikes/s2_lips_febio.py"
+    },
+    {
+      "where": "generator.dtmin_fraction",
+      "value": 0.00390625,
+      "source": "ours",
+      "note": "the step may shrink to this fraction of a frame step"
+    },
+    {
+      "where": "generator.motion_between_frames",
+      "value": "linear",
+      "source": "ours",
+      "note": "the rigid bodies' translation and rotation vector are interpolated linearly between frames (exact for a fixed hinge)"
+    },
+    {
+      "where": "plausibility.hard_tolerance_mm",
+      "value": 0.001,
+      "source": "ours",
+      "note": "docs/07 section 3"
+    },
+    {
+      "where": "plausibility.sag_factor",
+      "value": 10.0,
+      "source": "ours",
+      "note": "check (c) passes when the measured sag is within this factor of the model's estimate, rho |g| k L^2 / (2 E), either way"
+    },
+    {
+      "where": "trajectory.source",
+      "value": "head shake (T-28, ours): head and jaw01 translate along x, keys of the lab's passive_dynamics_test.py (0 at frames 0 and 16, 3 loops of 10 frames, +-5 scene units = +-4.81 mm), cubic Hermite with our reading of Maya's auto tangents, then 40 frames at rest; tools/head_shake_motion.py",
+      "source": "ours",
+      "note": "head_shake.json: 87 frames at 30 fps"
+    }
+  ],
+  "simplifications": [
+    "the 6 muscles around the mouth attached to the lips (zAttachment to zTissue around the orbicularis): not built in phase 1, ADR-32",
+    "the 9 skin attachments to the lips (zCloth): not built in phase 1, ADR-32 (skin is phase 2, T-18)",
+    "the chain mouth-corner node -> zTissue2/3 -> skull and jaw: replaced by the lip-corner anchor that moves alpha x the jaw's motion relative to the head (A-35, docs/05 section 3)"
+  ],
+  "warnings": [],
+  "generator": {
+    "physics_length_scale_k": 0.67,
+    "median_tet_edge_mm": 2.4187362354021107,
+    "max_distance_limit_mm": 4.837472470804221,
+    "display_vertices": 10240,
+    "display_vertices_outside_tets": 6674,
+    "display_max_distance_mm": 0.9310456995402685,
+    "most_negative_barycentric": -2.834259427443712,
+    "spring_offset_delta_febio_mm": 8.102766388597072,
+    "spring_offset_delta_geometric_mm": 12.093681177010554,
+    "groups": [
+      {
+        "name": "upper_lip_on_skull",
+        "kind": "hard",
+        "to": "skull",
+        "display_vertices": 74,
+        "nodes": 74,
+        "clipped_coordinates": 34,
+        "max_distance_mm": 0.07184585873135285,
+        "conflicts": 0
+      },
+      {
+        "name": "lower_lip_on_jaw",
+        "kind": "spring",
+        "to": "jaw",
+        "display_vertices": 76,
+        "nodes": 78,
+        "clipped_coordinates": 37,
+        "max_distance_mm": 0.07283775443467233,
+        "conflicts": 0,
+        "spring_nodes": 78,
+        "springs": 234,
+        "nodes_shared_with_other_spring_groups": 0,
+        "base_stiffness_n_per_mm": 2.43,
+        "node_stiffness_n_per_mm": {
+          "min": 0.30375,
+          "max": 9.474330820571009,
+          "sum": 184.68
+        },
+        "weight_sum": 76.0,
+        "level_count": 43,
+        "levels_n_per_mm": [
+          0.3093751345764299,
+          0.3218894826604856,
+          0.33973032984144813,
+          0.3602871899717247,
+          0.3895168835028455,
+          0.4086764077601194,
+          0.4773578975854562,
+          0.4849428586078406,
+          0.526492607735122,
+          0.5869375194205118,
+          0.6063518569242444,
+          0.6270404114482963,
+          0.6740830869488204,
+          0.8315914121795644,
+          0.8610470394480746,
+          0.9164760120145414,
+          1.0407307052029895,
+          1.0730397639302813,
+          1.234611738974843,
+          1.45719290118092,
+          1.5405905640304518,
+          1.5956573852952798,
+          1.697914399701082,
+          1.8624642854339948,
+          2.254915639728478,
+          2.388340949495154,
+          2.7054261682171523,
+          3.0868096465635233,
+          3.360014986045724,
+          3.4744624413069145,
+          3.691261020321752,
+          3.9423025355384644,
+          4.104635854189215,
+          4.23371913632749,
+          5.026378671038613,
+          5.7569846925103265,
+          6.061483254510171,
+          6.589362909450816,
+          7.134386221933305,
+          8.095736132457539,
+          8.478367983165088,
+          8.754952731989794,
+          9.295121066230118
+        ],
+        "max_level_error": 0.01965900590840106,
+        "level_error_limit": 0.02,
+        "binned_total_n_per_mm": 184.68
+      },
+      {
+        "name": "left_corner_on_anchor",
+        "kind": "spring",
+        "to": "lip_corner_anchor",
+        "display_vertices": 348,
+        "nodes": 196,
+        "clipped_coordinates": 206,
+        "max_distance_mm": 0.07954708486059651,
+        "conflicts": 0,
+        "spring_nodes": 196,
+        "springs": 588,
+        "nodes_shared_with_other_spring_groups": 0,
+        "base_stiffness_n_per_mm": 2.43,
+        "node_stiffness_n_per_mm": {
+          "min": 0.30375,
+          "max": 41.96687264867517,
+          "sum": 845.6400000000001
+        },
+        "weight_sum": 348.0,
+        "level_count": 77,
+        "levels_n_per_mm": [
+          0.30375,
+          0.3350362308012153,
+          0.3618091051766266,
+          0.40127002184708205,
+          0.4163434689120585,
+          0.4620855563120747,
+          0.6076980777246697,
+          0.6310872136058436,
+          0.6484162107355779,
+          0.7943559987228259,
+          0.9112500000000001,
+          0.9403451439763216,
+          1.1786915445824042,
+          1.215,
+          1.2593907291029962,
+          1.334325528197128,
+          1.3561621875378924,
+          1.4447886627144846,
+          1.4982200854250656,
+          1.5449549207698305,
+          1.6104247346487803,
+          1.6898041069014351,
+          1.717209826303315,
+          1.8225000000000002,
+          1.8649881673531465,
+          1.9407212150789885,
+          1.9950498837272697,
+          2.0799652671666595,
+          2.1523067399623756,
+          2.2410581632350155,
+          2.3174995021074007,
+          2.4058268398728533,
+          2.481225117506275,
+          2.595525249823051,
+          2.7168603557429445,
+          2.816050496838714,
+          2.9067589717411506,
+          3.0314517736945463,
+          3.129203977554547,
+          3.2357673555014443,
+          3.405532037148784,
+          3.510972747053158,
+          3.628911315211997,
+          3.826463487525437,
+          3.9397365494020917,
+          4.085404715768633,
+          4.2448618874966515,
+          4.411953233703874,
+          4.569766066482089,
+          4.660344075119703,
+          5.1703582621825195,
+          5.262124591477939,
+          5.505868302404461,
+          5.901049007936928,
+          6.129597198697222,
+          6.442208562395072,
+          6.52991641157423,
+          7.183098548928179,
+          7.497519515378167,
+          7.704433709227011,
+          7.897070283089715,
+          10.038298029996518,
+          10.366598887935524,
+          10.836537955808865,
+          11.253725904404286,
+          11.61192205573897,
+          12.116950993500593,
+          12.439477754666514,
+          13.886060925624603,
+          15.68910503758199,
+          16.195313914411265,
+          19.37731922146119,
+          24.337257531649566,
+          26.404133210917273,
+          31.623657706582225,
+          39.351468306341545,
+          41.96687264867517
+        ],
+        "max_level_error": 0.017283765780085305,
+        "level_error_limit": 0.02,
+        "binned_total_n_per_mm": 845.6400000000001
+      },
+      {
+        "name": "right_corner_on_anchor",
+        "kind": "spring",
+        "to": "lip_corner_anchor",
+        "display_vertices": 309,
+        "nodes": 202,
+        "clipped_coordinates": 176,
+        "max_distance_mm": 0.07735201792353644,
+        "conflicts": 0,
+        "spring_nodes": 202,
+        "springs": 606,
+        "nodes_shared_with_other_spring_groups": 0,
+        "base_stiffness_n_per_mm": 2.43,
+        "node_stiffness_n_per_mm": {
+          "min": 0.30375,
+          "max": 24.775545935247067,
+          "sum": 750.8700000000001
+        },
+        "weight_sum": 309.0,
+        "level_count": 70,
+        "levels_n_per_mm": [
+          0.30547664398221547,
+          0.3219177629152511,
+          0.3320981110354392,
+          0.35762780154248897,
+          0.5115461973157754,
+          0.609002406999837,
+          0.6279198818475271,
+          0.6584397380035933,
+          0.7077024825668832,
+          0.7321152810573937,
+          0.7608650095044776,
+          0.91125,
+          0.9443315988193287,
+          1.2218243394538935,
+          1.2629790873926232,
+          1.483629026068582,
+          1.5396220659663766,
+          1.6624847480283882,
+          1.7128451125047073,
+          1.7975357331393997,
+          1.84236418900535,
+          1.8983113926871138,
+          2.0001475768533226,
+          2.0833282425993196,
+          2.126956168188189,
+          2.214413946931532,
+          2.3182163868058323,
+          2.406077287254844,
+          2.5185963328094823,
+          2.604192415533076,
+          2.7175911992899398,
+          2.79487089866928,
+          2.9218503270181655,
+          3.012544539356061,
+          3.1170373357956316,
+          3.259353521792684,
+          3.3443348401681816,
+          3.490495128719612,
+          3.616877145951226,
+          3.7889966732581737,
+          3.9278564317544724,
+          4.054814553023313,
+          4.239668599061398,
+          4.338745154019803,
+          4.547824988378335,
+          4.633798398795393,
+          4.8599555764790185,
+          4.995533158113876,
+          5.324534448593172,
+          5.761727289815512,
+          6.026740637555807,
+          6.367638486631972,
+          6.616796401813587,
+          6.768795795006841,
+          7.116089366101383,
+          7.7057610866854365,
+          7.915311538079613,
+          8.383211650541375,
+          8.507710195262817,
+          8.739051380333397,
+          9.240421026151957,
+          10.37721274054277,
+          10.723465238237619,
+          11.552874398,
+          13.70751330798361,
+          16.84817588473616,
+          17.964682588882074,
+          19.01771047302453,
+          23.017638653043708,
+          24.775545935247067
+        ],
+        "max_level_error": 0.01896644949188345,
+        "level_error_limit": 0.02,
+        "binned_total_n_per_mm": 750.87
+      }
+    ],
+    "rigid_bodies": [
+      {
+        "name": "skull",
+        "motion": "prescribed",
+        "driver": "head",
+        "reference_mm": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      {
+        "name": "jaw",
+        "motion": "prescribed",
+        "driver": "jaw01",
+        "reference_mm": [
+          0.0,
+          -121.71261239029523,
+          -54.65355312431278
+        ]
+      },
+      {
+        "name": "lip_corner_anchor",
+        "motion": "prescribed",
+        "driver": "lip_corner_blend",
+        "reference_mm": [
+          0.0,
+          -121.71261239029523,
+          -54.65355312431278
+        ]
+      }
+    ],
+    "bones_not_written": [
+      "teeth_upper",
+      "teeth_lower"
+    ],
+    "febio_nodes": {
+      "tissue": 6747,
+      "rigid_stubs": 12,
+      "spring_anchors": 1428,
+      "total": 8187
+    },
+    "tets": 26721,
+    "springs": 1428,
+    "hard_nodes": 74,
+    "solver": {
+      "rhoi": 0.5,
+      "rhoi_from": "scene.solver.numerical_damping_rhoi",
+      "mass_damping_per_s": 45.0,
+      "substeps_per_frame": 1
+    }
+  },
+  "checks": {
+    "a": {
+      "name": "motion completed",
+      "passed": true,
+      "message": "all 87 frames; FEBio cut and retried a step 0 times",
+      "numbers": {
+        "status": "complete",
+        "frames": 87,
+        "frames_logged": 86,
+        "retries": 0
+      }
+    },
+    "b": {
+      "name": "hard attachments follow their bones",
+      "passed": true,
+      "message": "on all 87 frames the hard nodes are at most 9.63e-11 mm and the hard display vertices 8.42e-11 mm from where their bone puts them (limit 0.001 mm)",
+      "numbers": {
+        "hard_groups": [
+          "upper_lip_on_skull"
+        ],
+        "hard_nodes_max_deviation_mm": 9.628694433603645e-11,
+        "hard_display_vertices_max_deviation_mm": 8.424201207655568e-11,
+        "tolerance_mm": 0.001,
+        "frames": 87,
+        "spring_display_deviation": {
+          "lower_lip_on_jaw": {
+            "max_mm": 0.0013969421031930537,
+            "mean_mm": 0.0001981135590018338,
+            "worst_frame": 19
+          },
+          "left_corner_on_anchor": {
+            "max_mm": 0.0005801142781866175,
+            "mean_mm": 1.5020802497338741e-05,
+            "worst_frame": 2
+          },
+          "right_corner_on_anchor": {
+            "max_mm": 0.00031207913972258056,
+            "mean_mm": 1.3974721954603458e-05,
+            "worst_frame": 2
+          }
+        }
+      }
+    },
+    "b2": {
+      "name": "spring anchors follow their rigid bodies",
+      "passed": true,
+      "message": "on all 87 frames the 1428 spring anchor nodes are at most 1.20e-10 mm from where their rigid body puts them (limit 0.001 mm; jaw: 234 nodes, 1.14e-10 mm; lip_corner_anchor: 1194 nodes, 1.20e-10 mm)",
+      "numbers": {
+        "anchor_nodes": 1428,
+        "frames": 87,
+        "tolerance_mm": 0.001,
+        "bodies": [
+          "jaw",
+          "lip_corner_anchor"
+        ],
+        "max_deviation_mm": 1.200504485044832e-10,
+        "per_body": {
+          "jaw": {
+            "anchor_nodes": 234,
+            "max_deviation_mm": 1.1372640641460122e-10
+          },
+          "lip_corner_anchor": {
+            "anchor_nodes": 1194,
+            "max_deviation_mm": 1.200504485044832e-10
+          }
+        }
+      }
+    },
+    "c": {
+      "name": "gravity sag",
+      "passed": true,
+      "message": "free vertices moved 0.0950 mm along gravity (down) on average over frames 10-14; the model expects 0.1457 mm (rho |g| k L^2 / 2E with L = 25.05 mm) and the check passes from 0.0146 to 1.46 mm down; it catches a sign error or a gross error in E, density, gravity or units, not a small one",
+      "numbers": {
+        "free_vertices": 9433,
+        "frames": [
+          10,
+          14
+        ],
+        "expected_sag_mm": 0.14567203270160384,
+        "free_length_mm": 25.045164000911058,
+        "range_mm": [
+          0.014567203270160384,
+          1.4567203270160385
+        ],
+        "factor": 10.0,
+        "k": 0.67,
+        "density_t_per_mm3": 1.06e-09,
+        "E_mpa": 0.015,
+        "mean_sag_along_gravity_mm": 0.09497236355047123,
+        "mean_dz_mm": -0.09497236355047123
+      }
+    },
+    "d": {
+      "name": "the tet mesh stays valid",
+      "passed": true,
+      "message": "on all 87 frames every one of the 26721 tets keeps its orientation; volume / rest volume is between 0.961 (frame 1) and 1.031",
+      "numbers": {
+        "min_volume_ratio": 0.9611494754998434,
+        "min_volume_ratio_frame": 1,
+        "max_volume_ratio": 1.0308471234043224,
+        "inverted_tets": 0,
+        "frames_with_inverted_tets": 0,
+        "tets": 26721,
+        "frames": 87
+      }
+    }
+  },
+  "timing": {
+    "generate_s": 9.36,
+    "febio_s": 74.49,
+    "post_s": 1.767,
+    "febio_s_per_frame": 0.866
+  },
+  "motion": {
+    "max_display_distance_mm": 4.693375025392143,
+    "frame": 19
+  },
+  "settled_shape": {
+    "available": true,
+    "frame": 14
+  },
+  "return_to_settled": {
+    "frames": [
+      15,
+      16,
+      21,
+      26,
+      31,
+      36,
+      41,
+      46,
+      47,
+      48,
+      49,
+      50,
+      51,
+      52,
+      53,
+      54,
+      55,
+      56,
+      57,
+      58,
+      59,
+      60,
+      61,
+      62,
+      63,
+      64,
+      65,
+      66,
+      67,
+      68,
+      69,
+      70,
+      71,
+      72,
+      73,
+      74,
+      75,
+      76,
+      77,
+      78,
+      79,
+      80,
+      81,
+      82,
+      83,
+      84,
+      85,
+      86
+    ],
+    "max_mm": 0.09373537025052822,
+    "mean_mm": 0.004042967526608969
+  },
+  "spring_slip": {
+    "lower_lip_on_jaw": {
+      "max_slip_febio_mm": 0.012290770190860797,
+      "delta_febio_mm": 8.102766388597072,
+      "ratio": 0.0015168609832016697,
+      "flag": false
+    },
+    "left_corner_on_anchor": {
+      "max_slip_febio_mm": 0.004320150234591212,
+      "delta_febio_mm": 8.102766388597072,
+      "ratio": 0.0005331697876259778,
+      "flag": false
+    },
+    "right_corner_on_anchor": {
+      "max_slip_febio_mm": 0.013899277880891403,
+      "delta_febio_mm": 8.102766388597072,
+      "ratio": 0.0017153743813287884,
+      "flag": false
+    }
+  },
+  "relative_to_head": {
+    "body": "skull",
+    "reference_frame": 14,
+    "per_frame_max_mm": [
+      0.38708220360401874,
+      0.16474086908860547,
+      0.09795109005136551,
+      0.1912967323085961,
+      0.14728379538249878,
+      0.0601027114911056,
+      0.02316889749223291,
+      0.04467021161714375,
+      0.03522275809142203,
+      0.015215952726548335,
+      0.008979283597104393,
+      0.008904520515743593,
+      0.008328681843616695,
+      0.005399498382631683,
+      0.0,
+      0.003172141268302065,
+      0.002495509602399824,
+      0.1554550742186351,
+      0.006387201272260711,
+      0.14970483327236786,
+      0.010125845105468411,
+      0.05819764532319845,
+      0.08140755196089275,
+      0.007243222796492415,
+      0.10243931109412242,
+      0.05972225894637775,
+      0.02317093823960752,
+      0.0916332490085133,
+      0.006479462495675487,
+      0.11244836488026748,
+      0.05369757147187663,
+      0.029128911293374936,
+      0.09201669887523403,
+      0.007795041069544627,
+      0.10950403657448494,
+      0.05298748169414301,
+      0.027131006105621584,
+      0.09038059883325482,
+      0.006286610986140002,
+      0.11140549741690568,
+      0.05458706367986145,
+      0.02865597682843708,
+      0.09212428416426453,
+      0.007938051857426912,
+      0.12378794098933248,
+      0.08076673715447204,
+      0.09372757850773102,
+      0.024629203053241754,
+      0.03267185125217943,
+      0.05107570813735014,
+      0.0381000620219677,
+      0.019430222023397746,
+      0.007542249944767926,
+      0.006292197938061305,
+      0.009357053701358775,
+      0.0062563299933287644,
+      0.0034944368436364776,
+      0.002578875473775007,
+      0.002687816370559929,
+      0.0027482688494664884,
+      0.0024743008259475708,
+      0.002021876556094971,
+      0.00213844340234145,
+      0.0021460332091319543,
+      0.002079985037635542,
+      0.002128701696086869,
+      0.002060215873818029,
+      0.002084067157929429,
+      0.0020885966457366493,
+      0.0020709804279052555,
+      0.002089065499619507,
+      0.0020771339943252824,
+      0.002081649430423061,
+      0.0020825128099965355,
+      0.0020792577064463347,
+      0.0020824999322352922,
+      0.002080480526755057,
+      0.0020811456178812166,
+      0.0020813960876467008,
+      0.0020807790724923876,
+      0.0020813398911863072,
+      0.0020810261768022613,
+      0.0020810952226490327,
+      0.0020811720331664306,
+      0.0020810562927532812,
+      0.002081143579195603,
+      0.0020811053182895494
+    ],
+    "max_mm": 0.1554550742186351,
+    "frame": 17,
+    "free_vertices": 9433
+  },
+  "landmark_layer": {
+    "applied": false,
+    "reason": "the trajectory has no landmarks section"
+  },
+  "passed": true,
+  "not_run": {}
+}

@@ -217,10 +217,14 @@ def execute(
     cancel: threading.Event | None = None,
     timeout: float = 3600,
     threads: int = febio.DEFAULT_THREADS,
+    on_start: Callable[[Path], None] | None = None,
 ) -> Result:
+    """`on_start(run_dir)` is called once the run folder exists, before FEBio starts and the first progress report."""
     febio.threads_used(threads)  # refuse a bad count before a run folder exists
     require_ascii(runs_dir)
     run_dir = new_run_dir(runs_dir, name or prepared.feb.stem)
+    if on_start is not None:
+        on_start(run_dir)
     feb = run_dir / FEB_NAME
     shutil.copyfile(prepared.feb, feb)
     input_names = [FEB_NAME]

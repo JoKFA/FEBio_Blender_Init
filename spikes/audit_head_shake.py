@@ -1,5 +1,8 @@
 """One-off measurement (not product code): how much do the lips move against the head when the head is shaken?
 
+Written before T-28. It adds its own driver `head` to a copy of the scene, so on a scene imported after T-28
+(which already has a `head` driver) the scene check refuses it; use tools/head_shake_motion.py there.
+
 ADR-39 sets the head shake's acceptance to "runs and reports the amplitude" on an estimate (0.01 to 0.05 mm) that
 had not been run. This runs it with what exists today, as a first number for T-28: the lab's head shake
 (docs/03 section 13.8: the skull and the jaw translate along x, 3 back-and-forth cycles of 10 frames from frame

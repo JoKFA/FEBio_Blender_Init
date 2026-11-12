@@ -78,6 +78,10 @@ def cmd_import_asset(args: argparse.Namespace) -> int:
         size = " x ".join(f"{v:.1f}" for v in m["size_mm"])
         print(f"mesh       {m['name']:12} {m['vertices']:6d} vertices  {size} mm  ({m['role']})")
     for name, d in r["drivers"].items():
+        if "pivot_mm" not in d:  # no hinge (the head, T-28)
+            rest = ", at rest when a motion leaves it out" if d.get("absent_means_rest") else ""
+            print(f"driver     {name}: no hinge{rest}, moves {', '.join(d['moves'])}")
+            continue
         pivot = ", ".join(f"{v:.2f}" for v in d["pivot_mm"])
         axis = ", ".join(f"{v:.3f}" for v in d["axis"])
         print(f"driver     {name}: pivot ({pivot}) mm, axis ({axis}), moves {', '.join(d['moves'])}")
@@ -133,6 +137,11 @@ def cmd_run(args: argparse.Namespace) -> int:
     return 1
 
 
+def surface_text(h: dict) -> str:
+    return (f"{h['flipped_faces']} flipped faces of {h['faces']}, {h['edges_shorter_than_half']} edges < 0.5x, "
+            f"{h['edges_longer_than_double']} edges > 2x, edge ratio {h['edge_ratio_min']:.3f}..{h['edge_ratio_max']:.3f}")
+
+
 def run_scene(args: argparse.Namespace, show) -> int:
     from pathlib import Path
 
@@ -141,7 +150,8 @@ def run_scene(args: argparse.Namespace, show) -> int:
 
     try:
         result = simulate.run_scene(Path(args.scene), Path(args.trajectory), Path(args.runs_dir), febio_exe(),
-                                    args.name, show, None, args.timeout, args.threads)
+                                    args.name, show, None, args.timeout, args.threads,
+                                    on_start=lambda d: print(f"run folder {d}", flush=True))
     except (simulate.SceneRunError, run.RunError, FileNotFoundError) as e:
         print(f"ERROR  {e}")
         print("run NOT STARTED")
@@ -164,10 +174,32 @@ def run_scene(args: argparse.Namespace, show) -> int:
     for key, c in r["checks"].items():
         verdict = {True: "PASS", False: "FAIL", None: "NOT RUN"}[c["passed"]]
         print(f"check {key}    [{verdict}] {c['name']}: {c['message']}")
+    layer = r.get("landmark_layer")
+    if layer and layer["applied"]:
+        print(f"landmarks  applied: {layer['landmarks_moved']} moved, largest translation {layer['max_translation_mm']:.3g} mm, "
+              f"final differs from physics by at most {layer['max_final_minus_physics_mm']:.3g} mm (frame {layer['frame']})")
+    elif layer:
+        print(f"landmarks  not applied: {layer['reason']}")
     back = r.get("return_to_settled")
     if back and back["frames"]:
         print(f"returns    drivers back at rest on frame(s) {', '.join(map(str, back['frames']))}: nodes are at most "
               f"{back['max_mm']:.2e} mm (mean {back['mean_mm']:.2e} mm) from the settled shape (reported only)")
+    health = r.get("surface_health")
+    for version in ("physics", "final"):
+        h = (health or {}).get(version)
+        if h:
+            worst = h["worst"]
+            more = f"; worst frame {worst['frame']}: {surface_text(worst)}" if worst["frame"] != r["frames"] - 1 else ""
+            print(f"surface    {version}, last frame: {surface_text(h['last'])}{more} (reported only)")
+    settled = r.get("settled_shape") or {}
+    if "tissue_step_max_mm" in settled:
+        before, now = settled["tissue_step_frames"]
+        still = settled.get("tissue_settled")
+        verdict = "" if still is None else (f"; settled (limit {settled['tissue_settled_limit_mm']:g} mm)" if still else
+                                            f"; NOT SETTLED: above the {settled['tissue_settled_limit_mm']:g} mm limit, the "
+                                            "settled shape is still moving (give the motion a longer settle)")
+        print(f"settle     frame {now}: the tissue moved at most {settled['tissue_step_max_mm']:.2e} mm since frame {before}"
+              f"{verdict} (reported only)")
     t = r["timing"]
     if t.get("febio_s_per_frame") is not None:
         print(f"timing     FEBio {t['febio_s']} s, {t['febio_s_per_frame']} s per frame; "

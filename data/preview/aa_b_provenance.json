@@ -1,0 +1,154 @@
+{
+  "format": "asrp-provenance/1",
+  "run_id": "2026-11-12_aa-b_001",
+  "status": "complete",
+  "mode": "generated",
+  "command": [
+    "asrp",
+    "run",
+    "scene.json",
+    "aa_b.json"
+  ],
+  "inputs": {
+    "model.feb": {
+      "sha256": "1631c6b09f7cc9c5db2ac77889fd52126980892e0ae2f5336794c3e6d67af8f6",
+      "bytes": 2164507
+    },
+    "scene.json": {
+      "sha256": "3c9663fe979939f75e529751a91199c6aef620e246292c42f8e00f7c889816c9",
+      "bytes": 87286
+    },
+    "trajectory.json": {
+      "sha256": "bb22b959a57a046447c1f0ace0708e5037634499731b0fe3f0aa96dcdb331aea",
+      "bytes": 786879
+    },
+    "meshes/lips.obj": {
+      "sha256": "0214a4be839e7c6949ed05159e51bc5af73f4a6105d1b46895dc853975260c4f",
+      "bytes": 893862
+    },
+    "meshes/lips_tet.json": {
+      "sha256": "1ab281c588d61a017b71227e0656f9bbe78731aaa8dd0001e7797a1394d41704",
+      "bytes": 1234722
+    },
+    "meshes/jaw.obj": {
+      "sha256": "23fb9126852c2729b1dd445a5f55e836c1e029c1f5ce74d4b4c58fe39e6e169f",
+      "bytes": 652646
+    },
+    "meshes/skull.obj": {
+      "sha256": "a5883171901c0bd6e5c5b758f9441abde8d763060f0b9fe98f46104704d830e5",
+      "bytes": 2238213
+    },
+    "meshes/teeth_upper.obj": {
+      "sha256": "35e308fb17216addc2ccdf8d1fdac7ee67abe7bda76f0823c7c0b782978633da",
+      "bytes": 1916855
+    },
+    "meshes/teeth_lower.obj": {
+      "sha256": "64e2894abb186e1660c80266b049081ea2cd42d119ee68095e0eb627a949d7bb",
+      "bytes": 1916406
+    },
+    "landmarks/skin_mm.json": {
+      "sha256": "a3f0031cc475d4f3cc9f7232d0722106a9547148d19e9a404816de83dde7f972",
+      "bytes": 3738989
+    }
+  },
+  "parameters": {
+    "generator": {
+      "rhoi": 0.0,
+      "gravity_sign_in_febio": -1.0,
+      "gravity_from": 0.0,
+      "spring_offset_delta": "5 x median tet edge x k",
+      "spring_level_tolerance": 0.02,
+      "max_distance_edges": 2.0,
+      "max_retries": 8,
+      "dtmin_fraction": 0.00390625,
+      "motion_between_frames": "linear",
+      "spring_offset_delta_febio_mm": 8.102766388597072
+    },
+    "length_scale": 0.67,
+    "total_frames": 50,
+    "timeout_s": 3600,
+    "febio_args": [
+      "-i",
+      "model.feb",
+      "-o",
+      "model.log",
+      "-p",
+      "model.xplt",
+      "-noconfig",
+      "-silent"
+    ],
+    "febio_env": {
+      "OMP_NUM_THREADS": "4",
+      "MKL_NUM_THREADS": "4"
+    }
+  },
+  "software": {
+    "asrp": "0.0.1",
+    "asrp_source": {
+      "commit": "3bbc075b0ef77885dbbb43df690a4dd2a22bc872",
+      "dirty": false
+    },
+    "python": "3.13.6",
+    "febio": "4.13.0",
+    "os": "win32"
+  },
+  "outputs": {
+    "physics/positions.json": {
+      "sha256": "dadc423e5f3d87b86e6e857c452ba9456a15d292f2a024d9219f36c86369fd81",
+      "bytes": 48647
+    },
+    "physics/positions.npy": {
+      "sha256": "5e5c656b0910bda96e53879cf6e6f3abc52918e8316857aa47a85eafee25c9ba",
+      "bytes": 9824528
+    },
+    "physics/display.json": {
+      "sha256": "716b466450899651a804567886a15d31e5625ec17b992fe2b54c7064c831f318",
+      "bytes": 271
+    },
+    "physics/display.npy": {
+      "sha256": "67d3518200d8b30ff6b0db5bcaf1143a9a849456e69bd46b8d4fed54677e2983",
+      "bytes": 12533888
+    },
+    "physics/settled_frame14.json": {
+      "sha256": "631cda65f4282470e6aaf74e0abf1b0a335b412cf4fd78f000d9960fa1dd885e",
+      "bytes": 1054930
+    },
+    "physics/settled_frame14.obj": {
+      "sha256": "bcb9603e0751fd08a7aed6365bdb7213dda6e8a5cd9861504f04e2a3c7f3cc75",
+      "bytes": 948614
+    },
+    "playback.json": {
+      "sha256": "22efbc4051fcca43527222ba4828b34554b1814ebb767144488408bf3d3af5dd",
+      "bytes": 1047566
+    },
+    "playback.pc2": {
+      "sha256": "611ae531254d068eb30820d78ddd7895cc8a193dd2cb3bb863c4019d738c93a6",
+      "bytes": 6266912
+    },
+    "final/display.json": {
+      "sha256": "9553c1964883cddffed03efb4a6a62fb8f91683eecc42f17ba4b509d9c99d7b2",
+      "bytes": 240
+    },
+    "final/display.npy": {
+      "sha256": "224af25dcd1bfa4a7cb2b8b28f897737b10f764e49a9038c0f94336b8f9682cd",
+      "bytes": 12533888
+    },
+    "playback_final.pc2": {
+      "sha256": "b6f715a8e9dddd28cad0b3ab5eebd058d29c05f168934f174c58ed606161c695",
+      "bytes": 6266912
+    },
+    "run_report.json": {
+      "sha256": "dd82dde09ecc6d037573ba2f14b495019f2dd7d05cd3b3ff3a52c8e8c39a62cf",
+      "bytes": 22325
+    }
+  },
+  "failure": null,
+  "timing": {
+    "started_utc": "2026-11-12T17:30:02+00:00",
+    "febio_seconds": 33.74,
+    "finished_utc": "2026-11-12T17:30:37+00:00"
+  },
+  "result": {
+    "frames_written": 50
+  }
+}
