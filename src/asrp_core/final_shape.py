@@ -13,7 +13,8 @@ The conversion to mm, Z up happens inside, once, through asrp_core.asset.coords.
     model = final_shape.load("runs/<a completed lips run>")      # once
     jaw = np.eye(3)
     for step in range(n_steps):
-        jaw = jaw @ relative_rotation(step)      # the caller composes the per-step rotations
+        jaw = relative_rotation(step) @ jaw      # the caller composes the per-step rotations; a turn about
+                                                 # WORLD axes multiplies on the left (column vectors)
         positions = landmark_positions_after_step(step)           # (300, 3), absolute, oor_01..oor_300
         lips = final_shape.final_shape(model, jaw, positions)     # (10240, 3), the mesh's vertex order
         objective = ...
