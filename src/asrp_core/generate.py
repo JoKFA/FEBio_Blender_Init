@@ -47,8 +47,8 @@ What it writes, all in mm, N, MPa, s (mass in tonnes):
 
 Load controller ids run 1, 2, 3 ... with no gaps (pit 15). Every number is written through `_num`,
 so a numpy scalar never reaches the file (FEBio reads the text "np.float64(0.1)" as 0 and says
-nothing; found while building this, docs/05 pit 16). FEBio runs single-threaded (`febio.ENV`, pit 17) so that the
-same .feb gives the same positions to the last digit.
+nothing; found while building this, docs/05 pit 16). FEBio runs with `febio.DEFAULT_THREADS` threads (pit 17): the same .feb
+gives the same positions within 1e-9 mm, and to the last digit with one thread (`asrp run --threads 1`).
 """
 
 import math

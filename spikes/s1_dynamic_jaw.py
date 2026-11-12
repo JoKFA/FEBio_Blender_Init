@@ -197,10 +197,10 @@ def hinge_rotate(p, angle: float):
     return (p[0], PIVOT[1] + c * y - s * z, PIVOT[2] + s * y + c * z)
 
 
-def run_and_check(out: Path) -> dict:
+def run_and_check(out: Path, threads: int = febio.DEFAULT_THREADS) -> dict:
     out.mkdir(parents=True, exist_ok=True)
     model = build_feb(out / "s1.feb")
-    result = febio.run(out / "s1.feb", febio_exe())
+    result = febio.run(out / "s1.feb", febio_exe(), threads=threads)
     assert result.returncode == 0 and result.normal_termination, f"FEBio failed, see {result.log}"
 
     hist = febio.read_node_data(result.log, "positions")

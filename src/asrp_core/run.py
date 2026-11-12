@@ -162,7 +162,9 @@ def execute(
     on_progress: Callable[[Progress], None] | None = None,
     cancel: threading.Event | None = None,
     timeout: float = 3600,
+    threads: int = febio.DEFAULT_THREADS,
 ) -> Result:
+    febio.threads_used(threads)  # refuse a bad count before a run folder exists
     require_ascii(runs_dir)
     run_dir = new_run_dir(runs_dir, name or prepared.feb.stem)
     feb = run_dir / FEB_NAME
@@ -183,7 +185,7 @@ def execute(
         # The FEBio arguments (-noconfig, fixed names) are part of the recipe: they decide what FEBio reads.
         "parameters": {**prepared.parameters, "length_scale": prepared.length_scale, "total_frames": total, "timeout_s": timeout,
                        "febio_args": febio.command(FEB_NAME, LOG_NAME, PLOT_NAME, Path("febio4"))[1:],
-                       "febio_env": febio.ENV},
+                       "febio_env": febio.thread_env(threads)},  # the threads actually used
         "software": provenance.software(None),
         "outputs": {},
         "failure": None,
@@ -196,7 +198,7 @@ def execute(
     try:
         with tempfile.TemporaryFile() as console:  # FEBio's console text; read only if the log explains nothing
             t0 = time.perf_counter()
-            proc = febio.start(feb, LOG_NAME, PLOT_NAME, exe, console)
+            proc = febio.start(feb, LOG_NAME, PLOT_NAME, exe, console, threads)
             cancelled, failure = _wait(proc, run_dir, total, on_progress, cancel, timeout)
             proc.wait()
             record["timing"]["febio_seconds"] = round(time.perf_counter() - t0, 3)

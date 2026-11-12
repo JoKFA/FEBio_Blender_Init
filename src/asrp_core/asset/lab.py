@@ -32,6 +32,14 @@ from asrp_core.asset import coords
 DEFAULT_MM_PER_SCENE_UNIT = 0.962  # paper appendix V, same as the lab controller (ADR-31); still a setting
 LIPS = "middleres_OrbicularisOris"
 JAW_DRIVER = "jaw01"
+# ADR-32: what phase 1 leaves out of the lab's model; written into scene.json, copied into the run report.
+SIMPLIFICATIONS = [
+    "the 6 muscles around the mouth attached to the lips (zAttachment to zTissue around the orbicularis): not built in "
+    "phase 1, ADR-32",
+    "the 9 skin attachments to the lips (zCloth): not built in phase 1, ADR-32 (skin is phase 2, T-18)",
+    "the chain mouth-corner node -> zTissue2/3 -> skull and jaw: replaced by the lip-corner anchor that turns alpha x the "
+    "jaw angle (A-35, docs/05 section 3)",
+]
 # name in scene.json -> (Maya mesh name, motion, driver); docs/03 sections 3 and 4.
 BONES = {
     "jaw": ("middleres_Jaw", "prescribed", JAW_DRIVER),
@@ -292,6 +300,7 @@ def import_asset(export: Path, out: Path, tet_mesh: Path,
         drivers=drivers,
         attachments=attachments,
         anchors=anchors,
+        simplifications=list(SIMPLIFICATIONS),
         landmarks=landmarks,
         solver=scene.Solver(
             "dynamic",

@@ -2,8 +2,18 @@ import argparse
 import json
 from dataclasses import asdict
 
-from asrp_core import __version__
+from asrp_core import __version__, febio
 from asrp_core.doctor import run_checks
+
+
+def thread_count(text: str) -> int:
+    try:
+        n = int(text)
+    except ValueError:
+        n = 0
+    if n < 1:
+        raise argparse.ArgumentTypeError(f"{text!r} is not a thread count; give a whole number, 1 or more")
+    return n
 
 
 def cmd_doctor(args: argparse.Namespace) -> int:
@@ -106,7 +116,7 @@ def cmd_run(args: argparse.Namespace) -> int:
 
     try:
         prepared = run.standin(Path(args.feb))
-        result = run.execute(prepared, Path(args.runs_dir), febio_exe(), args.name, show, None, args.timeout)
+        result = run.execute(prepared, Path(args.runs_dir), febio_exe(), args.name, show, None, args.timeout, args.threads)
     except (run.RunError, FileNotFoundError) as e:
         print(f"ERROR  {e}")
         return 1
@@ -131,7 +141,7 @@ def run_scene(args: argparse.Namespace, show) -> int:
 
     try:
         result = simulate.run_scene(Path(args.scene), Path(args.trajectory), Path(args.runs_dir), febio_exe(),
-                                    args.name, show, None, args.timeout)
+                                    args.name, show, None, args.timeout, args.threads)
     except (simulate.SceneRunError, run.RunError, FileNotFoundError) as e:
         print(f"ERROR  {e}")
         print("run NOT STARTED")
@@ -154,10 +164,14 @@ def run_scene(args: argparse.Namespace, show) -> int:
     for key, c in r["checks"].items():
         verdict = {True: "PASS", False: "FAIL", None: "NOT RUN"}[c["passed"]]
         print(f"check {key}    [{verdict}] {c['name']}: {c['message']}")
+    back = r.get("return_to_settled")
+    if back and back["frames"]:
+        print(f"returns    drivers back at rest on frame(s) {', '.join(map(str, back['frames']))}: nodes are at most "
+              f"{back['max_mm']:.2e} mm (mean {back['mean_mm']:.2e} mm) from the settled shape (reported only)")
     t = r["timing"]
     if t.get("febio_s_per_frame") is not None:
-        print(f"timing     FEBio {t['febio_s']} s, {t['febio_s_per_frame']} s per frame (budget {t['budget_s_per_frame']}, "
-              f"reported only); generate {t['generate_s']} s, post {t['post_s']} s")
+        print(f"timing     FEBio {t['febio_s']} s, {t['febio_s_per_frame']} s per frame; "
+              f"generate {t['generate_s']} s, post {t['post_s']} s")
     print(f"report     {result.run_dir / simulate.REPORT}")
     if result.status == "complete":
         skipped = r.get("not_run", {})
@@ -201,6 +215,9 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--runs-dir", default="runs", help="where run folders go (default: runs; English-only path)")
     r.add_argument("--name", help="name for the run folder (default: the trajectory's or the .feb's name)")
     r.add_argument("--timeout", type=float, default=3600, help="stop FEBio after this many seconds")
+    r.add_argument("--threads", type=thread_count, default=febio.DEFAULT_THREADS,
+                   help=f"FEBio threads (default {febio.DEFAULT_THREADS}, never more than this machine's CPUs); "
+                        "1 gives bit-identical results, more gives results within 1e-9 mm")
     r.set_defaults(func=cmd_run)
 
     args = parser.parse_args(argv)
