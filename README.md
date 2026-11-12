@@ -1,12 +1,41 @@
 # ASRP
 
-Replace Ziva (the physics backend under the lab's facial controller) with FEBio, and Maya (the host) with Blender.
+![The lab's real lips opening and closing as the jaw turns, computed by FEBio and played back in Blender](data/preview/prototype_motion.gif)
+
+*The lab's real lips, pulled by the jaw (red: lips computed by FEBio; blue: jaw; grey: skull). Placeholder jaw motion, temporary material values, no landmark layer yet.*
+
+ASRP replaces Ziva (the physics backend under the lab's facial controller) with FEBio, and Maya (the host) with Blender. The prototype takes the lab's real lip mesh, lets the jaw pull it through 51 frames, solves it with FEBio in about two minutes and plays it back in Blender; the numbers and their limits are on one page: **[docs/15-prototype.md](docs/15-prototype.md)** (Chinese).
+
+## Run the prototype
+
+After the setup below (`uv sync`, `uv run asrp doctor` all `ok`), three commands, about two minutes, no Maya or Ziva needed (the output folders are git-ignored):
+
+```bash
+uv run asrp import-asset data/lab_export runs/prototype_scene
+uv run python tools/placeholder_jaw_motion.py runs/prototype_scene/scene.json runs/prototype_scene/placeholder_jaw.json
+uv run asrp run runs/prototype_scene/scene.json runs/prototype_scene/placeholder_jaw.json
+```
+
+The last line printed is `run COMPLETE: 51 frames; plausibility PASSED`. The result is `runs/<date>_placeholder-jaw_001/`; how to play it in Blender and what is in the folder: [docs/15-prototype.md](docs/15-prototype.md).
 
 - `src/asrp_core/`: solver core. Runs in its own process with its own venv; no `bpy`.
 - `blender_addon/asrp_blender/`: thin Blender add-on. UI only; calls the core as a subprocess.
 - `docs/`: the project's design documents (Chinese). They are the single source of truth for scope, design, standards and tasks.
 
 **Start here: [docs/README.md](docs/README.md).**
+
+## Commands
+
+| Command | What it does |
+|---|---|
+| `uv run asrp doctor` | check that FEBio, Blender and Python are usable |
+| `uv run asrp check <scene.json> [trajectory.json]` | check a scene (and a motion against it) |
+| `uv run asrp import-asset <export folder> <new folder>` | turn the lab export in `data/lab_export` into a `scene.json` |
+| `uv run asrp run <scene.json> <trajectory.json>` | generate the FEBio model, solve it, write a run folder (generated mode) |
+| `uv run asrp run --feb <model.feb>` | stand-in mode: run an existing `.feb` as is, same run folder |
+| `uv run python tools/verify.py` | everything below under "Checks" |
+
+`asrp run` options: `--runs-dir` (default `runs`, an English-only path), `--name`, `--timeout`.
 
 ## Setup (Windows)
 
@@ -59,17 +88,17 @@ Installed this way the add-on lives outside the repo, so Check Backend needs `AS
 
 ## Playing a result in Blender
 
-So far this is spike S1 only: a 10 × 10 × 35 mm test block, not the lab's lips. The lab asset has not been through FEBio yet (docs/09-roadmap-and-tasks.md).
+A solved run is a folder with `playback.json` (surface mesh, mm) and `playback.pc2` (per-frame positions). `runs/` is git-ignored, so a fresh clone has to run something first: the lab lips (the three commands above) or the small S1 test block (`uv run python spikes/s1_dynamic_jaw.py`, writes `runs/s1_dynamic_jaw`).
 
-A solved run is a folder with `playback.json` (surface mesh, mm) and `playback.pc2` (per-frame positions). `runs/` is git-ignored, so a fresh clone has to solve S1 first, which needs FEBio:
+In Blender (with the add-on installed, above): delete the default cube, then sidebar (N) > ASRP > Load Result, pick the run folder (the one that contains `playback.json`), View > Frame Selected (numpad `.`), press play. The object is scaled 0.001 so mm data shows in metres. Load Result brings in the lips only; the skull and jaw in the pictures come from `tools/render_prototype.py`:
 
 ```bash
-uv run python spikes/s1_dynamic_jaw.py
+"C:/Program Files/Blender Foundation/Blender 5.2/blender.exe" --background --factory-startup --python-exit-code 1 --python tools/render_prototype.py -- runs/<run folder> --out runs/<run folder>/render
 ```
 
-In Blender: delete the default cube (the result is 3.5 cm tall and sits inside it), then sidebar (N) > ASRP > Load Result, pick the run folder, View > Frame Selected (numpad `.`), press play. The object is scaled 0.001 so mm data shows in metres.
+It checks the Blender result against the solver's numbers, then renders three side views (rest, settled, jaw fully open). Add `--frames-dir <folder>` to render every frame (that is how `data/preview/prototype_motion.gif` was made).
 
-To render a few frames from the side (the camera and context props fit S1's geometry, so this works for S1 only). In PowerShell, put `&` in front of the quoted path:
+To render a few frames of the S1 block from the side (the camera and context props fit S1's geometry only). In PowerShell, put `&` in front of the quoted path:
 
 ```bash
 "C:/Program Files/Blender Foundation/Blender 5.2/blender.exe" --background --factory-startup --python-exit-code 1 --python tools/render_playback.py -- runs/s1_dynamic_jaw runs/s1_dynamic_jaw/render 0 15 30 45

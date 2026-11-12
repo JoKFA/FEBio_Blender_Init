@@ -1,0 +1,133 @@
+{
+  "format": "asrp-provenance/1",
+  "run_id": "2026-11-11_placeholder-jaw_001",
+  "status": "complete",
+  "mode": "generated",
+  "command": [
+    "asrp",
+    "run",
+    "scene.json",
+    "placeholder_jaw.json"
+  ],
+  "inputs": {
+    "model.feb": {
+      "sha256": "9e7b6678f4d7db427a4ed3432c6e76609f822c87f23615ed6aa6464805e9894c",
+      "bytes": 2160956
+    },
+    "scene.json": {
+      "sha256": "ef0e94583f49f0e1c5ccd732633fe195b7981e68b5960c107c1fe13ea81aef3f",
+      "bytes": 86780
+    },
+    "trajectory.json": {
+      "sha256": "c97220aed684698697ff6558640583cfebf8d6f19ea61c43a2855da9803a7bfc",
+      "bytes": 11348
+    },
+    "meshes/lips.obj": {
+      "sha256": "0214a4be839e7c6949ed05159e51bc5af73f4a6105d1b46895dc853975260c4f",
+      "bytes": 893862
+    },
+    "meshes/lips_tet.json": {
+      "sha256": "1ab281c588d61a017b71227e0656f9bbe78731aaa8dd0001e7797a1394d41704",
+      "bytes": 1234722
+    },
+    "meshes/jaw.obj": {
+      "sha256": "23fb9126852c2729b1dd445a5f55e836c1e029c1f5ce74d4b4c58fe39e6e169f",
+      "bytes": 652646
+    },
+    "meshes/skull.obj": {
+      "sha256": "a5883171901c0bd6e5c5b758f9441abde8d763060f0b9fe98f46104704d830e5",
+      "bytes": 2238213
+    },
+    "meshes/teeth_upper.obj": {
+      "sha256": "35e308fb17216addc2ccdf8d1fdac7ee67abe7bda76f0823c7c0b782978633da",
+      "bytes": 1916855
+    },
+    "meshes/teeth_lower.obj": {
+      "sha256": "64e2894abb186e1660c80266b049081ea2cd42d119ee68095e0eb627a949d7bb",
+      "bytes": 1916406
+    },
+    "landmarks/skin_skinCluster7.json": {
+      "sha256": "ba6c84258831607df7d8303630779e00669de28ba4f7df8099aef727b474e186",
+      "bytes": 4090146
+    }
+  },
+  "parameters": {
+    "generator": {
+      "rhoi": 0.0,
+      "gravity_sign_in_febio": -1.0,
+      "gravity_from": 0.0,
+      "spring_offset_delta": "5 x median tet edge x k",
+      "spring_level_tolerance": 0.02,
+      "max_distance_edges": 2.0,
+      "max_retries": 8,
+      "dtmin_fraction": 0.00390625,
+      "motion_between_frames": "linear",
+      "spring_offset_delta_febio_mm": 8.102766388597072
+    },
+    "length_scale": 0.67,
+    "total_frames": 50,
+    "timeout_s": 3600,
+    "febio_args": [
+      "-i",
+      "model.feb",
+      "-o",
+      "model.log",
+      "-p",
+      "model.xplt",
+      "-noconfig",
+      "-silent"
+    ],
+    "febio_env": {
+      "OMP_NUM_THREADS": "1"
+    }
+  },
+  "software": {
+    "asrp": "0.0.1",
+    "asrp_source": {
+      "commit": "1f5c454fbef1319c67d173654d90c973781147fd",
+      "dirty": false
+    },
+    "python": "3.13.6",
+    "febio": "4.13.0",
+    "os": "win32"
+  },
+  "outputs": {
+    "physics/positions.json": {
+      "sha256": "b173f0e03bd5704470b5e21e4969c496519f7dcb54c88f670bda99ecb2cf04e0",
+      "bytes": 25473731
+    },
+    "physics/display.json": {
+      "sha256": "ba0b1efb48d47ba251c700508f6793395ef9c5c6d419fe6745e4231582aec666",
+      "bytes": 32481724
+    },
+    "physics/settled_frame14.json": {
+      "sha256": "7ced4a12f5d2993a90b0e48baa35d4dc55784136cb0b68bc185e86fdfced5afa",
+      "bytes": 1054937
+    },
+    "physics/settled_frame14.obj": {
+      "sha256": "21ecefb84dac8e6688ac8876a135c8d3c89a04246298fbb0c85639d5ba404424",
+      "bytes": 948613
+    },
+    "playback.json": {
+      "sha256": "f5e591fea25a529c24e10ef5554e4c0b71a14195d036253db55ff89c99b1446c",
+      "bytes": 1047494
+    },
+    "playback.pc2": {
+      "sha256": "2d20392ff39a0bf8802081cb2a570bccb51bb4d930e5b5e586514cb34903cbfa",
+      "bytes": 6266912
+    },
+    "run_report.json": {
+      "sha256": "acb8342c01e83ed34c05df91ddc4f0b5eaecace7349deb6323699a43982ba032",
+      "bytes": 21177
+    }
+  },
+  "failure": null,
+  "timing": {
+    "started_utc": "2026-11-12T03:33:37+00:00",
+    "febio_seconds": 102.299,
+    "finished_utc": "2026-11-12T03:35:23+00:00"
+  },
+  "result": {
+    "frames_written": 50
+  }
+}
