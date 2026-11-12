@@ -539,7 +539,28 @@ def test_check_d_fails_on_an_inverted_tet_and_reports_the_volume_ratios():
     assert plausibility.tet_mesh_valid(rest, tets, flat).passed is False
     missing = frames.copy()
     missing[3, 2] = np.nan  # a frame FEBio did not log
-    assert plausibility.tet_mesh_valid(rest, tets, missing).passed is False
+    gone = plausibility.tet_mesh_valid(rest, tets, missing)
+    assert gone.passed is False
+    assert gone.numbers["min_volume_ratio"] is None  # -inf for a missing position: JSON has no such number
+    json.dumps(gone.numbers, allow_nan=False)
+    zero_rest = rest.copy()
+    zero_rest[3] = zero_rest[0]  # a rest tet of zero volume: its ratio is inf or NaN
+    degenerate = plausibility.tet_mesh_valid(zero_rest, tets, frames)
+    assert degenerate.numbers["max_volume_ratio"] is None  # inf
+    json.dumps(degenerate.numbers, allow_nan=False)
+
+
+def test_a_display_header_that_is_not_json_or_lacks_a_key_is_refused_in_a_sentence(tmp_path):
+    header = {"format": simulate.DISPLAY_FORMAT, "units": "mm", "fps": 30.0, "frames": 4, "vertex_count": 6}
+    path = tmp_path / "display.json"
+    run_module.save_array(path, header, np.zeros((4, 6, 3)), "display.npy")
+    good = json.loads(path.read_text())
+    for text, words in (("{nope", "as JSON"), ("3", "not a JSON object"),
+                        (json.dumps({k: v for k, v in good.items() if k != "vertex_count"}), "vertex_count"),
+                        (json.dumps({k: v for k, v in good.items() if k != "shape"}), "shape")):
+        path.write_text(text)
+        with pytest.raises(run_module.RunError, match=words):
+            simulate.read_display(path)
 
 
 def test_return_to_settled_measures_only_frames_where_every_driver_is_back_at_rest():

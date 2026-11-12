@@ -214,7 +214,11 @@ def tet_mesh_valid(rest_nodes: np.ndarray, tets: np.ndarray, node_frames: np.nda
         if ratio.min() < lowest:
             lowest, lowest_frame = float(ratio.min()), f
         highest = max(highest, float(ratio.max()))
-    numbers = {"min_volume_ratio": lowest, "min_volume_ratio_frame": lowest_frame, "max_volume_ratio": highest,
+    def finite(x):  # None, never NaN or inf, in the report: JSON has no such number
+        return float(x) if np.isfinite(x) else None
+
+    numbers = {"min_volume_ratio": finite(lowest), "min_volume_ratio_frame": lowest_frame,
+               "max_volume_ratio": finite(highest),
                "inverted_tets": inverted, "frames_with_inverted_tets": frames_with, "tets": int(len(tets)),
                "frames": int(len(node_frames))}
     if inverted:

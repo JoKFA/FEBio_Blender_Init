@@ -25,9 +25,10 @@ from s1_dynamic_jaw import FRAMES, build_feb  # noqa: E402
 PHYSICS_FILES = {"model.feb", "model.log", "physics/positions.json", "physics/positions.npy", "provenance.json"}
 
 
-def make_feb(path, time_steps=None, jaw_open=None, drop_output=False, data_file=False):
+def make_feb(path, time_steps=None, jaw_open=None, drop_output=False, data_file=False, file=None, no_delim=False):
     """The S1 model, optionally with a different step count, a jaw angle that breaks it, no node output, or the
-    node output in its own data file (as the generator writes it) instead of the log."""
+    node output in its own data file (as the generator writes it) instead of the log. file: the name of that data
+    file if not the generator's; no_delim: leave out delim="," so the records have no id,x,y,z rows."""
     path.parent.mkdir(parents=True, exist_ok=True)
     build_feb(path)
     text = path.read_text()
@@ -39,7 +40,10 @@ def make_feb(path, time_steps=None, jaw_open=None, drop_output=False, data_file=
         text = re.sub(r"<Output>.*</Output>", "", text, flags=re.S)
     if data_file:
         assert 'delim=","/>' in text
-        text = text.replace('delim=","/>', f'delim="," file="{febio.NODE_DATA_FILE}"/>')
+        text = text.replace('delim=","/>', f'delim="," file="{file or febio.NODE_DATA_FILE}"/>')
+    if no_delim:
+        assert 'delim=","' in text
+        text = text.replace(' delim=","', "")
     path.write_text(text)
     return path
 
@@ -284,6 +288,39 @@ def test_a_failed_run_with_a_data_file_leaves_neither_results_nor_the_raw_file(t
 
     assert bad.status == "failed"
     assert files_in(bad.run_dir) == {"model.feb", "model.log", "provenance.json"}
+
+
+def test_only_the_generators_raw_data_file_is_deleted_any_other_named_file_is_left_alone(tmp_path):
+    other = execute(make_feb(tmp_path / "a" / "jaw.feb", data_file=True, file="mydata.txt"), tmp_path / "runs", threads=1)
+    assert other.status == "complete", other.failure
+    assert (other.run_dir / "physics" / "positions.npy").is_file()  # still read from the file the .feb names
+    assert (other.run_dir / "mydata.txt").is_file()  # ... but not ours to delete
+    assert provenance.read(other.run_dir)["status"] == "complete"
+
+    own = execute(make_feb(tmp_path / "b" / "jaw.feb", data_file=True), tmp_path / "runs", threads=1)
+    assert not (own.run_dir / febio.NODE_DATA_FILE).exists()  # the generator's own file is still removed
+
+    clash = execute(make_feb(tmp_path / "c" / "jaw.feb", data_file=True, file="model.log"), tmp_path / "runs", threads=1)
+    assert (clash.run_dir / "model.log").is_file() and (clash.run_dir / "model.log").stat().st_size > 0
+
+
+def test_a_positions_series_with_no_node_rows_is_refused(tmp_path):
+    result = execute(make_feb(tmp_path / "jaw.feb", no_delim=True), tmp_path / "runs", threads=1)
+    assert result.status == "failed"
+    assert "id,x,y,z" in result.failure.message and 'delim=","' in result.failure.message
+    assert not (result.run_dir / "physics").exists()
+
+
+def test_a_header_that_is_not_json_or_lacks_a_key_is_a_sentence_not_a_traceback(tmp_path):
+    result = execute(make_feb(tmp_path / "jaw.feb"), tmp_path / "runs", threads=1)
+    path = result.run_dir / run.POSITIONS
+    good = json.loads(path.read_text())
+    for text, words in (("{not json", "as JSON"), ("[1, 2]", "not a JSON object"), ("", "as JSON"),
+                        (json.dumps({k: v for k, v in good.items() if k != "node_ids"}), "node_ids"),
+                        (json.dumps({k: v for k, v in good.items() if k != "array"}), "array")):
+        path.write_text(text)
+        with pytest.raises(run.RunError, match=words):
+            run.read_positions(path)
 
 
 def test_a_positions_header_that_disagrees_with_its_array_is_refused(tmp_path):

@@ -286,7 +286,7 @@ def _unrun_checks(check_a: plausibility.Check) -> dict:
 
 def read_display(path: Path) -> dict:
     """The display header plus "positions": a float64 array (frames, vertices, 3), geometric mm."""
-    data = run.load_array(path, "positions")
+    data = run.load_array(path, "positions", ("frames", "vertex_count"))
     shape = data["positions"].shape
     if list(shape) != [data["frames"], data["vertex_count"], 3]:
         raise run.RunError(f"{path.name} says {data['frames']} frames of {data['vertex_count']} vertices but its "
