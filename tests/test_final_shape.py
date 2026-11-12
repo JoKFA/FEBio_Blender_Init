@@ -358,3 +358,14 @@ def test_importing_the_module_needs_neither_blender_nor_a_subprocess():
             "print(bad); sys.exit(1 if bad else 0)")
     done = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True)
     assert done.returncode == 0, done.stdout + done.stderr
+
+
+def test_a_base_whose_tissue_was_still_moving_is_refused_unless_asked_for(tmp_path):
+    moving = {"available": True, "frame": 14, "tissue_settled": False, "tissue_step_max_mm": 0.0054,
+              "tissue_settled_limit_mm": 0.001}
+    folder, _ = make_run(tmp_path / "moving", settled=moving)
+    with pytest.raises(fs.FinalShapeError, match="still moving.*0.0054"):
+        fs.load(folder)
+    assert fs.load(folder, allow_unsettled=True).base == "settled"
+    still, _ = make_run(tmp_path / "still", settled={**moving, "tissue_settled": True, "tissue_step_max_mm": 4e-7})
+    assert fs.load(still).base == "settled"  # and a run report from before the key existed is accepted (other tests)

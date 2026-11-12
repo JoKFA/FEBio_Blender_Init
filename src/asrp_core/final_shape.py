@@ -110,7 +110,7 @@ def _scene_parts(scene_path: Path) -> tuple[scene_module.Scene, skinning.Skin, n
     return scene, skin, rest_scene
 
 
-def load(run_dir, *, allow_failed_checks: bool = False) -> LipModel:
+def load(run_dir, *, allow_failed_checks: bool = False, allow_unsettled: bool = False) -> LipModel:
     """Load the model from a COMPLETED run folder: its scene.json (landmarks, units), the skin file the
     scene references, and the shape after the gravity-only settle (physics/settled_frame<n>.json).
     The model's base is "settled". A run whose plausibility checks did not all pass is refused unless
@@ -138,6 +138,14 @@ def load(run_dir, *, allow_failed_checks: bool = False) -> LipModel:
         raise FinalShapeError(
             f"the run in {run_dir} has no settled shape: {reason or 'run_report.json does not say why'}. "
             "Make the run with a trajectory whose settle_until_frame ends a stretch where nothing moves"
+        )
+    if settled.get("tissue_settled") is False and not allow_unsettled:  # absent (an older run): not known, accepted
+        raise FinalShapeError(
+            f"the run in {run_dir} has a settled shape, but the tissue was still moving at that frame: "
+            f"{settled.get('tissue_step_max_mm')!r} mm in the last frame of the settle, above the "
+            f"{settled.get('tissue_settled_limit_mm')!r} mm limit. A base that is still moving gives a different lip "
+            "shape depending on when it is read. Give the motion a longer settle, or pass allow_unsettled=True if you "
+            "accept it"
         )
     frame = settled.get("frame")
     scene, skin, rest_scene = _scene_parts(run_dir / "scene.json")

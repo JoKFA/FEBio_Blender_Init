@@ -289,12 +289,18 @@ def return_to_settled(node_frames: np.ndarray, settle: int, transforms: list, to
     return {"frames": frames, "max_mm": float(dist.max()), "mean_mm": float(dist.mean())}
 
 
+TISSUE_SETTLED_LIMIT_MM = HARD_TOLERANCE_MM  # a node moving less than this in the last settle frame counts as still
+
+
 def tissue_step(node_frames: np.ndarray, frame: int) -> dict:
     """Not a check: how far the tet nodes moved between frame - 1 and `frame`, geometric mm: the largest and the mean
-    distance over the nodes, and the two frame numbers."""
+    distance over the nodes, the two frame numbers, and `tissue_settled`: whether the largest step is below
+    TISSUE_SETTLED_LIMIT_MM. The drivers being at rest (settled_shape.available) says the bones stopped; this says
+    whether the tissue did. It does not change `passed`; asrp_core.final_shape refuses a base that is not settled."""
     step = np.linalg.norm(node_frames[frame] - node_frames[frame - 1], axis=1)
     return {"tissue_step_max_mm": float(step.max()), "tissue_step_mean_mm": float(step.mean()),
-            "tissue_step_frames": [frame - 1, frame]}
+            "tissue_step_frames": [frame - 1, frame], "tissue_settled": bool(step.max() < TISSUE_SETTLED_LIMIT_MM),
+            "tissue_settled_limit_mm": TISSUE_SETTLED_LIMIT_MM}
 
 
 # --- the display surface against its rest shape (reported only) ---------------------------------------------------

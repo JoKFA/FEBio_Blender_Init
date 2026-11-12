@@ -245,7 +245,7 @@ def _physics_checks(model: generate.Model, node_frames: np.ndarray, display: np.
                                              material["density_t_per_mm3"].value, material["E_mpa"].value, model.k)
         checks["c"] = plausibility.gravity_sag(model.display, display, free, model.gravity, estimate,
                                                range(max(1, settle - SETTLE_FRAMES + 1), settle + 1))
-        report["settled_shape"] |= plausibility.tissue_step(node_frames, settle)  # reported only, no threshold
+        report["settled_shape"] |= plausibility.tissue_step(node_frames, settle)  # reported; does not change `passed`
     else:
         if settle is None:
             reason = "the trajectory does not say where the gravity-only settle ends (settle_until_frame)"

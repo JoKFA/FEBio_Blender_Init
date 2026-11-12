@@ -194,8 +194,12 @@ def run_scene(args: argparse.Namespace, show) -> int:
     settled = r.get("settled_shape") or {}
     if "tissue_step_max_mm" in settled:
         before, now = settled["tissue_step_frames"]
-        print(f"settle     frame {now}: the tissue moved at most {settled['tissue_step_max_mm']:.2e} mm since frame {before} "
-              "(reported only)")
+        still = settled.get("tissue_settled")
+        verdict = "" if still is None else (f"; settled (limit {settled['tissue_settled_limit_mm']:g} mm)" if still else
+                                            f"; NOT SETTLED: above the {settled['tissue_settled_limit_mm']:g} mm limit, the "
+                                            "settled shape is still moving (give the motion a longer settle)")
+        print(f"settle     frame {now}: the tissue moved at most {settled['tissue_step_max_mm']:.2e} mm since frame {before}"
+              f"{verdict} (reported only)")
     t = r["timing"]
     if t.get("febio_s_per_frame") is not None:
         print(f"timing     FEBio {t['febio_s']} s, {t['febio_s_per_frame']} s per frame; "

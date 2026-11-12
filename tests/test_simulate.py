@@ -301,6 +301,8 @@ def test_the_settle_step_is_how_far_the_tet_nodes_moved_in_the_settle_frames_las
     step = np.linalg.norm(data[1][tissue] - data[0][tissue], axis=1)  # frame 2 minus frame 1
     assert step.max() > 0
     assert settled["tissue_step_max_mm"] == pytest.approx(step.max(), rel=1e-9)
+    assert settled["tissue_settled"] is bool(step.max() < settled["tissue_settled_limit_mm"])
+    assert settled["tissue_settled_limit_mm"] == simulate.plausibility.TISSUE_SETTLED_LIMIT_MM == 0.001
     assert settled["tissue_step_mean_mm"] == pytest.approx(step.mean(), rel=1e-9)
     code = cli.main(["run", str(tmp_path / "box" / "scene.json"), str(traj), "--runs-dir", str(tmp_path / "cli")])
     assert code == 0 and "settle     frame 2: the tissue moved at most " in capsys.readouterr().out
@@ -313,7 +315,7 @@ def test_the_reported_only_keys_change_nothing_else(tmp_path, monkeypatch):
     monkeypatch.setattr(simulate, "_surface_health", lambda *a: "left out")
     monkeypatch.setattr(simulate.plausibility, "tissue_step", lambda *a: {})
     without = run(tmp_path / "box", traj, "without")
-    new = ("tissue_step_max_mm", "tissue_step_mean_mm", "tissue_step_frames")
+    new = ("tissue_step_max_mm", "tissue_step_mean_mm", "tissue_step_frames", "tissue_settled", "tissue_settled_limit_mm")
     assert all(k in with_keys.report["settled_shape"] for k in new) and "surface_health" in with_keys.report
     assert not any(k in without.report["settled_shape"] for k in new) and without.report["surface_health"] == "left out"
 
