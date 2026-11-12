@@ -28,7 +28,7 @@ from pathlib import Path
 
 import numpy as np
 
-from asrp_core import generate, simulate, trajectory
+from asrp_core import febio, generate, run, simulate, trajectory
 from asrp_core.doctor import febio_exe
 
 # (substeps per frame, the generator's rhoi): today's settings first, then with less and less of the numerical
@@ -96,10 +96,10 @@ def main() -> None:
             r = simulate.run_scene(folder / "scene.json", folder / f"{case}.json", work / "runs", exe,
                                    f"{case}-{substeps}-{rhoi:g}")
             if r.status != "complete":
-                failure = r.report["checks"]["a"]["message"]
-                print(f"  {case}, {substeps} substep(s) per frame, rhoi {rhoi:g}: run {r.status} "
-                      f"(FEBio finished {r.report['checks']['a']['numbers'].get('frames_logged', '?')} frames): {failure}",
-                      flush=True)
+                failure = r.report.get("checks", {}).get("a", {}).get("message", "no message")
+                reached = febio.steps_done(r.run_dir / run.LOG_NAME) // substeps
+                print(f"  {case}, {substeps} substep(s) per frame, rhoi {rhoi:g}: run {r.status} after frame {reached}: "
+                      f"{failure}", flush=True)
                 break
             shown[case] = (simulate.read_display(r.run_dir / simulate.DISPLAY)["positions"], xs, r)
             print(f"ran {case}, {substeps} substep(s) per frame, rhoi {rhoi:g}: FEBio {r.report['timing']['febio_s']} s, "

@@ -817,3 +817,14 @@ def test_ctrl_c_during_post_processing_is_not_swallowed(tmp_path, monkeypatch):
     monkeypatch.setattr(embed, "apply", interrupt)
     with pytest.raises(KeyboardInterrupt):
         run(tmp_path / "box", cs.still(6), "ctrl_c")
+
+
+def test_the_run_report_states_the_generator_settings_in_force_at_run_time(monkeypatch):
+    # The settings were once read when simulate was imported, so a run made after a setting changed (the
+    # head-shake measurement lowers the numerical damping) still reported the old value.
+    def rhoi():
+        return dict((w, v) for w, v, _ in simulate.generator_settings())["generator.rhoi"]
+
+    assert rhoi() == generate.RHOI
+    monkeypatch.setattr(generate, "RHOI", 0.5)
+    assert rhoi() == 0.5
