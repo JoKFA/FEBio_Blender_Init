@@ -9,6 +9,7 @@ Lines it understands (src/asrp_core/cli.py): `run folder <path>` as soon as the 
 Exit codes: 0 complete and plausible, 1 failed or a plausibility check failed, 2 cancelled or wrong usage.
 """
 
+import atexit
 import os
 import queue
 import re
@@ -49,11 +50,14 @@ def core_command(*args: str) -> list[str]:
 class RunSession:
     """state: idle | running | complete | failed | cancelled | not_started."""
 
-    def __init__(self):
-        self.state = "idle"
+    def __init__(self, launcher=None):
+        self.launcher = launcher or core_command  # builds the command line; a test can put a stand-in here
+        self.proc = None
         self.reset()
 
     def reset(self):
+        self.state = "idle"
+        self.cancel_too_late = False  # a cancel was asked for, but the run had already finished and completed
         self.proc = None
         self.run_dir: Path | None = None
         self.frame = 0
@@ -86,12 +90,17 @@ class RunSession:
     def start(self, scene: str, trajectory: str, runs_dir: str, name: str = "") -> None:
         if self.running:
             raise RuntimeError("a run is already going")
-        cmd = core_command("run", str(scene), str(trajectory), "--runs-dir", str(runs_dir), *(["--name", name] if name else []))
-        self.reset()
-        env = {**os.environ, "PYTHONUNBUFFERED": "1"}
-        kw = {"creationflags": subprocess.CREATE_NO_WINDOW} if os.name == "nt" else {}
-        self.proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding="utf-8",
-                                     errors="replace", bufsize=1, env=env, stdin=subprocess.DEVNULL, **kw)
+        self.reset()  # an earlier run's outcome must not stay on show if this one cannot even start
+        try:
+            cmd = self.launcher("run", str(scene), str(trajectory), "--runs-dir", str(runs_dir),
+                                *(["--name", name] if name else []))
+            env = {**os.environ, "PYTHONUNBUFFERED": "1", "PYTHONIOENCODING": "utf-8"}
+            kw = {"creationflags": subprocess.CREATE_NO_WINDOW} if os.name == "nt" else {}
+            self.proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding="utf-8",
+                                         errors="replace", bufsize=1, env=env, stdin=subprocess.DEVNULL, **kw)
+        except (RuntimeError, OSError) as exc:
+            self.state, self.error, self.handled = "not_started", f"the run could not be started: {exc}", True
+            raise
         self.state = "running"
         self.started_at = time.monotonic()
         threading.Thread(target=self._read, args=(self.proc, self._queue), daemon=True).start()
@@ -156,8 +165,12 @@ class RunSession:
             if not self.error:
                 tail = [line for line in self.lines if line.strip()][-1:]
                 self.error = tail[0] if tail else f"the solver process ended with exit code {code} and printed nothing"
+        if final == "complete" and code not in (0, 1):  # exit 1 means "a plausibility check failed"; anything else is a crash
+            final = "failed"
+            self.error = f"the solver process ended with exit code {code} after reporting the run complete; no results are loaded"
         if final == "complete":
             self.passed = code == 0
+            self.cancel_too_late = self.cancel_requested
         if final == "failed" and not self.error:
             self.error = f"the run failed (exit code {code})"
         self.state = final
@@ -176,8 +189,39 @@ class RunSession:
         except OSError as exc:
             self.error = f"could not write the cancel file: {exc}"
 
-    def close(self) -> None:
-        """Add-on unregister: do not leave a solver running behind a closed panel. The cancel file lets the core stop
-        FEBio itself (terminating the uv process would leave FEBio running)."""
-        self.cancel()
+    def kill_tree(self) -> None:
+        """Stop the process and everything it started (uv -> python -> FEBio). On Windows: `taskkill /PID <pid> /T /F`."""
+        proc = self.proc
+        if proc is None or proc.poll() is not None:
+            return
+        if os.name == "nt":
+            subprocess.run(["taskkill", "/PID", str(proc.pid), "/T", "/F"], capture_output=True,
+                           creationflags=subprocess.CREATE_NO_WINDOW)
+        else:
+            proc.terminate()
+
+    def close(self, wait: float = 0.0) -> None:
+        """The panel goes away (add-on unregister, Blender quits): leave no solver running behind it.
+        Folder known: ask the core to cancel (it stops FEBio itself); with `wait` seconds given, wait for it and kill
+        the tree if it is still there after that. Folder not known yet (FEBio has not started): kill the tree at once."""
+        if self.running and self.proc is not None:
+            if self.run_dir is None:
+                self.kill_tree()
+            else:
+                self.cancel()
+                if wait:
+                    try:
+                        self.proc.wait(timeout=wait)
+                    except subprocess.TimeoutExpired:
+                        self.kill_tree()
         self.state = "idle"
+
+
+def register_exit_handler(session: RunSession):
+    """Blender quitting mid-run must not leave uv, python and FEBio running until the timeout. Returns the handler."""
+
+    def handler():
+        session.close(wait=15.0)
+
+    atexit.register(handler)
+    return handler

@@ -12,11 +12,22 @@ own `bpy.app.timers` callback follow each run, and prints:
   - per entry (physics / A final / B final): the visible object and the position (mm) of one lower-lip vertex
     at the last frame, read from the evaluated mesh;
   - a third run cancelled from the operator: the list is unchanged and nothing is visible;
-  - the largest gap between two calls of the add-on's timer callback while a run was going.
+  - the largest gap between two calls of the add-on's timer callback while a run was going;
+  - the shown result's object deleted with the viewport's X (object.delete): the panel must not claim it is shown;
+  - File > Open (read_homefile) in the middle of a run: the run is still followed to its end and loaded;
+  - every panel drawn as a popup, with Python errors on stderr captured and asserted absent (a panel whose draw
+    raises on purpose proves the capture can fail).
+
+Second mode, `--quit-midrun` (same arguments): starts a run, waits until FEBio is running, writes the run's process
+tree to `quit_tree.txt`, then quits Blender mid-run. The add-on's atexit handler must have cancelled the run. A detached
+helper started from Blender does not survive its exit here, so the check is by hand, once Blender has quit (about 10 s):
+    powershell -NoProfile -Command "Get-Content <work>/quit_tree.txt | ForEach-Object { $id = ($_ -split ' ')[0]; Get-Process -Id $id -ErrorAction SilentlyContinue }"
+which must print nothing (every process of the run's tree is gone, FEBio included).
 """
 
 import json
 import math
+import subprocess
 import sys
 import time
 import traceback
@@ -41,6 +52,27 @@ WORK.mkdir(parents=True, exist_ok=True)
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 SESSION = asrp_blender.SESSION
 result = {"ok": False}
+QUIT_MIDRUN = "--quit-midrun" in argv
+
+
+class Capture:
+    """sys.stderr that also keeps what was written: Blender prints a panel's draw error there."""
+
+    def __init__(self, inner):
+        self.inner, self.text = inner, []
+
+    def write(self, s):
+        self.text.append(s)
+        return self.inner.write(s)
+
+    def flush(self):
+        self.inner.flush()
+
+    def __getattr__(self, name):
+        return getattr(self.inner, name)
+
+
+sys.stderr = Capture(sys.stderr)
 calls = []  # (time, running, progress lines so far, run folder) of every call of the add-on's timer callback
 
 original_tick = asrp_blender.tick
@@ -59,7 +91,8 @@ def say(msg):
 
 
 def visible():
-    return [o.name for o in bpy.data.objects if o.name.startswith("ASRP") and not o.hide_viewport and not o.hide_render]
+    return [o.name for o in bpy.data.objects
+            if o.name.startswith("ASRP") and o.users_collection and not o.hide_viewport and not o.hide_render]
 
 
 def start(motion, name):
@@ -69,7 +102,11 @@ def start(motion, name):
 
 
 def wait_for_end():
+    last = time.monotonic()
     while not (SESSION.state in asrp_blender.ENDED and SESSION.handled):
+        if time.monotonic() - last > 15:
+            last = time.monotonic()
+            say(f"  ... waiting: state {SESSION.state}, {SESSION.progress_lines} progress lines")
         yield 0.2
 
 
@@ -119,8 +156,66 @@ def open_panel(name):
     """Draw a real panel as a popup (bpy.ops.wm.call_panel): a draw error is printed to the console by Blender, which
     this script's caller greps for."""
     window, area, region = find_view3d()
+    mark = len(sys.stderr.text)
     with bpy.context.temp_override(window=window, area=area, region=region):
-        return bpy.ops.wm.call_panel(name=name, keep_open=False)
+        finished = bpy.ops.wm.call_panel(name=name, keep_open=False)
+    return finished, mark
+
+
+def draw_errors(mark):
+    return "".join(sys.stderr.text[mark:])
+
+
+def draw_panel(name):
+    """Open the panel as a popup, let Blender draw it, and assert that no Python error was printed meanwhile."""
+    finished, mark = open_panel(name)
+    yield 0.7
+    errors = draw_errors(mark)
+    assert "Traceback" not in errors, f"panel {name} raised while drawing:\n{errors}"
+    say(f"panel {name} drawn as a popup {finished}, no Python error on stderr")
+
+
+class ASRP_PT_selftest(bpy.types.Panel):
+    """A panel that raises on purpose: proves that draw_panel's capture can fail."""
+    bl_label = "selftest"
+    bl_space_type = "VIEW_3D"
+    bl_region_type = "UI"
+    bl_category = "ASRP"
+
+    def draw(self, context):
+        raise ValueError("selftest draw error")
+
+
+def tree_of(pid):
+    table = {}
+    out = subprocess.run(["powershell", "-NoProfile", "-Command",
+                          "Get-CimInstance Win32_Process | ForEach-Object { \"$($_.ProcessId),$($_.ParentProcessId),$($_.Name)\" }"],
+                         capture_output=True, text=True).stdout
+    for line in out.splitlines():
+        if line.count(",") < 2:
+            continue
+        child, parent, name = line.strip().split(",", 2)
+        table.setdefault(int(parent), []).append((int(child), name))
+    found, todo = {}, [pid]
+    while todo:
+        for child, name in table.get(todo.pop(), []):
+            found[child] = name
+            todo.append(child)
+    return found
+
+
+def quit_midrun():
+    yield 1.0
+    start(MOTION_A, "Q")
+    while SESSION.progress_lines < 3:  # FEBio is running
+        assert SESSION.running, (SESSION.state, SESSION.error)
+        yield 0.3
+    tree = {SESSION.proc.pid: "uv(root)", **tree_of(SESSION.proc.pid)}
+    (WORK / "quit_tree.txt").write_text("\n".join(f"{p} {n}" for p, n in tree.items()), encoding="utf-8")
+    say(f"quitting Blender mid-run: {SESSION.progress_lines} progress lines, run folder {SESSION.run_dir}, process tree {tree}")
+    assert any(n.lower().startswith("febio") for n in tree.values()), "FEBio was not running: this would prove nothing"
+    result["ok"] = True
+    yield 0.2
 
 
 def script():
@@ -159,9 +254,14 @@ def script():
     assert min(d_ab, d_ap, d_bp) > 1e-3, "the three shapes are not different at this vertex"
     for tag in wanted:
         say(f"  screenshots {tag}: {points[tag + ' shots']}")
+    bpy.utils.register_class(ASRP_PT_selftest)  # the capture must be able to fail
+    _, mark = open_panel("ASRP_PT_selftest")
+    yield 0.7
+    bpy.utils.unregister_class(ASRP_PT_selftest)
+    assert "selftest draw error" in draw_errors(mark), "a panel that raises was not noticed: the draw-error assertion proves nothing"
+    say("self-test: a panel that raises while drawing was caught on stderr")
     for name in ("ASRP_PT_results", "ASRP_PT_checks", "ASRP_PT_run"):
-        say(f"panel {name} drawn as a popup: {open_panel(name)}")
-        yield 0.7
+        yield from draw_panel(name)
     # a third run, cancelled from the operator
     before = [(e.label, e.run_dir) for e in sc.asrp_results]
     start(MOTION_A, "C")
@@ -169,20 +269,58 @@ def script():
     while SESSION.run_dir is None and SESSION.running:
         yield 0.2
     yield 2.0
-    say(f"panel ASRP_PT_run drawn while the run is going (state {SESSION.state}): {open_panel('ASRP_PT_run')}")
-    yield 0.7
+    assert SESSION.running
+    yield from draw_panel("ASRP_PT_run")  # drawn while the run is going: progress bar and cancel button
     assert bpy.ops.asrp.cancel_run() == {"FINISHED"}
     yield from wait_for_end()
     after = [(e.label, e.run_dir) for e in sc.asrp_results]
     say(f"run C cancelled: state {SESSION.state}, exit {SESSION.exit_code}, list unchanged {before == after} ({len(after)} entries), "
         f"visible {visible()}, playback.json in its folder {(SESSION.run_dir / 'playback.json').exists()}")
     assert SESSION.state == "cancelled" and before == after and visible() == []
+    snap = list(calls)  # runs A, B, C: the gap figure leaves out the file load of run D, which stalls Blender by itself
+    # the shown result's object deleted with the viewport's X: the list must not go on claiming it is shown
+    assert bpy.ops.asrp.show_result(index=3) == {"FINISHED"}
+    shown = asrp_blender.shown_entry(sc)
+    assert shown is not None and shown.label.endswith("final shape")
+    deleted = shown.obj.name
+    for o in bpy.context.selected_objects:
+        o.select_set(False)
+    shown.obj.select_set(True)
+    bpy.context.view_layer.objects.active = shown.obj
+    window, area, region = find_view3d()
+    with bpy.context.temp_override(window=window, area=area, region=region):
+        assert bpy.ops.object.delete() == {"FINISHED"}
+    claim = sc.asrp_shown
+    say(f"X-delete of {deleted!r}: asrp_shown still {claim} (it is the index of the deleted entry), "
+        f"shown_entry {asrp_blender.shown_entry(sc)}, visible {visible()}, entry 3 object {sc.asrp_results[3].obj}")
+    assert asrp_blender.shown_entry(sc) is None and visible() == []
+    yield from draw_panel("ASRP_PT_results")
+    yield from draw_panel("ASRP_PT_checks")
+    # File > Open in the middle of a run: the timer is persistent, the run is followed to its end and loaded
+    start(MOTION_A, "D")
+    while SESSION.run_dir is None:
+        yield 0.2
+    yield 2.0
+    assert SESSION.running
+    say(f"File > Open in the middle of run D ({SESSION.progress_lines} progress lines so far)")
+    assert bpy.ops.wm.read_homefile() == {"FINISHED"}
+    yield 0.5
+    say(f"after the load: results in the new scene {len(bpy.context.scene.asrp_results)}, state {SESSION.state}, "
+        f"timer registered {bpy.app.timers.is_registered(asrp_blender.tick)}")
+    assert len(bpy.context.scene.asrp_results) == 0 and SESSION.running
+    yield from wait_for_end()
+    sc = bpy.context.scene
+    assert SESSION.state == "complete" and not SESSION.load_error, (SESSION.state, SESSION.load_error)
+    say(f"run D after the file load: {SESSION.state}, results in the new file's scene {[e.label for e in sc.asrp_results]}, visible {visible()}")
+    assert len(sc.asrp_results) == 2 and len(visible()) == 1
+    yield from draw_panel("ASRP_PT_run")
+    yield from draw_panel("ASRP_PT_checks")
     # two calls of the same run (a new run, which this script starts after its own work, is not a gap of the timer)
-    pairs = [(b[0] - a[0], a, b) for a, b in zip(calls, calls[1:]) if a[1] and b[1] and a[2] <= b[2] and (a[3] == b[3] or a[3] is None)]
+    pairs = [(b[0] - a[0], a, b) for a, b in zip(snap, snap[1:]) if a[1] and b[1] and a[2] <= b[2] and (a[3] == b[3] or a[3] is None)]
     gaps = [g for g, _, _ in pairs]
     for g, a, b in sorted(pairs, key=lambda p: -p[0])[:3]:
         say(f"  gap {g:.3f} s in {a[3]} between progress lines {a[2]} and {b[2]}")
-    say(f"timer callback: {len(calls)} calls, {len(gaps)} gaps inside runs, largest gap {max(gaps):.3f} s (asked for {asrp_blender.TICK_S} s)")
+    say(f"timer callback: {len(snap)} calls, {len(gaps)} gaps inside runs, largest gap {max(gaps):.3f} s (asked for {asrp_blender.TICK_S} s)")
     result.update(ok=True, largest_timer_gap_s=max(gaps), positions=pos, screenshots={t: points[t + " shots"] for t in wanted})
 
 
@@ -194,6 +332,10 @@ def drive():
     except Exception:  # noqa: BLE001
         traceback.print_exc()
         result["error"] = traceback.format_exc()
+    if QUIT_MIDRUN:  # quit with the add-on still registered and the run still going: the atexit handler must clean up
+        say("QUIT MIDRUN: quitting now; read quit_leftover.txt in 30 s" if result["ok"] else f"QUIT MIDRUN FAILED: {result.get('error')}")
+        bpy.ops.wm.quit_blender()
+        return None
     (WORK / "windowed_check.json").write_text(json.dumps(result, indent=1), encoding="utf-8")
     say("WINDOWED CHECK PASSED" if result["ok"] else "WINDOWED CHECK FAILED")
     asrp_blender.unregister()
@@ -202,5 +344,5 @@ def drive():
 
 
 asrp_blender.register()
-generator = script()
-bpy.app.timers.register(drive, first_interval=1.0)
+generator = quit_midrun() if QUIT_MIDRUN else script()
+bpy.app.timers.register(drive, first_interval=1.0, persistent=True)  # File > Open must not end the script
