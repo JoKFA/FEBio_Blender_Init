@@ -25,7 +25,11 @@
                                   and the frame it occurs at), relative_to_head (per frame, the largest
                                   displacement of the free display vertices relative to the head, the
                                   body the hard attachments hold, minus the settled value; its maximum
-                                  and frame; reported only, T-28), landmark_layer (below), timing
+                                  and frame; reported only, T-28), surface_health (flipped faces and
+                                  stretched or squashed edges of the display surface against its rest
+                                  shape, physics and final, at the last and the worst frame; reported
+                                  only), landmark_layer (below), timing. settled_shape also reports how far
+                                  the tet nodes moved in the settle frame's last step (reported only)
 
 When the trajectory has a `landmarks` section (T-09) the landmark layer is applied on top of the physics,
 `final = physics + weights @ translations` (`skinning.deform`; the physics results above are not touched):
@@ -78,7 +82,8 @@ FINAL_PLAYBACK = "playback_final.pc2"
 PLAYBACK_FILES = ("playback.json", "playback.pc2")
 RESULT_DIRS = ("physics", "final")
 RESULT_FILES = (*PLAYBACK_FILES, FINAL_PLAYBACK)
-RESULT_REPORT_KEYS = ("settled_shape", "return_to_settled", "spring_slip", "motion", "landmark_layer", "relative_to_head")
+RESULT_REPORT_KEYS = ("settled_shape", "return_to_settled", "spring_slip", "motion", "landmark_layer", "relative_to_head",
+                      "surface_health")
 SLIP_LIMIT = 0.1  # docs/05 section 3: max|u| / δ above this, the spring result is off by more than ~2 %
 
 def generator_settings(model: generate.Model | None = None) -> list[tuple]:
@@ -240,6 +245,7 @@ def _physics_checks(model: generate.Model, node_frames: np.ndarray, display: np.
                                              material["density_t_per_mm3"].value, material["E_mpa"].value, model.k)
         checks["c"] = plausibility.gravity_sag(model.display, display, free, model.gravity, estimate,
                                                range(max(1, settle - SETTLE_FRAMES + 1), settle + 1))
+        report["settled_shape"] |= plausibility.tissue_step(node_frames, settle)  # reported only, no threshold
     else:
         if settle is None:
             reason = "the trajectory does not say where the gravity-only settle ends (settle_until_frame)"
@@ -302,6 +308,21 @@ def _landmark_layer(model: generate.Model, run_dir: Path, display: np.ndarray, r
         "frame": at,
     }
     return final
+
+
+def _surface_health(model: generate.Model, display: np.ndarray, final: np.ndarray | None) -> dict:
+    """Reported only: the display surface against its rest shape (frame 0 of the display mesh), for the physics result
+    and, when there is a landmark layer, the final shape; each at its last frame and at its worst frame. The five
+    checks look only at the physics tet mesh; this is what a researcher looking at the surface sees. A flipped face is
+    not a proof of self-intersection."""
+    return {
+        "physics": plausibility.surface_health(display[0], display, model.faces),
+        "final": plausibility.surface_health(final[0], final, model.faces) if final is not None else None,
+        "note": "reported only, not a check: faces and edges of the display surface against its rest shape (frame 0). "
+                "A flipped face (normal against the rest normal) is not a proof of self-intersection; intersections "
+                "are not measured. 'worst' is the frame with the most flipped faces (ties: the most edges shorter than "
+                "half or longer than double their rest length)",
+    }
 
 
 def _outputs(settle: int | None, final: bool = False) -> list[str]:
@@ -375,6 +396,7 @@ def run_scene(scene_path, trajectory_path, runs_dir: Path, exe: Path, name: str 
             found, settle = _physics_checks(model, node_frames, display, positions, logged, report)
             checks.update(found)
             final = _landmark_layer(model, run_dir, display, report)  # nothing is written yet
+            report["surface_health"] = _surface_health(model, display, final)
             _write_results(run_dir, model, node_frames, display, settle, final)
             record["outputs"] = provenance.hash_files(run_dir, _outputs(settle, final is not None))
         # An invalid number (NaN, inf) in the report is a failed run, never a silently written one.

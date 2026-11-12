@@ -30,17 +30,28 @@ Five checks, each a function of plain arrays so that a test can make it fail on 
 `relative_motion` is not a check either: how far the free display vertices move against a rigid body (the head)
 beyond a reference frame (the settled shape), per frame. Reported, not judged (T-28).
 
+`surface_health` is not a check either (the five checks look only at the physics tet mesh): how many faces of the display
+surface have turned over against the rest surface, and how far its edges have shrunk or grown, at the last frame and at the
+worst frame. Reported, not judged. A turned-over face (normal against the rest normal) is not a proof of
+self-intersection; intersections are not measured. `folds` is the same count for one frame (spikes/audit_aa_folds.py).
+
+`tissue_step` is also only reported: how far the tet nodes moved between two frames (the settle frame and the one
+before it), so a reader can see whether the tissue was still moving when the settled shape was taken.
+
 `return_to_settled` is not a check but a measurement: once the drivers are back at rest after the motion, how
 far the tet nodes are from the shape they had after the gravity-only settle. Reported, not judged.
 
 All positions are geometric mm (what `run` writes after dividing by k).
 """
 
+import os
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 
 import numpy as np
 
 from asrp_core import tetmesh
+from asrp_core.asset import coords
 
 HARD_TOLERANCE_MM = 1e-3
 ANCHOR_TOLERANCE_MM = 1e-3
@@ -276,3 +287,98 @@ def return_to_settled(node_frames: np.ndarray, settle: int, transforms: list, to
         return {"frames": []}
     dist = np.stack([np.linalg.norm(node_frames[f] - node_frames[settle], axis=1) for f in frames])
     return {"frames": frames, "max_mm": float(dist.max()), "mean_mm": float(dist.mean())}
+
+
+def tissue_step(node_frames: np.ndarray, frame: int) -> dict:
+    """Not a check: how far the tet nodes moved between frame - 1 and `frame`, geometric mm: the largest and the mean
+    distance over the nodes, and the two frame numbers."""
+    step = np.linalg.norm(node_frames[frame] - node_frames[frame - 1], axis=1)
+    return {"tissue_step_max_mm": float(step.max()), "tissue_step_mean_mm": float(step.mean()),
+            "tissue_step_frames": [frame - 1, frame]}
+
+
+# --- the display surface against its rest shape (reported only) ---------------------------------------------------
+
+def _cross(points: np.ndarray, faces: np.ndarray) -> tuple:
+    """The cross product (b - a) x (c - a) of every triangle, as three arrays (..., m). points (..., 3, v): the
+    coordinates in rows, which is what makes the arithmetic below run on long contiguous arrays."""
+    a, b, c = (np.take(points, faces[:, i], axis=-1) for i in range(3))
+    b -= a
+    c -= a
+    ux, uy, uz = b[..., 0, :], b[..., 1, :], b[..., 2, :]
+    wx, wy, wz = c[..., 0, :], c[..., 1, :], c[..., 2, :]
+    return uy * wz - uz * wy, uz * wx - ux * wz, ux * wy - uy * wx
+
+
+def unique_edges(faces: np.ndarray) -> np.ndarray:
+    """Every edge of a triangle list once, (e, 2) sorted vertex indices."""
+    pairs = np.sort(np.concatenate([faces[:, [0, 1]], faces[:, [1, 2]], faces[:, [2, 0]]]), axis=1).astype(np.int64)
+    key = np.unique(pairs[:, 0] * (int(pairs.max()) + 1) + pairs[:, 1])
+    return np.stack([key // (int(pairs.max()) + 1), key % (int(pairs.max()) + 1)], axis=1)
+
+
+def fold_counts(rest: np.ndarray, frames: np.ndarray, faces: np.ndarray, chunk: int = 8) -> dict:
+    """Per frame, against the rest surface, with the same triangles: the number of faces whose normal points the other
+    way (dot product with the rest normal < 0) and of faces turned by more than 60 degrees (dot < 0.5), the number of
+    edges shorter than half or longer than twice their rest length, the smallest and largest edge length ratio and the
+    smallest face area ratio. rest (v, 3), frames (F, v, 3), faces (m, 3) int. Each value is an array of F numbers.
+    Done a few frames at a time (a long run does not need one huge array) on the coordinates laid out in rows.
+    Edges or faces with zero rest length or area (no ratio exists) are left out of the ratios."""
+    faces = np.asarray(faces)
+    r = np.ascontiguousarray(rest.T)[None]  # (1, 3, v)
+    n0 = _cross(r, faces)
+    len0 = np.sqrt(n0[0] ** 2 + n0[1] ** 2 + n0[2] ** 2)[0]
+    n0 = [x[0] / np.maximum(len0, 1e-12) for x in n0]  # the rest normals, unit length
+    a0 = 0.5 * len0
+    edges = unique_edges(faces)
+    e0 = np.sqrt(((r[0][:, edges[:, 0]] - r[0][:, edges[:, 1]]) ** 2).sum(axis=0))
+    keep_edge, keep_face = e0 > 0, a0 > 0
+
+    def one(start: int) -> dict:
+        block = np.ascontiguousarray(frames[start:start + chunk].transpose(0, 2, 1))  # (c, 3, v)
+        cx, cy, cz = _cross(block, faces)
+        length = np.sqrt(cx * cx + cy * cy + cz * cz)
+        dot = (cx * n0[0] + cy * n0[1] + cz * n0[2]) / np.maximum(length, 1e-12)
+        dist = np.take(block, edges[:, 0], axis=2)
+        dist -= np.take(block, edges[:, 1], axis=2)
+        ratio = np.sqrt(dist[:, 0] ** 2 + dist[:, 1] ** 2 + dist[:, 2] ** 2)[:, keep_edge] / e0[keep_edge]
+        nan = np.full(len(block), np.nan)
+        return {"flipped": (dot < 0).sum(axis=1), "turned": (dot < 0.5).sum(axis=1),
+                "short": (ratio < 0.5).sum(axis=1), "long": (ratio > 2).sum(axis=1),
+                "ratio_min": ratio.min(axis=1) if ratio.size else nan,
+                "ratio_max": ratio.max(axis=1) if ratio.size else nan,
+                "area_min": ((0.5 * length)[:, keep_face] / a0[keep_face]).min(axis=1) if keep_face.any() else nan}
+
+    starts = range(0, len(frames), chunk)
+    with ThreadPoolExecutor(max_workers=min(8, os.cpu_count() or 1)) as pool:  # numpy lets go of the GIL in big operations
+        parts = list(pool.map(one, starts))
+    result = {k: np.concatenate([part[k] for part in parts]) for k in parts[0]} if parts else {}
+    result["faces"], result["edges"] = len(faces), len(edges)
+    return result
+
+
+def folds(rest: np.ndarray, shape: np.ndarray, faces: np.ndarray) -> dict:
+    """Count folded and squashed faces of one shape against the rest shape (docs/15 section 8; the printout of
+    spikes/audit_aa_folds.py). A flipped face is not a proof of self-intersection."""
+    c = fold_counts(rest, shape[None], faces)
+    return {"faces": c["faces"], "flipped (dot < 0)": int(c["flipped"][0]), "turned > 60 deg (dot < 0.5)": int(c["turned"][0]),
+            "edges > 2x": int(c["long"][0]), "edges < 0.5x": int(c["short"][0]),
+            "edge ratio min / max": (round(float(c["ratio_min"][0]), 3), round(float(c["ratio_max"][0]), 3)),
+            "smallest face area ratio": round(float(c["area_min"][0]), 3)}
+
+
+def _frame_health(c: dict, f: int) -> dict:
+    return {"flipped_faces": int(c["flipped"][f]), "edges_shorter_than_half": int(c["short"][f]),
+            "edges_longer_than_double": int(c["long"][f]), "edge_ratio_min": float(c["ratio_min"][f]),
+            "edge_ratio_max": float(c["ratio_max"][f]), "min_face_area_ratio": float(c["area_min"][f]),
+            "faces": int(c["faces"]), "edges": int(c["edges"])}
+
+
+def surface_health(rest: np.ndarray, frames: np.ndarray, faces) -> dict:
+    """Not a check: the display surface against its rest shape, at the last frame and at the worst frame (the one with
+    the most flipped faces; ties go to the most edges outside half..double their rest length, then to the earliest
+    frame). `faces` are the mesh's own polygons, fanned into triangles. Same counts as `folds`. A flipped face means
+    the surface has turned over there, not that it intersects itself."""
+    c = fold_counts(rest, frames, coords.triangulate(faces))
+    worst = int(np.argmax(c["flipped"] * (c["edges"] + 1) + c["short"] + c["long"]))
+    return {"last": _frame_health(c, len(frames) - 1), "worst": {**_frame_health(c, worst), "frame": worst}}

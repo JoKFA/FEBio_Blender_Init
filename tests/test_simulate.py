@@ -183,6 +183,7 @@ def assert_failed_and_clean(r, text):
     assert prov["status"] == "failed" and prov["outputs"] == {} and text in prov["failure"]["message"]
     report = cs.report(r.run_dir)
     assert report["status"] == "failed" and "landmark_layer" not in report and "motion" not in report
+    assert "surface_health" not in report and "settled_shape" not in report
 
 
 def test_a_failure_inside_the_landmark_stage_leaves_no_results(tmp_path, monkeypatch):
@@ -221,3 +222,107 @@ def test_a_scene_that_lists_the_landmarks_in_another_order_than_the_weights_is_r
     landmark_scene(tmp_path / "box", scene_names=[NAMES[1], NAMES[0], NAMES[2]])
     r = run(tmp_path / "box", landmark_motion(tmp_path / "box", ramp()), "order")
     assert_failed_and_clean(r, "same landmarks in the same order")
+
+
+# --- surface_health and the settle step: reported only ----------------------------------------------------
+
+
+def naive_edge_ratios(rest, shape, faces):
+    """Every edge of the triangles once, shape length over rest length, by plain loops (independent of plausibility)."""
+    seen, out = set(), []
+    for f in faces:
+        for i in range(3):
+            a, b = sorted((int(f[i]), int(f[(i + 1) % 3])))
+            if (a, b) not in seen:
+                seen.add((a, b))
+                out.append(np.linalg.norm(shape[a] - shape[b]) / np.linalg.norm(rest[a] - rest[b]))
+    return out
+
+
+def test_surface_health_has_physics_and_final_when_there_is_a_landmark_layer(tmp_path, capsys):
+    landmark_scene(tmp_path / "box")
+    traj = landmark_motion(tmp_path / "box", ramp())
+    r = run(tmp_path / "box", traj, "health")
+    assert r.status == "complete" and r.passed
+    health = r.report["surface_health"]
+    assert health["physics"] and health["final"] and "not a proof of self-intersection" in health["note"]
+    d = r.run_dir
+    faces = json.loads((d / "playback.json").read_text(encoding="utf-8"))["faces"]
+    triangles = [(f[0], f[i], f[i + 1]) for f in faces for i in range(1, len(f) - 1)]
+    for version, display in (("physics", simulate.DISPLAY), ("final", simulate.FINAL_DISPLAY)):
+        shape = simulate.read_display(d / display)["positions"]
+        ratios = naive_edge_ratios(shape[0], shape[-1], triangles)
+        last = health[version]["last"]
+        assert last["faces"] == len(triangles) and last["edges"] == len(ratios)
+        assert last["edges_longer_than_double"] == sum(x > 2 for x in ratios)
+        assert last["edges_shorter_than_half"] == sum(x < 0.5 for x in ratios)
+        assert last["edge_ratio_min"] == pytest.approx(min(ratios)) and last["edge_ratio_max"] == pytest.approx(max(ratios))
+        assert 0 <= health[version]["worst"]["frame"] < FRAMES
+        assert health[version]["worst"]["flipped_faces"] >= last["flipped_faces"]
+    # the landmark layer moves the surface, so the final numbers are not the physics numbers
+    assert health["final"]["last"]["edge_ratio_max"] > health["physics"]["last"]["edge_ratio_max"] + 0.1
+    code = cli.main(["run", str(tmp_path / "box" / "scene.json"), str(traj), "--runs-dir", str(tmp_path / "cli")])
+    out = capsys.readouterr().out
+    assert code == 0 and "surface    physics, last frame: " in out and "surface    final, last frame: " in out
+    assert "flipped faces of" in out and "edges < 0.5x" in out and "(reported only)" in out
+
+
+def test_without_a_landmarks_section_surface_health_has_no_final(tmp_path):
+    cs.write(tmp_path / "box")
+    r = run(tmp_path / "box", cs.motion(tmp_path / "box", cs.still(FRAMES)), "plain")
+    health = r.report["surface_health"]
+    assert health["final"] is None and health["physics"]["last"]["faces"] > 0
+    assert health["physics"]["last"]["flipped_faces"] == 0 and 0.5 < health["physics"]["last"]["edge_ratio_min"] <= 1.5
+
+
+def test_a_failed_post_processing_leaves_no_surface_health(tmp_path, monkeypatch):
+    cs.write(tmp_path / "box")
+
+    def boom(*a, **k):
+        raise OSError("disk full")
+
+    monkeypatch.setattr(simulate.playback, "write_surface_bundle", boom)
+    r = run(tmp_path / "box", cs.motion(tmp_path / "box", cs.still(FRAMES), settle=2), "late")
+    assert_failed_and_clean(r, "disk full")  # includes: no surface_health, no settled_shape
+
+
+def test_the_settle_step_is_how_far_the_tet_nodes_moved_in_the_settle_frames_last_step(tmp_path, capsys):
+    c = cs.write(tmp_path / "box")
+    traj = cs.motion(tmp_path / "box", cs.still(FRAMES), settle=2)
+    r = run(tmp_path / "box", traj, "settle")
+    settled = r.report["settled_shape"]
+    assert settled["available"] is True and settled["frame"] == 2
+    assert settled["tissue_step_frames"] == [1, 2]
+    # from the raw FEBio result: positions.npy has frames 1..N-1 (no frame 0), the tet nodes are ids 1..n
+    data = np.load(r.run_dir / "physics" / "positions.npy", allow_pickle=False)
+    header = json.loads((r.run_dir / "physics" / "positions.json").read_text(encoding="utf-8"))
+    assert [round(t * 30) for t in header["times_s"]] == list(range(1, FRAMES))
+    tissue = [header["node_ids"].index(n + 1) for n in range(len(c["nodes"]))]
+    step = np.linalg.norm(data[1][tissue] - data[0][tissue], axis=1)  # frame 2 minus frame 1
+    assert step.max() > 0
+    assert settled["tissue_step_max_mm"] == pytest.approx(step.max(), rel=1e-9)
+    assert settled["tissue_step_mean_mm"] == pytest.approx(step.mean(), rel=1e-9)
+    code = cli.main(["run", str(tmp_path / "box" / "scene.json"), str(traj), "--runs-dir", str(tmp_path / "cli")])
+    assert code == 0 and "settle     frame 2: the tissue moved at most " in capsys.readouterr().out
+
+
+def test_the_reported_only_keys_change_nothing_else(tmp_path, monkeypatch):
+    cs.write(tmp_path / "box")
+    traj = cs.motion(tmp_path / "box", cs.still(FRAMES), settle=2)
+    with_keys = run(tmp_path / "box", traj, "with")
+    monkeypatch.setattr(simulate, "_surface_health", lambda *a: "left out")
+    monkeypatch.setattr(simulate.plausibility, "tissue_step", lambda *a: {})
+    without = run(tmp_path / "box", traj, "without")
+    new = ("tissue_step_max_mm", "tissue_step_mean_mm", "tissue_step_frames")
+    assert all(k in with_keys.report["settled_shape"] for k in new) and "surface_health" in with_keys.report
+    assert not any(k in without.report["settled_shape"] for k in new) and without.report["surface_health"] == "left out"
+
+    def core(report):
+        out = {k: v for k, v in report.items() if k not in ("run_id", "timing", "surface_health")}
+        out["settled_shape"] = {k: v for k, v in report["settled_shape"].items() if k not in new}
+        return out
+
+    assert core(with_keys.report) == core(without.report)
+    assert with_keys.passed is without.passed is True and with_keys.report["settled_shape"]["available"] is True
+    for f in ("physics/positions.npy", "physics/display.npy", "playback.pc2"):
+        assert sha(with_keys.run_dir / f) == sha(without.run_dir / f)
