@@ -105,7 +105,7 @@ uv run asrp run runs/prototype_scene/scene.json runs/prototype_scene/placeholder
 | 回到沉降形状（只报告，不判） | 第 50 帧：四面体节点离沉降形状最多 0.0041 mm，平均 0.0012 mm（沉降形状在第 14 帧，重力的沉降当时还差这么一点没走完，[13](13-explanations.md) E-08） |
 <!-- END generated: run -->
 
-更早的单线程用时（同一份 `.feb`，50 步）是 56.2 秒，4 线程 26.8 秒；为什么默认改成 4 线程见 [10](10-decisions.md) ADR-38 和 [13](13-explanations.md) E-08。
+线程数对用时的影响（1、4、8、16 线程的比较）只记在 [10](10-decisions.md) ADR-38 的证据里；为什么默认改成 4 线程见 ADR-38 和 [13](13-explanations.md) E-08。
 
 ### 五项合理性检查
 
@@ -189,7 +189,8 @@ uv run asrp run runs/prototype_scene/scene.json runs/prototype_scene/placeholder
 |---|---|---|
 | 材料是我们猜的 | neo-Hookean，E = 15 kPa、ν = 0.45、密度 1060 kg/m³：猜测接近 Ziva 的默认值，没有验证，等实验室的 Ziva 属性清单 | [05](05-ziva-to-febio.md) 第 1 节 zMaterial 一行，[13](13-explanations.md) E-06，[11](11-risks-and-questions.md) D6 |
 | 材料几乎不影响张嘴的形状 | 2026-11-11 做过一次对照：把 `scene.json` 里嘴唇的 E 改成 10 倍和 1/10，弹簧不变，各重跑一遍。现在可以自己重跑：`uv run python spikes/audit_material.py <场景文件夹> <运动文件>`。张嘴最大时（第 32 帧）基准的嘴唇最多移动 30.41 mm。E × 10：下垂 0.0106 mm，形状和基准相比最多差 0.9824 mm（平均 0.2057 mm）；E ÷ 10：下垂 0.9316 mm，最多差 3.3057 mm（平均 0.8327 mm，主要是多出来的重力下垂）。三种材料都通过检查 (c)（基准的下垂见第 1 节，估计 0.1457 mm）。材料差 100 倍，形状只变 2%–3%。**现在的形状主要由"粘在哪、粘多紧"决定**，就是下面两行那些我们自己定的规则，FEBio 做的接近在给定运动的边界之间插值 | 本页第 3 节，[05](05-ziva-to-febio.md) 第 3 节，[13](13-explanations.md) E-08 |
-| 粘连刚度、嘴角混合比例是我们定的 | 弹簧基础刚度按 100 × E × h 的规则取；嘴角锚转下颌角度的 α = 0.5。下唇跟随下颌的比例要等 Ziva 的"只有物理"结果才能定 | [05](05-ziva-to-febio.md) 第 3 节，[10](10-decisions.md) ADR-32，[11](11-risks-and-questions.md) Q17、A-35 |
+| 粘连刚度、嘴角混合比例是我们定的，而且它们对形状的影响比材料大 | 弹簧基础刚度按 100 × E × h 的规则取；嘴角锚转下颌角度的 α = 0.5。2026-11-12 量过：α 改 ±0.2，张嘴最大时形状最多差 4.79 mm，比材料差 100 倍还大；弹簧刚度除以 10 最多差 0.95 mm。实验室的 AA 目标形状里嘴角不动，不利于 0.5，但目标不含物理，默认值没改。下唇跟随下颌的比例要等 Ziva 的"只有物理"结果才能定 | [05](05-ziva-to-febio.md) 第 3 节，[13](13-explanations.md) E-09，[10](10-decisions.md) ADR-32、ADR-40，[11](11-risks-and-questions.md) Q17、A-35 |
+| 实验室的 AA 目标里嘴唇不跟着下颌走，我们的跟着 | 目标里下唇的跟随比例是 0.09、嘴角 0.00；我们的物理是 1.00 和嘴角锚的比例，下唇差约 13 mm。所以原型机的下唇"跟着下颌走"是我们的设定，不是和实验室结果吻合的证据 | [13](13-explanations.md) E-09，[10](10-decisions.md) ADR-40，[11](11-risks-and-questions.md) Q17、Q20 |
 | 粘连顶点集是强推断 | 上唇和下唇的粘连顶点（个数见第 3 节）来自对 Ziva 权重表的读法，等 Ziva 机器导出的权重表确认 | [03](03-asset.md) 第 6 节，[11](11-risks-and-questions.md) A-33 |
 | 物理尺度 k = 0.67 是我们定的 | 来自会议结论（按真人大小算），不是 Ziva 的尺度 | [10](10-decisions.md) ADR-31，[05](05-ziva-to-febio.md) 第 2 节 |
 | 下颌运动是代用的 | 张开 12° 的铰链运动，不是实验室控制器算出的运动（还没拿到运动文件） | [09](09-roadmap-and-tasks.md) T-10，[11](11-risks-and-questions.md) D2 |
@@ -237,6 +238,6 @@ flowchart LR
 
 ## 7. 下一步
 
-- **下一个里程碑是"原型机二"**：真实的从中性到 AA 的嘴形（带 landmark 层），加上摇头的运动。内容和顺序写在 [09](09-roadmap-and-tasks.md) 第 1 节。
+- **下一个里程碑是"原型机二"**：真实的从中性到 AA 的嘴形（带 landmark 层），加上摇头的运动。内容和顺序写在 [09](09-roadmap-and-tasks.md) 第 1 节。AA 的形状两种拼法都做（ADR-40）：甲是照实验室流程的读法，最终形状不等于目标；乙是对准目标，landmark 要把物理带走的部分拉回来。哪一种作为正式结果，还要项目负责人定（[11](11-risks-and-questions.md) P-07）。
 - **去 Ziva 机器**：拿 Ziva 的属性清单、权重表和一条运动的参考结果（[12](12-lab-export-checklist.md) 第二部分，ADR-35）。许可还能用约一年半（[11](11-risks-and-questions.md) Q5），所以不急。
 - **和 Ziva 并排比较**（T-11，M4）：[07](07-validation.md) 第 4 节。
