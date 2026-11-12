@@ -11,16 +11,16 @@
   ],
   "inputs": {
     "model.feb": {
-      "sha256": "9e7b6678f4d7db427a4ed3432c6e76609f822c87f23615ed6aa6464805e9894c",
-      "bytes": 2160956
+      "sha256": "1a4515dbea1fc006681fe7e967b2355ec0009f7a3cd4b0b100778ff8b786324b",
+      "bytes": 2161319
     },
     "scene.json": {
-      "sha256": "ef0e94583f49f0e1c5ccd732633fe195b7981e68b5960c107c1fe13ea81aef3f",
-      "bytes": 86780
+      "sha256": "5ce1064d06fae834322f0afefd1b8a40dfdcaf1b603f23b99f07dfe9bb47a270",
+      "bytes": 87209
     },
     "trajectory.json": {
-      "sha256": "c97220aed684698697ff6558640583cfebf8d6f19ea61c43a2855da9803a7bfc",
-      "bytes": 11348
+      "sha256": "ebcab7ae7b45b1ca65118987aebfcfedc9a7b778337b97b642bb7febb0d4631f",
+      "bytes": 11400
     },
     "meshes/lips.obj": {
       "sha256": "0214a4be839e7c6949ed05159e51bc5af73f4a6105d1b46895dc853975260c4f",
@@ -78,13 +78,14 @@
       "-silent"
     ],
     "febio_env": {
-      "OMP_NUM_THREADS": "1"
+      "OMP_NUM_THREADS": "4",
+      "MKL_NUM_THREADS": "4"
     }
   },
   "software": {
     "asrp": "0.0.1",
     "asrp_source": {
-      "commit": "1f5c454fbef1319c67d173654d90c973781147fd",
+      "commit": "122d9e770f2fb9c9e48d771d32ad9c1d0c42bd22",
       "dirty": false
     },
     "python": "3.13.6",
@@ -93,23 +94,23 @@
   },
   "outputs": {
     "physics/positions.json": {
-      "sha256": "b173f0e03bd5704470b5e21e4969c496519f7dcb54c88f670bda99ecb2cf04e0",
-      "bytes": 25473731
+      "sha256": "38d7734c813755d6f9820be91f0c36df78231ca7720e0bc049f5fe693945a7d9",
+      "bytes": 25474158
     },
     "physics/display.json": {
-      "sha256": "ba0b1efb48d47ba251c700508f6793395ef9c5c6d419fe6745e4231582aec666",
-      "bytes": 32481724
+      "sha256": "7394c91a1d7e9f0a588f87607cb116d8bf952e166bb8d7b983bdfa30f7bc6af5",
+      "bytes": 32481718
     },
     "physics/settled_frame14.json": {
-      "sha256": "7ced4a12f5d2993a90b0e48baa35d4dc55784136cb0b68bc185e86fdfced5afa",
-      "bytes": 1054937
+      "sha256": "9066ab3b7569c2045c800033a124182cbabcc58739fe90e8c6de30e750c46595",
+      "bytes": 1054929
     },
     "physics/settled_frame14.obj": {
-      "sha256": "21ecefb84dac8e6688ac8876a135c8d3c89a04246298fbb0c85639d5ba404424",
-      "bytes": 948613
+      "sha256": "06bbab5369aa69647cb20357a95c1cc2822c4c543e0f93fdea7b60c93bd38376",
+      "bytes": 948606
     },
     "playback.json": {
-      "sha256": "f5e591fea25a529c24e10ef5554e4c0b71a14195d036253db55ff89c99b1446c",
+      "sha256": "5ca5392a1b7d501fbf4d259900ef8eb5511df3a58966bb4b1147fa4e7017fb8d",
       "bytes": 1047494
     },
     "playback.pc2": {
@@ -117,15 +118,15 @@
       "bytes": 6266912
     },
     "run_report.json": {
-      "sha256": "acb8342c01e83ed34c05df91ddc4f0b5eaecace7349deb6323699a43982ba032",
-      "bytes": 21177
+      "sha256": "83dd58e5605a9fdb3c5d980f43065de47c69e172dec53ff9c495d428d3fd255e",
+      "bytes": 22023
     }
   },
   "failure": null,
   "timing": {
-    "started_utc": "2026-11-12T03:33:37+00:00",
-    "febio_seconds": 102.299,
-    "finished_utc": "2026-11-12T03:35:23+00:00"
+    "started_utc": "2026-11-12T06:43:08+00:00",
+    "febio_seconds": 28.634,
+    "finished_utc": "2026-11-12T06:43:40+00:00"
   },
   "result": {
     "frames_written": 50

@@ -65,7 +65,7 @@ def software(febio_version: str | None) -> dict:
 def write(run_dir: Path, record: dict) -> None:
     """Replace provenance.json in one step, so a reader polling during the run never sees half a file."""
     tmp = run_dir / (FILE + ".tmp")
-    tmp.write_text(json.dumps({"format": FORMAT, **record}, indent=2) + "\n", encoding="utf-8")
+    tmp.write_text(json.dumps({"format": FORMAT, **record}, indent=2) + "\n", encoding="utf-8", newline="\n")
     os.replace(tmp, run_dir / FILE)
 
 

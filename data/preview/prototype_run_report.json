@@ -177,13 +177,10 @@
       "note": "docs/07 section 3"
     },
     {
-      "where": "plausibility.sag_range_mm_at_k1",
-      "value": [
-        0.1,
-        10.0
-      ],
+      "where": "plausibility.sag_factor",
+      "value": 10.0,
       "source": "ours",
-      "note": "docs/07 section 3, provisional; times k"
+      "note": "check (c) passes when the measured sag is within this factor of the model's estimate, rho |g| k L^2 / (2 E), either way"
     },
     {
       "where": "trajectory.source",
@@ -192,7 +189,7 @@
       "note": "placeholder_jaw.json: 51 frames at 30 fps"
     }
   ],
-  "attachments_not_built": [
+  "simplifications": [
     "the 6 muscles around the mouth attached to the lips (zAttachment to zTissue around the orbicularis): not built in phase 1, ADR-32",
     "the 9 skin attachments to the lips (zCloth): not built in phase 1, ADR-32 (skin is phase 2, T-18)",
     "the chain mouth-corner node -> zTissue2/3 -> skull and jaw: replaced by the lip-corner anchor that turns alpha x the jaw angle (A-35, docs/05 section 3)"
@@ -565,13 +562,13 @@
             "worst_frame": 32
           },
           "left_corner_on_anchor": {
-            "max_mm": 0.010260218823938553,
-            "mean_mm": 0.0001665582866240554,
+            "max_mm": 0.010260218823940187,
+            "mean_mm": 0.00016655828662448584,
             "worst_frame": 32
           },
           "right_corner_on_anchor": {
-            "max_mm": 0.008110945186400301,
-            "mean_mm": 0.00017701698251236997,
+            "max_mm": 0.008110945186401146,
+            "mean_mm": 0.00017701698249907935,
             "worst_frame": 32
           }
         }
@@ -589,7 +586,7 @@
           "jaw",
           "lip_corner_anchor"
         ],
-        "max_deviation_mm": 1.2562298752398847e-10,
+        "max_deviation_mm": 1.256208878625988e-10,
         "per_body": {
           "jaw": {
             "anchor_nodes": 234,
@@ -597,7 +594,7 @@
           },
           "lip_corner_anchor": {
             "anchor_nodes": 1194,
-            "max_deviation_mm": 1.2562298752398847e-10
+            "max_deviation_mm": 1.256208878625988e-10
           }
         }
       }
@@ -605,33 +602,58 @@
     "c": {
       "name": "gravity sag",
       "passed": true,
-      "message": "free vertices moved 0.0952 mm along gravity (down) on average over frames 10-14; expected 0.067 to 6.7 mm down (07 section 3 x k = 0.67); this check only catches a sign error or an error of about 100x",
+      "message": "free vertices moved 0.0952 mm along gravity (down) on average over frames 10-14; the model expects 0.1457 mm (rho |g| k L^2 / 2E with L = 25.05 mm) and the check passes from 0.0146 to 1.46 mm down; it catches a sign error or a gross error in E, density, gravity or units, not a small one",
       "numbers": {
         "free_vertices": 9433,
         "frames": [
           10,
           14
         ],
+        "expected_sag_mm": 0.14567203270160384,
+        "free_length_mm": 25.045164000911058,
         "range_mm": [
-          0.067,
-          6.7
+          0.014567203270160384,
+          1.4567203270160385
         ],
+        "factor": 10.0,
         "k": 0.67,
-        "mean_sag_along_gravity_mm": 0.09519027176871235,
-        "mean_dz_mm": -0.09519027176871235
+        "density_t_per_mm3": 1.06e-09,
+        "E_mpa": 0.015,
+        "mean_sag_along_gravity_mm": 0.09519027176870656,
+        "mean_dz_mm": -0.09519027176870656
+      }
+    },
+    "d": {
+      "name": "the tet mesh stays valid",
+      "passed": true,
+      "message": "on all 51 frames every one of the 26721 tets keeps its orientation; volume / rest volume is between 0.690 (frame 32) and 3.675",
+      "numbers": {
+        "min_volume_ratio": 0.6904387051868732,
+        "min_volume_ratio_frame": 32,
+        "max_volume_ratio": 3.675254780430205,
+        "inverted_tets": 0,
+        "frames_with_inverted_tets": 0,
+        "tets": 26721,
+        "frames": 51
       }
     }
   },
   "timing": {
-    "generate_s": 5.675,
-    "febio_s": 102.299,
-    "post_s": 4.679,
-    "febio_s_per_frame": 2.046,
-    "budget_s_per_frame": 2.5,
-    "budget_note": "docs/02 N-07, provisional (about Ziva's 2.5 s per frame): reported, not a pass/fail"
+    "generate_s": 4.958,
+    "febio_s": 28.634,
+    "post_s": 3.728,
+    "febio_s_per_frame": 0.573
   },
   "settled_shape": {
-    "available": true
+    "available": true,
+    "frame": 14
+  },
+  "return_to_settled": {
+    "frames": [
+      50
+    ],
+    "max_mm": 0.004128629332535777,
+    "mean_mm": 0.001201832020213963
   },
   "spring_slip": {
     "lower_lip_on_jaw": {
@@ -641,15 +663,15 @@
       "flag": false
     },
     "left_corner_on_anchor": {
-      "max_slip_febio_mm": 0.08072027576184783,
+      "max_slip_febio_mm": 0.08072027576184829,
       "delta_febio_mm": 8.102766388597072,
-      "ratio": 0.009962063805201706,
+      "ratio": 0.009962063805201763,
       "flag": false
     },
     "right_corner_on_anchor": {
-      "max_slip_febio_mm": 0.06712022273845236,
+      "max_slip_febio_mm": 0.06712022273845347,
       "delta_febio_mm": 8.102766388597072,
-      "ratio": 0.008283618152056051,
+      "ratio": 0.008283618152056188,
       "flag": false
     }
   },
