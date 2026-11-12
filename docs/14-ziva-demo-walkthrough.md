@@ -2,6 +2,8 @@
 
 **一段话**：2026-11-10 的 Zoom 会议里，研究员 Zhiyun (Richard) Peng 在 Ziva 机器上演示了 Maya 2023.3.1 + Ziva 的操作：打开场景、给骨头和软组织加上或去掉 Ziva 物理、渲染几帧看重力下坠、用"钢琴界面"（Facial Expression Automator）做 AA 音。录像只有 19 分 30 秒。**没有演示**：读 zSolver、zMaterial、zAttachment 的数值，清 Ziva 缓存，加载 `.pkl` 运动文件，甩头。所以第 3 节的数值表很短，对 [11](11-risks-and-questions.md) 的 5 个问题基本没有回答。
 
+> 本文只转述录像里的操作、画面上的文字和研究员的意思，不逐字引用录像里的话（AGENTS.md 的保密规则；录像和转写稿留在仓库外）。
+
 **材料位置（不进 git）**：`E:\Codebase\3D模拟\ziva-demo-2026-11-10\`，里面有完整转写稿 `transcript.txt`、5 张缩略总览 `sheet_*.jpg`、80 张抽帧 `frames/`、本文引用的全分辨率关键帧 `key_frames/`。视频原件在 `C:\Users\User\Downloads\GMT20261110-235156_Recording_2160x1350.mp4`，没有移动。
 
 **怎么读本文的标记**：时间点是视频 mm:ss；来源"画面"或"语音"；把握：高 / 中 / 低 / 不确定。转写质量：前 12 分钟和 14 分钟之后基本可信，**约 12:00 到 13:00 是语音识别失败**（一串重复的"2"），那一段只信画面。语音里的专有名词（Ziva、Solver、LBS、FEBio）有错字，下面已按画面和上下文改过。说话人没有标，换人时只能从摄像头小窗判断。
@@ -15,25 +17,25 @@
 | 1 | 通过远程桌面进入 Ziva 机器。进去时上一位同学的 Maya 还开着（`g10-10 rest pose 1200 landmarks v9.mb`，标题带 `*`，未保存） | 0:08–0:23 | 语音+画面 | 高 |
 | 2 | **别人留下没关的东西，先帮他保存再关**。研究员存到 `C:\Users\zpa18\Desktop\daiwik\` | 0:20–0:54 | 语音+画面（保存对话框 0:23，资源管理器 0:27） | 高 |
 | 3 | 从任务栏启动 Maya（启动界面写 Autodesk Maya 2023），在 Recent 里点场景，或点 Open 在对话框里选 | 1:00–1:43 | 画面 | 高 |
-| 4 | 第一个打开的是简化演示场景 `v36 dev_proxy_jaw_oor V3 more aggressive delete done.mb`，目录 `C:\keyLabLocal_D\c99-maya-ziva-workshop\different pose as rest pose\`。研究员口头叫它"Ziva project … rest pose，带 Ziva 的简化模型" | 1:06–2:14 | 语音+画面（标题栏 2:14） | 高 |
+| 4 | 第一个打开的是简化演示场景 `v36 dev_proxy_jaw_oor V3 more aggressive delete done.mb`，目录 `C:\keyLabLocal_D\c99-maya-ziva-workshop\different pose as rest pose\`。研究员介绍它是带 Ziva 的简化静止姿态模型 | 1:06–2:14 | 语音+画面（标题栏 2:14） | 高 |
 | 5 | 场景载入后，他**先把 Ziva 的 playback 关掉**。他的说法：打开它，Ziva 会在后台把全部 50 帧一次算出来，所以慢，他一般关掉 | 2:02–2:25 | 语音 | 中（"playback"具体是哪个按钮、哪个界面，画面没拍清） |
 | 6 | 看场景：一层是皮肤 surface mesh，一层是头骨，层（Layer Editor）里点 V 就能隐藏 | 2:28–2:49 | 语音+画面 | 高 |
 | 7 | **去掉物理**：选中网格，点 Ziva 菜单里的 `Remove tissue or bone`，它就变回纯几何网格 | 2:56–3:07 | 语音 | 高（菜单项名语音说出） |
 | 8 | **加骨头物理**：选中网格，Ziva 菜单里点 `bone`，它就有重力、刚体性质，能被别的组织粘连（attach） | 3:14–3:40 | 语音+画面（3:14、3:29 骨头网格呈绿色线框） | 高 |
 | 9 | **加软组织物理**：同样的方式点 `tissue`（肌肉）。4:58 画面是 Ziva 菜单展开、嘴唇网格选中成绿色 | 4:53–4:58 | 语音+画面 | 中 |
-| 10 | 点完加物理就会在后台算前几帧（他说"算了三帧"），"solver 已经打开了"；从第 1 帧开始算重力和周围组织的拉力 | 3:49–4:13 | 语音 | 中 |
-| 11 | 这个简化场景**算崩了**：研究员说他把肌肉剪得太多，只剩几块，"不是好例子" | 4:16–4:29 | 语音 | 高 |
-| 12 | 换一个**完整场景**：File → Open，在同一目录里选 `neutral 260825 v15 made the teeth MESH.mb`（对话框里同目录有几十个版本文件）。他说这个"可以渲染" | 4:33–5:11 | 语音+画面（打开对话框 5:02，标题栏 6:32 起） | 高 |
-| 13 | 这个场景就是"0–50 帧"。他说：你们的 FEBio 相当于点了 playback，后台算好，再在 Blender 里回放 | 5:12–5:34 | 语音 | 高 |
+| 10 | 点完加物理就会在后台算前几帧（他提到已经算了几帧），求解器此时已经开着；从第 1 帧开始算重力和周围组织的拉力 | 3:49–4:13 | 语音 | 中 |
+| 11 | 这个简化场景**算崩了**：研究员说他把肌肉剪得太多，只剩几块，不适合拿来演示 | 4:16–4:29 | 语音 | 高 |
+| 12 | 换一个**完整场景**：File → Open，在同一目录里选 `neutral 260825 v15 made the teeth MESH.mb`（对话框里同目录有几十个版本文件）。他说这个场景能正常渲染 | 4:33–5:11 | 语音+画面（打开对话框 5:02，标题栏 6:32 起） | 高 |
+| 13 | 这个场景的时间轴是第 0 到 50 帧。他把我们的 FEBio 比作打开 playback：后台算好，再在 Blender 里回放 | 5:12–5:34 | 语音 | 高 |
 | 14 | 渲染一帧看结果：Render Settings（渲染器 Arnold，渲染层 masterLayer）设单帧、很小的图（160 × 121，画面上 "Image size: 160 x 121"）；Render Sequence 里相机选 `muscle_closeup`；点 `Render Sequence` | 6:07–6:50 | 语音+画面 | 高 |
 | 15 | 渲染连续帧：Frame Range 设 0 到 2，再开 playback，第 2 帧嘴唇会往下掉，但没掉很多，因为骨头拖着它 | 7:00–8:07 | 语音+画面 | 中 |
 | 16 | 找渲染出来的图：用 Everything 搜文件名（`test_new_neutral_V14`），10 张这样的图连起来就是动画 | 7:43–8:24 | 语音+画面 | 高 |
 | 17 | 在时间轴上拖动，直接看肌肉往下掉 | 10:00–10:13 | 语音+画面 | 高 |
 | 18 | **钢琴界面的启动**：在 VS Code 里打开 `h99-UI-mayascipt-V1.py`（仓库路径 `a3-stochastic-V1 > b99-frame1to4-get-b1to3 > d4 interactive interface of animation`），文件开头的注释写着：先在 Maya 里打开场景，再在 Maya 的 Script Editor 里执行 `commandPort -name "localhost:7001" -sourceType "mel";`，打通 VS Code 和 Maya 的通道，然后从 VS Code 把界面代码送进 Maya | 12:17–12:43 | 画面（注释原文 12:40）；语音那段识别失败 | 高（画面）／低（语音） |
-| 19 | 清理环境，然后按一个快捷键，"钢琴界面就出现了"：窗口标题 `Facial Expression Automator`，初始显示 `Current Pose: Neutral \| Frame: 14` | 12:55–13:31 | 语音（13:04）+画面（13:01、13:31 缩略图） | 中（快捷键语音识别失败，"shift"后面的内容不知道） |
-| 20 | 选 `Phoneme AA (pot)`，界面调用"已经算好的路径"，"5000 步压缩成 50 步"，每步自己推进、算出下一步 | 13:06–13:35 | 语音 | 中（"code one"很可能是 combined checkpoints，推断） |
+| 19 | 清理环境，然后按一个快捷键，钢琴界面随即出现：窗口标题 `Facial Expression Automator`，初始显示 `Current Pose: Neutral \| Frame: 14` | 12:55–13:31 | 语音（13:04）+画面（13:01、13:31 缩略图） | 中（快捷键语音识别失败，Shift 之后的键不知道） |
+| 20 | 选 `Phoneme AA (pot)`，界面调用预先算好的路径（他说是把几千步压缩成几十步），每步自己推进、算出下一步 | 13:06–13:35 | 语音 | 中（语音里的路径名很可能指 combined checkpoints，推断） |
 | 21 | 渲染到第 20 步就停（不用看满 36 步）：landmark 拖着嘴唇往下拉，下巴也在转，这就是音素 AA。完整的 AA 要 36 步 | 15:22–16:16 | 语音 | 高 |
-| 22 | 键盘模式（钢琴式）：展开 `Keyboard Mode (piano-style)`，勾 `Enable keyboard mode`，按键盘上的键切换表情，可以同时按多个键（低音加高音，"又做表情又说话"）。第一次用前点 `Precompute All Keyboard Transitions (Fix First-Time Lag)` | 14:26–14:47 | 语音+画面（14:46） | 高 |
+| 22 | 键盘模式（钢琴式）：展开 `Keyboard Mode (piano-style)`，勾 `Enable keyboard mode`，按键盘上的键切换表情，可以同时按多个键（低音加高音，相当于同时做表情和说话）。第一次用前点 `Precompute All Keyboard Transitions (Fix First-Time Lag)` | 14:26–14:47 | 语音+画面（14:46） | 高 |
 | 23 | **回到初始**：界面上的按钮叫 `Reset to Neutral (Reopen Rest Pose)`，字面意思是重新打开静止姿态的场景 | 14:46 | 画面 | 高（按钮字）／中（实际做法） |
 | 24 | 研究员答应：可以把我们的脚本放到这台机器上运行取数据；建议在**共享文件夹**里新建一个 project（名字以 `b5` 开头，没听清），资产放进去，大家共享 | 16:43–17:12 | 语音 | 高 |
 
@@ -56,8 +58,8 @@
 | 大纲里的节点 | `middleres_skull`、`middleres_Jaw`、`middleres_Node`、`middleres_OrbicularisOculi`、`middleres_OrbicularisOris`、`middleres_TeethDown`、`middleres_TeethUp`、`zSolver1`、`head`、`jack01_MODEL`、`jack01_c_mouth01_world`，以及三组相机和 Omni 灯 | 4:33、5:02 | 画面 | 高 |
 | 图层 | `skin_ziva`、`skin_render`、`the_hand`、`ziva_mesh_muscles`、`back_eye_hider_board`、`three_point_lightV1`、`muscle_view_mode`、`skin_view_mode` | 12:55 | 画面 | 高 |
 | 帧率 | **30 fps**（时间轴右下） | 12:55、14:46 | 画面 | 高 |
-| 时间轴 | 动画范围 0 到 50（语音："0–50 帧"）；播放范围随操作变（演示时 0–20，AA 运行后 1–36）；AA 运行后显示 `Current Pose: phoneme AA \| Frame: 36` | 5:12、12:55、14:46 | 语音+画面 | 高 |
-| 重力沉降 | 前面留"缓冲期"，运动从第 15 帧开始；钢琴界面起始显示 Frame 14 | 11:07–11:28、13:31 | 语音+画面 | 高（语音）／中（Frame 14，缩略图） |
+| 时间轴 | 动画范围 0 到 50（语音也这么说）；播放范围随操作变（演示时 0–20，AA 运行后 1–36）；AA 运行后显示 `Current Pose: phoneme AA \| Frame: 36` | 5:12、12:55、14:46 | 语音+画面 | 高 |
+| 重力沉降 | 前面留一段缓冲，运动从第 15 帧开始；钢琴界面起始显示 Frame 14 | 11:07–11:28、13:31 | 语音+画面 | 高（语音）／中（Frame 14，缩略图） |
 | 每帧求解耗时 | Script Editor 里每行 `ziva 2026-11-10 17:05:54.302 INFO\| Timestep completed; stepped to frame …`，相邻行间隔约 **2.3–2.5 秒**（最后一间隔 5 秒）；状态栏一行写着 `stepped to frame 36.0; wall clock time 1.519s` | 14:46 | 画面 | 中（帧号被截断；这是演示机配置，实际质量设置不详） |
 | 渲染设置 | Arnold Renderer，图 160 × 121，相机 `muscle_closeup` | 6:32、12:55 | 画面 | 高 |
 | 钢琴界面的按键 | 见第 1 节第 22 步；键位：`[f] Frown [b] Brow [q] Squint`；`[0] Neu [s] Smile [m] Mouth [c] Cheek [p] Pucker [1] Happy [2] Sad [3] Surpr`；`[n] N [a] AA [i] IY [t] T [e] EH [u] UW [v] V [y] Y` | 14:46 | 画面 | 高 |
@@ -71,9 +73,9 @@
 - **别人没关的 Maya 先帮存再关**（0:48–0:54）。
 - **加骨头、加软组织、去物理**是三个 Ziva 菜单项，对应 `bone`、`tissue`、`Remove tissue or bone`（2:56–4:58）。加完物理，Ziva 在后台立刻开始算，慢，所以他平时关掉 playback（2:02–2:25，3:49–4:13）。
 - **简化场景会崩**（4:16–4:29）：把肌肉删到只剩几块，Ziva 的解算失败。**对我们的影响**：`v36 … more aggressive delete done.mb` 这个代理场景不一定能解算，参考结果要在完整场景里做（12 里写的"完整场景"就是他演示的 `neutral 260825 v15 made the teeth MESH.mb`，见第 5 节）。
-- 他把我们的 FEBio 流程类比成"点 playback，后台算好，Blender 里回放"（5:12–5:34、10:39–10:51）。
+- 他把我们的 FEBio 流程比作 Ziva 的 playback：后台算好，在 Blender 里回放（5:12–5:34、10:39–10:51）。
 - 运动前 0–14 帧是沉降缓冲，第 15 帧起 landmark 才开始动（11:07–11:28）。
-- 钢琴界面的运动是已经算好的 36 个检查点，"5000 步压缩成 50 步"，界面逐步推进，每一步重新算（13:23–13:35，16:14）。
+- 钢琴界面的运动是已经算好的 36 个检查点，由几千步压缩而来，界面逐步推进，每一步重新算（13:23–13:35，16:14）。
 - 钢琴界面大部分代码是 LLM 写的，他们只给提示词和技术（14:54–14:57）。
 - 另一位美国博士生在做这个过程的加速，暂时不需要合作（13:38–14:11）。
 - 文件和代码都在共有资产里，代码已经整理过，拉下来就能跑（16:21–16:40）。
@@ -93,7 +95,7 @@
 | 30 帧/秒 | 12、03 第 5 节 | **证实** | 画面 12:55 |
 | 从第 0 帧开始，0–14 帧沉降，运动从第 15 帧 | 12、03 | **证实**（语音）；时间轴动画范围从 0 | 语音 11:07–11:28，画面 12:55 |
 | 运动是打在时间轴上的关键帧 | 12 | **没涉及**：界面逐步推进，日志是 `stepped to frame N`，但有没有关键帧画面没拍到。下面第 5 节要在现场确认 | 画面 14:46 |
-| 钢琴界面加载运动、读 `combined_checkpoints.pkl` | 03 第 7 节 | **没涉及**：选 `Phoneme AA` 就开始，没有文件对话框；语音"调用算好的路径"，只是推断就是它 | 语音 13:18 |
+| 钢琴界面加载运动、读 `combined_checkpoints.pkl` | 03 第 7 节 | **没涉及**：选 `Phoneme AA` 就开始，没有文件对话框；语音只说调用预先算好的路径，只是推断就是它 | 语音 13:18 |
 | 甩头是给骨头网格打平移关键帧 | 03 第 13.8 节 | **没涉及** | — |
 | 清 Ziva 缓存、重置回到起始帧 | 12 B 节 | **部分涉及**：研究员关的是 Ziva 的 playback；重置的按钮是 `Reset to Neutral (Reopen Rest Pose)`，字面是重新打开场景。没见到"缓存"这个词 | 语音 2:02、画面 14:46 |
 | 研究场景是"完整场景" | 12 | **具体化**：完整可算的场景是 `neutral 260825 v15 made the teeth MESH.mb`；v36 代理会算崩 | 语音 4:16、5:01 |
