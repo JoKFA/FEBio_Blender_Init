@@ -164,6 +164,10 @@ def run_scene(args: argparse.Namespace, show) -> int:
     for key, c in r["checks"].items():
         verdict = {True: "PASS", False: "FAIL", None: "NOT RUN"}[c["passed"]]
         print(f"check {key}    [{verdict}] {c['name']}: {c['message']}")
+    back = r.get("return_to_settled")
+    if back and back["frames"]:
+        print(f"returns    drivers back at rest on frame(s) {', '.join(map(str, back['frames']))}: nodes are at most "
+              f"{back['max_mm']:.2e} mm (mean {back['mean_mm']:.2e} mm) from the settled shape (reported only)")
     t = r["timing"]
     if t.get("febio_s_per_frame") is not None:
         print(f"timing     FEBio {t['febio_s']} s, {t['febio_s_per_frame']} s per frame; "

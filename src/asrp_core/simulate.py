@@ -16,7 +16,9 @@
     playback.json, playback.pc2   the display mesh and its point cache for Blender (`playback`)
     run_report.json               every temporary value and its source, the scene's simplifications,
                                   the generator's report, max|u|/δ per spring group, the plausibility
-                                  checks (`plausibility`), timing
+                                  checks a, b, b2, c, d (`plausibility`), return_to_settled (how far
+                                  the tet nodes are from the settled shape once the drivers are back
+                                  at rest; reported only), timing
 
 A failed or cancelled run gets run_report.json (with check (a) failed) but no physics results.
 """
@@ -182,6 +184,7 @@ def run_scene(scene_path, trajectory_path, runs_dir: Path, exe: Path, name: str 
         checks["b"] = plausibility.Check("hard attachments follow their bones", None, "the run did not complete")
         checks["b2"] = plausibility.Check("spring anchors follow their rigid bodies", None, "the run did not complete")
         checks["c"] = plausibility.Check("gravity sag", None, "the run did not complete")
+        checks["d"] = plausibility.Check("the tet mesh stays valid", None, "the run did not complete")
     else:
         checks["a"] = check_a
         index = {nid: i for i, nid in enumerate(positions["node_ids"])}
@@ -224,6 +227,10 @@ def run_scene(scene_path, trajectory_path, runs_dir: Path, exe: Path, name: str 
                 reason = f"the motion starts on or before frame {settle}, the end of the gravity-only settle"
             checks["c"] = plausibility.Check("gravity sag", None, reason)
             report["settled_shape"]["reason"] = f"{reason}: the shape after the settle is not written"
+        checks["d"] = plausibility.tet_mesh_valid(model.mesh.nodes, model.mesh.tets, node_frames)
+        if settled:
+            report["return_to_settled"] = plausibility.return_to_settled(
+                node_frames, settle, [b.transforms for b in model.bodies.values()])
         report["spring_slip"] = slips(model, node_frames)
         _write_results(run_dir, model, node_frames, display, settle if settled else None)
         files = [run.POSITIONS, DISPLAY, "playback.json", "playback.pc2"]

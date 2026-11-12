@@ -1,6 +1,6 @@
 """The plausibility checks every run on the lab's model gets (docs/07 section 3, T-06a).
 
-Three checks, each a function of plain arrays so that a test can make it fail on purpose:
+Five checks, each a function of plain arrays so that a test can make it fail on purpose:
 
 (a) `motion_completed`: FEBio reached the end of the motion with every frame logged. Steps FEBio cut and
     retried are a success, but they are counted and reported.
@@ -22,12 +22,22 @@ Three checks, each a function of plain arrays so that a test can make it fail on
     estimate, and proportional to 1/E like the estimate). This still only finds gross errors (a flipped
     sign, a unit off by 100, E or the density off by 10 times or more); it does not prove the scale.
 
+(d) `tet_mesh_valid`: on every frame, every tet's signed volume has the sign it had at rest (ratio of its
+    volume to its rest volume above 0). A tet turned inside out means the solution is not a real deformation
+    and the display mesh it carries is wrong even though the run "converged". The same function reports the
+    smallest and largest volume ratio.
+
+`return_to_settled` is not a check but a measurement: once the drivers are back at rest after the motion, how
+far the tet nodes are from the shape they had after the gravity-only settle. Reported, not judged.
+
 All positions are geometric mm (what `run` writes after dividing by k).
 """
 
 from dataclasses import dataclass, field
 
 import numpy as np
+
+from asrp_core import tetmesh
 
 HARD_TOLERANCE_MM = 1e-3
 ANCHOR_TOLERANCE_MM = 1e-3
@@ -186,3 +196,47 @@ def gravity_sag(rest_display: np.ndarray, display_frames: np.ndarray, free: np.n
                  f"{frames.start}-{frames.stop - 1}; the model expects {estimate.sag_mm:.4f} mm (rho |g| k L^2 / 2E with "
                  f"L = {estimate.free_length_mm:.2f} mm) and the check passes from {lo:.3g} to {hi:.3g} mm down; it "
                  "catches a sign error or a gross error in E, density, gravity or units, not a small one", numbers)
+
+
+def tet_mesh_valid(rest_nodes: np.ndarray, tets: np.ndarray, node_frames: np.ndarray) -> Check:
+    """(d). rest_nodes (n, 3), tets (t, 4), node_frames (F, n, 3), geometric mm. Per frame, each tet's signed volume
+    over its rest signed volume; the check fails if any ratio is not above 0 on any frame (a missing, NaN position
+    fails too)."""
+    rest = tetmesh.signed_volumes(rest_nodes, tets)
+    lowest, lowest_frame, highest = np.inf, 0, -np.inf
+    inverted, frames_with = 0, 0
+    for f in range(len(node_frames)):
+        ratio = tetmesh.signed_volumes(node_frames[f], tets) / rest
+        ratio = np.where(np.isnan(ratio), -np.inf, ratio)  # a missing position counts as inverted
+        bad = int((ratio <= 0).sum())
+        inverted += bad
+        frames_with += bad > 0
+        if ratio.min() < lowest:
+            lowest, lowest_frame = float(ratio.min()), f
+        highest = max(highest, float(ratio.max()))
+    numbers = {"min_volume_ratio": lowest, "min_volume_ratio_frame": lowest_frame, "max_volume_ratio": highest,
+               "inverted_tets": inverted, "frames_with_inverted_tets": frames_with, "tets": int(len(tets)),
+               "frames": int(len(node_frames))}
+    if inverted:
+        return Check("the tet mesh stays valid", False,
+                     f"{inverted} tet volumes are zero or turned inside out, on {frames_with} of {len(node_frames)} frames "
+                     f"(smallest volume / rest volume {lowest:.3g} at frame {lowest_frame}); the display mesh carried by "
+                     "them is wrong. Soften the motion, raise the substeps or remesh", numbers)
+    return Check("the tet mesh stays valid", True,
+                 f"on all {len(node_frames)} frames every one of the {len(tets)} tets keeps its orientation; volume / rest "
+                 f"volume is between {lowest:.3f} (frame {lowest_frame}) and {highest:.3f}", numbers)
+
+
+def return_to_settled(node_frames: np.ndarray, settle: int, transforms: list, tolerance: float = 1e-9) -> dict:
+    """Once every driver is back at rest, how far are the tet nodes from their positions at frame `settle`?
+    transforms: the per-frame transforms of every moving body (None entries skipped). Over every frame after
+    `settle` on which all of them are the identity within `tolerance`: the frame numbers, and the largest and
+    the mean distance (geometric mm) of any node from where it was at `settle`."""
+    eye = np.eye(4).ravel()
+    moving = [np.asarray(t, dtype=float).reshape(len(t), 16) for t in transforms if t is not None]
+    frames = [f for f in range(settle + 1, len(node_frames))
+              if all(np.abs(t[f] - eye).max() <= tolerance for t in moving)]
+    if not frames:
+        return {"frames": []}
+    dist = np.stack([np.linalg.norm(node_frames[f] - node_frames[settle], axis=1) for f in frames])
+    return {"frames": frames, "max_mm": float(dist.max()), "mean_mm": float(dist.mean())}

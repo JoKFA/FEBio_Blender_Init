@@ -492,6 +492,60 @@ def test_check_c_range_follows_the_material_a_stiffer_bar_is_expected_to_sag_les
     assert 0.1 < a["numbers"]["mean_sag_along_gravity_mm"] / a["numbers"]["expected_sag_mm"] < 10
 
 
+def test_check_d_fails_on_an_inverted_tet_and_reports_the_volume_ratios():
+    rest = np.array([[0.0, 0, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1], [1, 1, 1]])
+    tets = np.array([[0, 1, 2, 3], [1, 2, 3, 4]])
+    frames = np.stack([rest, rest * 0.5, rest * 2.0, rest])
+    ok = plausibility.tet_mesh_valid(rest, tets, frames)
+    assert ok.passed and ok.numbers["inverted_tets"] == 0 and ok.numbers["frames_with_inverted_tets"] == 0
+    assert ok.numbers["min_volume_ratio"] == pytest.approx(0.125) and ok.numbers["min_volume_ratio_frame"] == 1
+    assert ok.numbers["max_volume_ratio"] == pytest.approx(8.0)
+
+    bad = frames.copy()
+    bad[2, 3, 2] = -1.0  # frame 2: node 3 goes through the opposite face of tet 0; tet 1 shares that node too
+    check = plausibility.tet_mesh_valid(rest, tets, bad)
+    assert check.passed is False and check.numbers["inverted_tets"] >= 1 and check.numbers["frames_with_inverted_tets"] == 1
+    assert check.numbers["min_volume_ratio"] < 0 and check.numbers["min_volume_ratio_frame"] == 2
+    assert "turned inside out" in check.message
+    flat = frames.copy()
+    flat[1, 3] = flat[1, 0]  # a tet squashed to zero volume is not valid either
+    assert plausibility.tet_mesh_valid(rest, tets, flat).passed is False
+    missing = frames.copy()
+    missing[3, 2] = np.nan  # a frame FEBio did not log
+    assert plausibility.tet_mesh_valid(rest, tets, missing).passed is False
+
+
+def test_return_to_settled_measures_only_frames_where_every_driver_is_back_at_rest():
+    eye = np.eye(4).ravel().tolist()
+    moved = cs.turn(12, 3, 0.3, (0, 0, 0), (1, 0, 0))  # frames 0-2 still, then turning
+    one = [moved[f] if 3 <= f <= 7 else eye for f in range(12)]
+    two = [eye] * 12
+    nodes = np.zeros((12, 3, 3))
+    nodes[:, :, 0] = np.arange(12)[:, None] * 0.001  # drifts 1 micrometre per frame along x
+    got = plausibility.return_to_settled(nodes, 2, [one, two, None])
+    assert got["frames"] == [8, 9, 10, 11]
+    assert got["max_mm"] == pytest.approx(0.009) and got["mean_mm"] == pytest.approx(np.mean([0.006, 0.007, 0.008, 0.009]))
+    assert plausibility.return_to_settled(nodes, 2, [one[:8] + moved[8:], two])["frames"] == []  # never back at rest
+    assert plausibility.return_to_settled(nodes, 11, [one, two]) == {"frames": []}  # nothing after the settle
+    assert plausibility.return_to_settled(nodes, 8, [one, two])["frames"] == [9, 10, 11]
+
+
+@needs_febio
+def test_a_run_reports_check_d_and_how_far_it_is_from_the_settled_shape_when_the_plate_is_back(tmp_path):
+    c, _ = plate_box(tmp_path / "back", "hard")
+    ramp = [0.0] * 5 + [-0.1 * (i + 1) for i in range(4)] + [-0.1 * (4 - i) for i in range(4)] + [0.0] * 17
+    motion = trajectory.hinge_transforms(PIVOT, AXIS, ramp)  # still to frame 4, turn and return by frame 12, still
+    r = run(c["scene"].parent, motion, "back", settle=4)
+    d = r.report["checks"]["d"]
+    assert r.status == "complete" and d["passed"] is True and "tet mesh" in d["name"], d
+    assert d["numbers"]["min_volume_ratio"] > 0.5 and d["numbers"]["inverted_tets"] == 0
+    back = r.report["return_to_settled"]
+    assert back["frames"][0] == 13 and back["frames"][-1] == 29 and len(back["frames"]) == 17
+    assert 0 <= back["max_mm"] < 0.5 and back["mean_mm"] <= back["max_mm"]
+    none = run(c["scene"].parent, motion, "no_settle")  # no settle_until_frame: no settled shape, no measurement
+    assert "return_to_settled" not in none.report and none.report["checks"]["d"]["passed"] is True
+
+
 # --- the placeholder motion and the command line ------------------------------------------------
 
 
