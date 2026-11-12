@@ -117,7 +117,7 @@ runs/2026-11-03_neutral-to-AA_001/
 已经实现，格式见 `src/asrp_core/playback.py` 开头的说明。表面网格以毫米存储，Blender 插件负责缩放显示。
 
 ### 5.4 溯源 `provenance.json`
-每个输入文件（包括四面体网格）的哈希值、asrp 版本（git 提交号）、FEBio 版本、Python 版本、运行时间、运行命令、运行结果（成功或失败及原因）。
+每个输入文件（包括四面体网格）的哈希值、asrp 版本和源码的 git 提交号（`software.asrp_source`：提交号，以及运行时有没有未提交的改动 `dirty`）、FEBio 版本、Python 版本、运行时间、运行命令、运行结果（成功或失败及原因）。
 
 ## 6. 物理后端接口
 

@@ -300,6 +300,16 @@ def test_a_run_whose_step_count_differs_from_time_steps_but_reaches_the_end_time
     assert abs(febio.time_reached(result.run_dir / "model.log") - febio.end_time(feb)) < 1e-4
 
 
+def test_provenance_records_the_source_commit(tmp_path):
+    # 04 section 5.4 (PR #7 review): the package version does not change between milestones, the commit does.
+    head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=provenance.SOURCE_ROOT,
+                          capture_output=True, text=True, check=True).stdout.strip()
+    result = execute(make_feb(tmp_path / "in" / "s1.feb"), tmp_path / "runs")
+    source = json.loads((result.run_dir / "provenance.json").read_text())["software"]["asrp_source"]
+    assert len(head) == 40 and source["commit"] == head
+    assert source["dirty"] in (True, False)
+
+
 def test_control_settings_inside_xml_comments_do_not_count(tmp_path):
     # PR #7 review: a .feb keeping old settings in a comment was failed after a normal solve.
     feb = make_feb(tmp_path / "in" / "commented.feb")

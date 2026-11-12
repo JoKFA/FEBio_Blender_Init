@@ -9,6 +9,7 @@ import hashlib
 import json
 import os
 import platform
+import subprocess
 import sys
 from pathlib import Path
 
@@ -31,9 +32,30 @@ def hash_files(root: Path, names: list[str]) -> dict[str, dict]:
     return {n: {"sha256": sha256_file(root / n), "bytes": (root / n).stat().st_size} for n in names}
 
 
+SOURCE_ROOT = Path(__file__).resolve().parents[2]
+
+
+def source_revision() -> dict | None:
+    """The git commit of the asrp source that ran, and whether it had uncommitted changes (04 section 5.4:
+    the package version alone does not change between milestones). None outside a git checkout."""
+    def git(*args: str) -> str | None:
+        try:
+            done = subprocess.run(["git", "-C", str(SOURCE_ROOT), *args], capture_output=True, text=True, timeout=10)
+        except (OSError, subprocess.TimeoutExpired):
+            return None
+        return done.stdout.strip() if done.returncode == 0 else None
+
+    commit = git("rev-parse", "HEAD")
+    if not commit:
+        return None
+    status = git("status", "--porcelain", "--untracked-files=no")
+    return {"commit": commit, "dirty": bool(status) if status is not None else None}
+
+
 def software(febio_version: str | None) -> dict:
     return {
         "asrp": __version__,
+        "asrp_source": source_revision(),
         "python": platform.python_version(),
         "febio": febio_version,
         "os": sys.platform,
