@@ -309,6 +309,20 @@ class Scene:
         return d
 
 
+def parameters(node, where=""):
+    """(location, PARAM json) for every parameter in a scene's JSON, e.g. ("solver.fps", {...})."""
+    if isinstance(node, dict):
+        if "value" in node and "source" in node:
+            yield where, node
+            return
+        for k, v in node.items():
+            yield from parameters(v, f"{where}.{k}" if where else k)
+    elif isinstance(node, list):
+        for i, v in enumerate(node):
+            label = v.get("name", i) if isinstance(v, dict) else i
+            yield from parameters(v, f"{where}[{label}]")
+
+
 def write(path, scene: Scene) -> None:
     Path(path).parent.mkdir(parents=True, exist_ok=True)
     text = json.dumps(scene.to_json(), indent=2, ensure_ascii=False)

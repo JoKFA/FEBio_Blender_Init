@@ -13,6 +13,16 @@ NORMAL_TERMINATION = "N O R M A L   T E R M I N A T I O N"
 ERROR_TERMINATION = "E R R O R   T E R M I N A T I O N"
 
 
+# FEBio's multi-threaded solver gives positions that differ in the last logged digit (about 1e-11 mm) from run to
+# run; with one thread the log is the same every time (docs/05 pit 17, T-06a). Bit-identical playback files need
+# that (docs/07 section 2), so every FEBio we start runs single-threaded.
+ENV = {"OMP_NUM_THREADS": "1"}
+
+
+def environment() -> dict:
+    return {**os.environ, **ENV}
+
+
 def command(feb_name: str, log_name: str, plot_name: str, exe: Path) -> list[str]:
     """The one place FEBio's command line is built. Names are relative: FEBio runs in the .feb's folder."""
     # -noconfig: results must not depend on a per-machine febio.xml (docs 05, pit 4).
@@ -38,6 +48,7 @@ def run(feb: Path, exe: Path, timeout: float = 600) -> Run:
         capture_output=True,
         text=True,
         timeout=timeout,
+        env=environment(),
     )
     seconds = time.perf_counter() - started
     text = log.read_text(errors="replace") if log.exists() else ""
@@ -98,6 +109,7 @@ def start(feb: Path, log_name: str, plot_name: str, exe: Path, out) -> subproces
     return subprocess.Popen(
         command(feb.name, log_name, plot_name, exe),
         cwd=feb.parent, stdin=subprocess.DEVNULL, stdout=out, stderr=subprocess.STDOUT, creationflags=flags,
+        env=environment(),
         start_new_session=sys.platform != "win32",
     )
 

@@ -57,6 +57,12 @@ LIP_ATTACHMENTS = {
     "zAttachment10": ("right_corner_on_anchor", CORNER_ANCHOR, "spring", 309),
 }
 SOLVER_FPS = 30  # the lab's zSolver frame rate (docs/03 section 5)
+# T-06a's temporary material (docs/09 T-06a card), ours: guessed to be near Ziva's defaults, not checked.
+TISSUE_E_MPA = 0.015
+TISSUE_NU = 0.45
+TISSUE_DENSITY = 1.06e-9  # t/mm^3
+TISSUE_NOTE = ("T-06a's temporary value: guessed to be close to Ziva's default, not checked, waits for D6 "
+               "(the Ziva attribute list, docs/12 item 2, Q4)")
 
 # Data the import cannot fill yet, said once here so the report and the docs agree.
 STILL_MISSING = [
@@ -98,20 +104,6 @@ def _write_obj(path: Path, header: list[str], vertices: np.ndarray, faces) -> No
     lines += [f"v {x!r} {y!r} {z!r}" for x, y, z in vertices.tolist()]
     lines += ["f " + " ".join(str(i + 1) for i in face) for face in faces]
     path.write_text("\n".join(lines) + "\n", encoding="utf-8", newline="\n")
-
-
-def _params(node, where=""):
-    """(location, Param json) for every parameter in a scene's JSON."""
-    if isinstance(node, dict):
-        if "value" in node and "source" in node:
-            yield where, node
-            return
-        for k, v in node.items():
-            yield from _params(v, f"{where}.{k}" if where else k)
-    elif isinstance(node, list):
-        for i, v in enumerate(node):
-            label = v.get("name", i) if isinstance(v, dict) else i
-            yield from _params(v, f"{where}[{label}]")
 
 
 def import_asset(export: Path, out: Path, tet_mesh: Path,
@@ -186,9 +178,9 @@ def import_asset(export: Path, out: Path, tet_mesh: Path,
         "lips", lips_mesh, lips_source,
         scene.TetRef("meshes/lips_tet.json", tet_meta.get("content_sha256", "")),
         scene.Material("neo-Hookean", {
-            "E_mpa": ours(0.02, f"20 kPa, a common soft-tissue value; {no_attribute_list}"),
-            "nu": ours(0.45, no_attribute_list),
-            "density_t_per_mm3": ours(1.06e-9, f"1060 kg/m3; {no_attribute_list}"),
+            "E_mpa": ours(TISSUE_E_MPA, f"15 kPa; {TISSUE_NOTE}"),
+            "nu": ours(TISSUE_NU, TISSUE_NOTE),
+            "density_t_per_mm3": ours(TISSUE_DENSITY, f"1060 kg/m3; {TISSUE_NOTE}"),
         }),
     )
 
@@ -328,7 +320,7 @@ def import_asset(export: Path, out: Path, tet_mesh: Path,
         "landmarks": len(names),
         "drivers": {JAW_DRIVER: {"pivot_mm": pivot.tolist(), "axis": axis.tolist(),
                                  "moves": [b.name for b in bones if b.driver == JAW_DRIVER]}},
-        "parameters": [{"where": w, **p} for w, p in _params(model.to_json())],
+        "parameters": [{"where": w, **p} for w, p in scene.parameters(model.to_json())],
         "missing": [*check.warnings, *STILL_MISSING],
         "check": {"errors": check.errors, "warnings": check.warnings},
     }

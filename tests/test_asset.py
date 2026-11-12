@@ -157,7 +157,7 @@ def test_the_four_lip_attachments_are_in_the_scene_as_docs_05_section_3_says(imp
     # The stiffness is T-07's rule: 100 x E x h, h = median tet edge x k.
     mesh, _ = tetmesh.load(TET)
     h = tetmesh.quality(mesh).median_edge_mm * 0.67
-    assert springs[0].value == pytest.approx(100 * 0.02 * h, rel=5e-3)
+    assert springs[0].value == pytest.approx(100 * 0.015 * h, rel=5e-3)
     assert result.report["attachments_file"] == {
         "name": "lip_attachments.json",
         "sha256": hashlib.sha256((EXPORT / "lip_attachments.json").read_bytes()).hexdigest()}

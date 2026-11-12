@@ -1,0 +1,240 @@
+"""`asrp run <scene.json> <trajectory.json>`: one physics run of a scene, start to finish (T-06a, docs/04 section 8).
+
+1. `generate.build` checks the scene and trajectory, maps the attachments and writes the .feb (nothing is
+   started if it refuses);
+2. the run shell (`run.Prepared` -> `run.execute`, length_scale = k) makes the run folder, copies the
+   inputs in, runs FEBio and writes physics/positions.json already divided by k;
+3. after a complete run, this module adds (all geometric mm, Z up, frames 0..N-1 of the trajectory; FEBio
+   logs no frame 0, so frame 0 is the rest pose):
+
+    physics/display.json          the display mesh at every frame, carried by the tet mesh (`embed`)
+    physics/settled_frame14.json  the shape after the gravity-only settle, frame 14 (ADR-30: the
+    physics/settled_frame14.obj   controller's starting point): tet nodes and display mesh, and the
+                                  display mesh as an OBJ with its faces
+    playback.json, playback.pc2   the display mesh and its point cache for Blender (`playback`)
+    run_report.json               every temporary value and its source, the attachments not built in
+                                  phase 1, the generator's report, max|u|/δ per spring group, the three
+                                  plausibility checks (`plausibility`), timing
+
+A failed or cancelled run gets run_report.json (with check (a) failed) but no physics results.
+"""
+
+import json
+import tempfile
+import time
+from dataclasses import dataclass
+from pathlib import Path
+
+import numpy as np
+
+from asrp_core import embed, generate, playback, plausibility, provenance, run
+from asrp_core import scene as scene_module
+
+SETTLED_FRAME = 14  # the last frame of the lab's gravity-only settle (ADR-30)
+REPORT = "run_report.json"
+DISPLAY = "physics/display.json"
+DISPLAY_FORMAT = "asrp-display/1"
+SETTLED = f"physics/settled_frame{SETTLED_FRAME}"
+SPEED_BUDGET_S_PER_FRAME = 2.5  # docs/02 N-07, provisional: about Ziva's 2.5 s per frame; reported only
+SLIP_LIMIT = 0.1  # docs/05 section 3: max|u| / δ above this, the spring result is off by more than ~2 %
+
+# Settings the generator chose (all "ours"), for the run report next to the scene's own parameters.
+GENERATOR_SETTINGS = [
+    ("generator.rhoi", generate.RHOI, "generalized-alpha spectral radius at infinity: 0 is FEBio's strongest damping of "
+     "fast modes; numerical, not physical damping. Used by T-07's runs (spikes/s3_attachment.py); docs/05 pit 2, T-12 "
+     "revisits it"),
+    ("generator.gravity_sign_in_febio", generate.FEBIO_GRAVITY_SIGN, "docs/05 pit 1 (ADR-10): FEBio's const body load "
+     "acts opposite to the manual, so the scene's physical gravity is written negated"),
+    ("generator.gravity_from", 0.0, "gravity is on at full strength from t = 0, like the lab's frames 0-14"),
+    ("generator.spring_offset_delta", f"{generate.SPRING_OFFSET_EDGES:g} x median tet edge x k", "docs/05 section 3: the anchors sit delta away along x, y, z "
+     "(FEBio coordinates); delta must stay >= 10 x the slip, see max|u|/delta"),
+    ("generator.spring_levels", generate.SPRING_LEVELS, "at most this many stiffness levels per spring group, log-spaced, "
+     "each the mean of its members (one FEBio spring material per level)"),
+    ("generator.max_distance_edges", generate.MAX_DISTANCE_EDGES, "a display vertex farther than this x the median tet edge "
+     "from its tet stops the run (docs/05 section 3 rule 5)"),
+    ("generator.max_retries", generate.MAX_RETRIES, "adaptive stepping as in spikes/s2_lips_febio.py"),
+    ("generator.dtmin_fraction", generate.DTMIN_FRACTION, "the step may shrink to this fraction of a frame step"),
+    ("generator.motion_between_frames", "linear", "the rigid bodies' translation and rotation vector are interpolated "
+     "linearly between frames (exact for a fixed hinge)"),
+    ("plausibility.hard_tolerance_mm", plausibility.HARD_TOLERANCE_MM, "docs/07 section 3"),
+    ("plausibility.sag_range_mm_at_k1", list(plausibility.SAG_RANGE_MM), "docs/07 section 3, provisional; times k"),
+]
+
+# ADR-32: attachments of the lab's model that phase 1 does not build (a simplification).
+NOT_BUILT = [
+    "the 6 muscles around the mouth attached to the lips (zAttachment to zTissue around the orbicularis): not built in "
+    "phase 1, ADR-32",
+    "the 9 skin attachments to the lips (zCloth): not built in phase 1, ADR-32 (skin is phase 2, T-18)",
+    "the chain mouth-corner node -> zTissue2/3 -> skull and jaw: replaced by the lip-corner anchor that turns alpha x the "
+    "jaw angle (A-35, docs/05 section 3)",
+]
+
+
+class SceneRunError(Exception):
+    """The scene could not be run; nothing was started. The message says what to do."""
+
+
+@dataclass
+class SceneRun:
+    run_dir: Path
+    status: str
+    report: dict
+    passed: bool  # complete and every plausibility check passed
+
+
+def _inputs(model: generate.Model, trajectory_path: Path) -> dict[str, Path]:
+    """The files the run folder needs to be run again: scene.json, the trajectory, every file it refers to."""
+    base = model.scene_path.parent
+    names = [t.mesh.path for t in model.scene.soft_tissues] + [t.tet_mesh.path for t in model.scene.soft_tissues]
+    names += [b.mesh.path for b in model.scene.bones]
+    if model.scene.landmarks is not None:
+        names.append(model.scene.landmarks.weights.path)
+    out = {"scene.json": model.scene_path, "trajectory.json": trajectory_path}
+    for n in names:
+        if Path(n).is_absolute() or ".." in Path(n).parts:
+            raise SceneRunError(f"scene.json refers to {n}, outside its own folder; a run folder can only copy files "
+                                "below the scene's folder")
+        out[n] = base / n
+    return out
+
+
+def _retries(log: Path) -> int:
+    text = log.read_text(errors="replace") if log.exists() else ""
+    return text.count("Retrying time step")
+
+
+def _write_obj(path: Path, vertices: np.ndarray, faces, header: str) -> None:
+    lines = [f"# {header}"] + [f"v {x!r} {y!r} {z!r}" for x, y, z in vertices.tolist()]
+    lines += ["f " + " ".join(str(i + 1) for i in f) for f in faces]
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8", newline="\n")
+
+
+def slips(model: generate.Model, node_frames: np.ndarray) -> dict:
+    """max|u| / δ per spring group: u is a spring node's distance from where its target puts the node's rest
+    position, in FEBio coordinates (geometric x k, the coordinates δ is in), over every frame."""
+    out = {}
+    for g in model.groups:
+        if g.kind != "spring" or not g.stiffness:
+            continue
+        nodes = np.array(sorted(g.stiffness))
+        body = model.bodies[g.target]
+        motion = body.transforms or [plausibility.IDENTITY] * len(node_frames)
+        u = max(float(np.linalg.norm(node_frames[f][nodes] - plausibility._moved(motion[f], model.mesh.nodes[nodes]),
+                                     axis=1).max()) for f in range(len(node_frames))) * model.k
+        out[g.name] = {"max_slip_febio_mm": u, "delta_febio_mm": model.delta, "ratio": u / model.delta,
+                       "flag": u / model.delta > SLIP_LIMIT}
+    return out
+
+
+def _parameters(model: generate.Model, trajectory_path: Path) -> list[dict]:
+    rows = [{"where": f"scene.{w}", **p} for w, p in scene_module.parameters(model.scene.to_json())]
+    rows += [{"where": w, "value": v, "source": "ours", "note": n} for w, v, n in GENERATOR_SETTINGS]
+    rows.append({"where": "trajectory.source", "value": model.trajectory.source, "source": "ours"
+                 if "placeholder" in model.trajectory.source else "lab_setting",
+                 "note": f"{trajectory_path.name}: {model.trajectory.frames} frames at {model.trajectory.fps} fps"})
+    return rows
+
+
+def run_scene(scene_path, trajectory_path, runs_dir: Path, exe: Path, name: str | None = None,
+              on_progress=None, cancel=None, timeout: float = 3600) -> SceneRun:
+    scene_path, trajectory_path = Path(scene_path), Path(trajectory_path)
+    t0 = time.perf_counter()
+    try:
+        model = generate.build(scene_path, trajectory_path)
+    except (generate.GenerateError, ValueError) as e:
+        raise SceneRunError(str(e)) from e
+    generated_s = time.perf_counter() - t0
+    with tempfile.TemporaryDirectory() as tmp:
+        feb = Path(tmp) / run.FEB_NAME
+        feb.write_text(model.feb_text, encoding="ascii", newline="\n")
+        prepared = run.Prepared(
+            feb, "generated", ["asrp", "run", scene_path.name, trajectory_path.name],
+            {"generator": {w.split(".", 1)[1]: v for w, v, _ in GENERATOR_SETTINGS if w.startswith("generator.")}
+             | {"spring_offset_delta_febio_mm": model.delta}},
+            _inputs(model, trajectory_path), length_scale=model.k)
+        result = run.execute(prepared, runs_dir, exe, name or trajectory_path.stem, on_progress, cancel, timeout)
+    run_dir = result.run_dir
+    t1 = time.perf_counter()
+    record = provenance.read(run_dir)
+    retries = _retries(run_dir / run.LOG_NAME)
+    report = {
+        "format": "asrp-run-report/1",
+        "run_id": run_dir.name,
+        "status": result.status,
+        "frames": model.frames,
+        "parameters": _parameters(model, trajectory_path),
+        "attachments_not_built": NOT_BUILT,
+        "generator": model.report,
+        "checks": {},
+        "timing": {},
+    }
+    checks = {}
+    if result.status != "complete":
+        checks["a"] = plausibility.motion_completed(result.status, model.frames, [], retries,
+                                                    result.failure.message if result.failure else None)
+        checks["b"] = plausibility.Check("hard attachments follow their bones", None, "the run did not complete")
+        checks["c"] = plausibility.Check("gravity sag", None, "the run did not complete")
+    else:
+        positions = run.read_positions(run_dir / run.POSITIONS)
+        index = {nid: i for i, nid in enumerate(positions["node_ids"])}
+        logged = [round(t * model.fps) for t in positions["times_s"]]
+        checks["a"] = plausibility.motion_completed("complete", model.frames, logged, retries)
+        tissue = [index[n + 1] for n in range(len(model.mesh.nodes))]
+        node_frames = np.empty((model.frames, len(model.mesh.nodes), 3))
+        node_frames[0] = model.mesh.nodes
+        for f, frame in zip(logged, positions["positions"]):
+            if 0 < f < model.frames:
+                node_frames[f] = np.asarray(frame)[tissue]
+        display = np.stack([embed.apply(model.embedding, p) for p in node_frames])
+        groups = [{"name": g.name, "kind": g.kind, "target": g.target, "nodes": g.nodes, "vertices": g.vertices}
+                  for g in model.groups]
+        transforms = {name: b.transforms for name, b in model.bodies.items()}
+        checks["b"] = plausibility.follows_bones(groups, model.mesh.nodes, node_frames, model.display, display, transforms)
+        attached = np.unique(np.concatenate([g.vertices for g in model.groups])) if model.groups else np.zeros(0, int)
+        free = np.setdiff1d(np.arange(len(model.display)), attached)
+        checks["c"] = plausibility.gravity_sag(model.display, display, free, model.gravity, model.k)
+        report["spring_slip"] = slips(model, node_frames)
+        _write_results(run_dir, model, node_frames, display)
+        record["outputs"] = provenance.hash_files(run_dir, [run.POSITIONS, DISPLAY, f"{SETTLED}.json", f"{SETTLED}.obj",
+                                                            "playback.json", "playback.pc2"]
+                                                  if model.frames > SETTLED_FRAME else
+                                                  [run.POSITIONS, DISPLAY, "playback.json", "playback.pc2"])
+    report["checks"] = {key: c.to_json() for key, c in checks.items()}
+    passed = result.status == "complete" and all(c.passed for c in checks.values())
+    report["passed"] = passed
+    febio_s = record.get("timing", {}).get("febio_seconds")
+    steps = model.frames - 1
+    report["timing"] = {
+        "generate_s": round(generated_s, 3), "febio_s": febio_s, "post_s": round(time.perf_counter() - t1, 3),
+        "febio_s_per_frame": round(febio_s / steps, 3) if febio_s else None,
+        "budget_s_per_frame": SPEED_BUDGET_S_PER_FRAME,
+        "budget_note": "docs/02 N-07, provisional (about Ziva's 2.5 s per frame): reported, not a pass/fail",
+    }
+    (run_dir / REPORT).write_text(json.dumps(report, indent=2, ensure_ascii=False) + "\n", encoding="utf-8", newline="\n")
+    record["outputs"] = {**record.get("outputs", {}), **provenance.hash_files(run_dir, [REPORT])} \
+        if result.status == "complete" else {}
+    record.pop("format", None)
+    provenance.write(run_dir, record)
+    return SceneRun(run_dir, result.status, report, passed)
+
+
+def _write_results(run_dir: Path, model: generate.Model, node_frames: np.ndarray, display: np.ndarray) -> None:
+    (run_dir / "physics").mkdir(exist_ok=True)
+    (run_dir / DISPLAY).write_text(json.dumps({
+        "format": DISPLAY_FORMAT, "units": "mm", "fps": model.fps, "frames": model.frames,
+        "vertex_count": int(len(model.display)), "mesh": model.scene.soft_tissues[0].mesh.path,
+        "note": "frame 0 is the rest pose (FEBio logs no frame 0); positions are geometric mm (FEBio's / k)",
+        "positions": display.tolist(),
+    }), encoding="utf-8", newline="\n")
+    if model.frames > SETTLED_FRAME:
+        f = SETTLED_FRAME
+        (run_dir / f"{SETTLED}.json").write_text(json.dumps({
+            "format": "asrp-settled/1", "units": "mm", "frame": f, "time_s": f / model.fps,
+            "note": "the shape after the gravity-only settle, the controller's starting point (ADR-30)",
+            "tet_nodes": node_frames[f].tolist(), "display": display[f].tolist(),
+        }), encoding="utf-8", newline="\n")
+        _write_obj(run_dir / f"{SETTLED}.obj", display[f], model.faces,
+                   f"{model.scene.soft_tissues[0].name}, frame {f} (settled under gravity), mm, Z up, asrp run (T-06a)")
+    playback.write_surface_bundle(run_dir, model.display, model.faces, display.tolist(), model.fps,
+                                  run_dir / run.FEB_NAME, model.scene.soft_tissues[0].name,
+                                  model.scene.soft_tissues[0].mesh.path)
