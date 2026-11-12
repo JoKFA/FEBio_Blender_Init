@@ -81,7 +81,7 @@ asrp/
 │  │                          待开发：compare.py……
 │
 ├─ blender_addon/asrp_blender/  Blender 插件，只管界面，不用第三方库
-│  ├─ __init__.py             面板：加载结果、检查后端、运行、结果列表、检查显示
+│  ├─ __init__.py             面板（英文）：Load result、Check backend、Run、Results、Checks
 │  └─ session.py              一次 asrp run 的子进程：读输出、进度、取消（不含 bpy）
 ├─ tests/                     自动测试（pytest）
 │  ├─ fixtures/s1/            S1 写成的示例 scene.json、trajectory.json，由同目录的 build.py 生成
