@@ -59,6 +59,35 @@ CHECKS = ("a", "b", "b2", "c", "d")
 
 # ---------------------------------------------------------------- pure functions (unit tested)
 
+PATH_OPTIONS = {"--work": "<work>", "--target": "<lab data>", "--export": "<export>", "--report": "<report>"}
+
+
+def recorded_command(args: list[str], repo: Path = REPO) -> str:
+    """The command line as the archive records it: no local absolute path. The value of --work becomes `<work>`
+    and that of --target `<lab data>`; --export and --report become a path relative to the repo when they are
+    inside it, otherwise `<export>` / `<report>`."""
+    out: list[str] = []
+    i = 0
+    while i < len(args):
+        arg = args[i]
+        name, eq, value = arg.partition("=")
+        if name in PATH_OPTIONS:
+            if not eq:
+                i += 1
+                value = args[i] if i < len(args) else ""
+            shown = PATH_OPTIONS[name]
+            if name in ("--export", "--report"):
+                try:
+                    shown = Path(value).resolve().relative_to(repo).as_posix()
+                except ValueError:
+                    pass
+            out.append(f"{name} {shown}")
+        else:
+            out.append(arg)
+        i += 1
+    return " ".join(["uv run python tools/aa_standin.py", *out])
+
+
 def target_array(text: str, name: str) -> np.ndarray:
     """The assignment `name = [[x, y, z], ...]` in the target file's text, read with ast.literal_eval."""
     found = re.search(rf"^{re.escape(name)}\s*=\s*(.*)$", text, re.M)
@@ -310,7 +339,7 @@ def main() -> None:
         "format": "asrp-aa-standin-report/1",
         "note": "numbers and verdicts only. A stand-in for D2 (the lab's landmark motion); replaced by the T-10 conversion once D2 arrives. "
                 "Variant A is expected to miss the target (docs/09 T-27, ADR-40); the fit guarantees reaching the target only for B and does not show the physics is right.",
-        "command_line": " ".join(["uv run python tools/aa_standin.py", *sys.argv[1:]]),
+        "command_line": recorded_command(sys.argv[1:]),
         "lab_repo_commit": LAB_COMMIT,
         "counts": {"vertices": int(len(rest)), "landmarks": int(len(names)), "frames": len(jaw_frames),
                    "settle_until_frame": SETTLE, "ramp_frames": STEPS},

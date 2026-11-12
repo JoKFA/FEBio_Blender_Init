@@ -1,7 +1,7 @@
 {
   "format": "asrp-aa-standin-report/1",
   "note": "numbers and verdicts only. A stand-in for D2 (the lab's landmark motion); replaced by the T-10 conversion once D2 arrives. Variant A is expected to miss the target (docs/09 T-27, ADR-40); the fit guarantees reaching the target only for B and does not show the physics is right.",
-  "command_line": "uv run python tools/aa_standin.py --work C:/Users/User/AppData/Local/Temp/claude/8c0cf8c4250a43bc/14dc09eb-822f-4b63-befc-066452f96712/scratchpad/aa_work",
+  "command_line": "uv run python tools/aa_standin.py --work <work>",
   "lab_repo_commit": "506cd69",
   "counts": {
     "vertices": 10240,

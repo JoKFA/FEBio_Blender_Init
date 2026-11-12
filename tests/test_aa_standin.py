@@ -1,5 +1,7 @@
 """tools/aa_standin.py: the fitting pieces on synthetic data (no lab file, no FEBio run)."""
 
+import re
+
 import aa_standin as aa
 import numpy as np
 import pytest
@@ -76,3 +78,23 @@ def test_rigid_fit_recovers_a_known_turn():
     move, residual = aa.rigid_fit(a, a @ r.T + [1.0, 2.0, 3.0])
     assert residual < 1e-9
     assert aa.rotation_degrees(move) == pytest.approx(5.74)
+
+
+def test_the_recorded_command_line_has_no_local_path():
+    cmd = aa.recorded_command(["--work", "C:/Users/someone/AppData/Local/Temp/aa_work",
+                               "--target=E:/Codebase/_lab/data/dataV22_phoneme_AA_for_d2.py",
+                               "--report", str(aa.REPO / "data" / "preview" / "aa_standin_report.json"),
+                               "--export", "D:/somewhere/else/lab_export"])
+    assert cmd == ("uv run python tools/aa_standin.py --work <work> --target <lab data> "
+                   "--report data/preview/aa_standin_report.json --export <export>")
+    assert "Users" not in cmd and ":/" not in cmd and "\\" not in cmd
+
+
+def test_the_archived_files_hold_no_local_absolute_path():
+    names = ("aa_standin_report", "aa_a_run_report", "aa_a_provenance", "aa_b_run_report", "aa_b_provenance",
+             "landmark_layer_check")
+    pattern = re.compile(r"[A-Za-z]:[\\/]|\\\\|/Users/|/home/")
+    for name in names:
+        text = (aa.REPO / "data" / "preview" / f"{name}.json").read_text(encoding="utf-8")
+        assert len(text) > 200, name
+        assert not pattern.search(text), f"{name}.json holds a local absolute path"
