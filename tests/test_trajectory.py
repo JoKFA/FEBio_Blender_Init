@@ -67,6 +67,18 @@ def example() -> dict:
     return json.loads((S1 / "trajectory.json").read_text())
 
 
+def test_source_tag_is_optional_round_trips_and_a_bad_value_is_refused(tmp_path):
+    assert trajectory.read(write(tmp_path, example())).source_tag is None
+    assert "source_tag" not in trajectory.read(write(tmp_path, example())).to_json()
+    for tag in ("lab_setting", "ziva_default", "ours"):
+        t = trajectory.read(write(tmp_path, example() | {"source_tag": tag}))
+        assert t.source_tag == tag and t.to_json()["source_tag"] == tag
+        trajectory.write(tmp_path / "again.json", t)
+        assert trajectory.read(tmp_path / "again.json").source_tag == tag
+    with pytest.raises(TrajectoryError, match="source_tag is 'mine'.*lab_setting, ziva_default, ours"):
+        trajectory.read(write(tmp_path, example() | {"source_tag": "mine"}))
+
+
 def test_an_unknown_version_is_refused(tmp_path):
     data = example() | {"format_version": "asrp-trajectory/9"}
     with pytest.raises(TrajectoryError, match="asrp-trajectory/1"):

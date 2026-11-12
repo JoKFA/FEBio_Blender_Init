@@ -48,6 +48,7 @@ def make(scene_path: Path, out: Path, cycles: int) -> None:
     trajectory.write(out, trajectory.Trajectory(
         fps=float(s.solver.fps.value), frames=len(angles),
         drivers={DRIVER: trajectory.hinge_transforms(hinge.pivot_mm, hinge.axis, angles)},
+        source_tag="ours",
         source=f"placeholder (audit, ours): the T-06a opening repeated {cycles} times; spikes/audit_cycles.py"))
     print(f"wrote {out}: {len(angles)} frames")
 

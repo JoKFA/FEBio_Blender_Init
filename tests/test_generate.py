@@ -320,7 +320,7 @@ def test_the_run_folder_holds_its_inputs_results_and_report(hard_plate):
     assert where["scene.soft_tissues[tissue].material.E_mpa"] == "ours" and where["generator.rhoi"] == "ours"
     scene_params = list(scene_module.parameters(json.loads((d / "scene.json").read_text())))
     assert len(scene_params) > 5 and all(f"scene.{w}" in where for w, _ in scene_params)
-    assert any("ADR-32" in n for n in report["attachments_not_built"])
+    assert where["trajectory.source"] == "unstated"  # cube_scene.motion writes no source_tag: never guessed
     manifest = json.loads((d / "playback.json").read_text())
     assert manifest["frame_count"] == 30 and len(manifest["vertices"]) == len(c["display"])
 

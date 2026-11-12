@@ -131,8 +131,8 @@ def slips(model: generate.Model, node_frames: np.ndarray) -> dict:
 def _parameters(model: generate.Model, trajectory_path: Path) -> list[dict]:
     rows = [{"where": f"scene.{w}", **p} for w, p in scene_module.parameters(model.scene.to_json())]
     rows += [{"where": w, "value": v, "source": "ours", "note": n} for w, v, n in GENERATOR_SETTINGS]
-    rows.append({"where": "trajectory.source", "value": model.trajectory.source, "source": "ours"
-                 if "placeholder" in model.trajectory.source else "lab_setting",
+    rows.append({"where": "trajectory.source", "value": model.trajectory.source,
+                 "source": model.trajectory.source_tag or "unstated",
                  "note": f"{trajectory_path.name}: {model.trajectory.frames} frames at {model.trajectory.fps} fps"})
     return rows
 
