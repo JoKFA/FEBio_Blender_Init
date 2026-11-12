@@ -208,8 +208,11 @@ def execute(
         elif failure is None:
             text = log.read_text(errors="replace") if log.exists() else ""
             if proc.returncode == 0 and febio.NORMAL_TERMINATION in text:
-                if total is not None and frames != total:
-                    failure = febio.Failure(None, f"FEBio finished {frames} of {total} time steps")
+                # Judge completion by the time reached, not the step count: FEBio may cut the step and retry
+                # (dtmin / max_retries), which is a success with more converged steps than <time_steps> (07 section 3).
+                want, got = febio.end_time(feb), febio.time_reached(log)
+                if want is not None and (got is None or abs(got - want) > 1e-5 * want):
+                    failure = febio.Failure(None, f"FEBio stopped at time {got} of {want:g}")
                 else:
                     record["result"] = {"frames_written": write_positions(log, run_dir / POSITIONS, prepared.length_scale)}
                     record["outputs"] = provenance.hash_files(run_dir, [POSITIONS])

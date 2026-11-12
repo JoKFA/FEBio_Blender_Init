@@ -282,6 +282,32 @@ def test_positions_are_divided_by_k_and_the_recorded_hash_matches(tmp_path):
     assert provenance.mismatches(two.run_dir) == []
 
 
+def test_a_run_whose_step_count_differs_from_time_steps_but_reaches_the_end_time_completes(tmp_path):
+    # FEBio's time stepper may change the step (retries after a cut, growth when convergence is easy): a run that
+    # reaches the requested end time is complete whatever its step count (PR #7 review). Here the stepper grows
+    # the step, so FEBio converges fewer times than <time_steps>; the old step-count check called this a failure.
+    feb = make_feb(tmp_path / "in" / "adaptive.feb")
+    text = feb.read_text()
+    dt = 1.0 / 30
+    stepper = (f"<time_stepper type=\"default\"><max_retries>5</max_retries><opt_iter>200</opt_iter>"
+               f"<dtmin>{dt / 16!r}</dtmin><dtmax>{4 * dt!r}</dtmax></time_stepper>\n    <solver")
+    feb.write_text(text.replace("<solver", stepper, 1))
+    result = execute(feb, tmp_path / "runs")
+    record = json.loads((result.run_dir / "provenance.json").read_text())
+    steps = febio.steps_done(result.run_dir / "model.log")
+    assert steps != FRAMES, f"the stepper did not change the step count ({steps}); the test proves nothing"
+    assert record["status"] == "complete", record.get("failure")
+    assert abs(febio.time_reached(result.run_dir / "model.log") - febio.end_time(feb)) < 1e-4
+
+
+def test_a_run_that_stops_short_of_the_end_time_is_not_complete(tmp_path):
+    log = tmp_path / "model.log"
+    log.write_text("------- converged at time : 0.0333333\n------- converged at time : 0.0666667\n")
+    feb = make_feb(tmp_path / "short.feb")
+    assert febio.end_time(feb) == pytest.approx(FRAMES / 30)
+    assert febio.time_reached(log) == pytest.approx(0.0666667)
+
+
 def test_local_paths_in_a_failure_message_are_reduced_to_names(tmp_path):
     run_dir = tmp_path / "runs" / "2026-11-11_x_001"
     msg = f"cannot open {run_dir}\\model.feb and C:\\Users\\someone\\data\\mesh.json and /home/u/proj/a.obj ok"

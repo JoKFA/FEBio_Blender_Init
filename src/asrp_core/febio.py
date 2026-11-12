@@ -131,6 +131,26 @@ def total_steps(feb: Path) -> int | None:
     return sum(map(int, found)) if found else None
 
 
+def end_time(feb: Path) -> float | None:
+    """The time the .feb asks FEBio to reach: sum over steps of time_steps × step_size.
+    None if a step does not say both."""
+    text = feb.read_text(errors="replace")
+    steps = re.findall(r"<time_steps>\s*(\d+)\s*</time_steps>", text)
+    sizes = re.findall(r"<step_size>\s*([0-9.eE+-]+)\s*</step_size>", text)
+    if not steps or len(steps) != len(sizes):
+        return None
+    return sum(int(n) * float(dt) for n, dt in zip(steps, sizes))
+
+
+def time_reached(log: Path) -> float | None:
+    """The last time FEBio converged at (FEBio prints it with about 6 significant digits)."""
+    try:
+        found = re.findall(r"^-+ converged at time\s*:\s*([0-9.eE+-]+)", log.read_text(errors="replace"), re.M)
+    except OSError:
+        return None
+    return float(found[-1]) if found else None
+
+
 def steps_done(log: Path) -> int:
     """Time steps FEBio has finished so far. Safe to call while FEBio is still writing the log."""
     try:
