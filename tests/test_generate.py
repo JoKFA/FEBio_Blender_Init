@@ -417,16 +417,64 @@ def test_check_b2_fails_when_an_anchor_leaves_its_rigid_body_or_the_angle_is_wro
     assert plausibility.anchors_follow_bodies(rest[:0], [], pos[:, :0], {}).numbers["anchor_nodes"] == 0
 
 
-def test_check_c_averages_the_frames_it_is_given_and_scales_its_range_with_k():
+def test_the_free_length_is_the_largest_distance_to_the_nearest_held_vertex_in_chunks():
+    rng = np.random.default_rng(5)
+    pts = rng.uniform(-10, 10, size=(300, 3))
+    held = np.arange(0, 300, 37)
+    free = np.setdiff1d(np.arange(300), held)
+    brute = max(min(np.linalg.norm(pts[i] - pts[j]) for j in held) for i in free)
+    for chunk in (1, 7, 256, 10_000):
+        assert plausibility.free_length(pts, free, held, chunk) == pytest.approx(brute, abs=1e-12)
+    bar = np.array([[0.0, 0, z] for z in range(0, 21)])  # a bar held at z = 0: L is its length
+    assert plausibility.free_length(bar, np.arange(1, 21), np.array([0]), 4) == pytest.approx(20.0)
+
+
+def test_the_expected_sag_is_the_hanging_bar_formula_and_none_without_something_to_measure_from():
+    bar = np.array([[0.0, 0, z] for z in range(0, 21)])
+    free, held = np.arange(1, 21), np.array([0])
+    est = plausibility.expected_sag(bar, free, held, [0, 0, -9810.0], 1.06e-9, 0.015, 0.67)
+    assert est.free_length_mm == pytest.approx(20.0) and est.sag_mm == pytest.approx(1.06e-9 * 9810.0 * 0.67 * 400.0 / 0.03)
+    assert plausibility.expected_sag(bar, free, np.array([], dtype=int), [0, 0, -9810.0], 1.06e-9, 0.015, 1.0) is None
+    assert plausibility.expected_sag(bar, np.array([], dtype=int), held, [0, 0, -9810.0], 1.06e-9, 0.015, 1.0) is None
+    assert plausibility.expected_sag(bar, free, held, [0, 0, 0.0], 1.06e-9, 0.015, 1.0) is None
+    stiffer = plausibility.expected_sag(bar, free, held, [0, 0, -9810.0], 1.06e-9, 0.15, 0.67)
+    assert stiffer.sag_mm == pytest.approx(est.sag_mm / 10)  # proportional to 1 / E
+
+
+def test_check_c_passes_within_a_factor_of_ten_of_the_estimate_and_fails_outside_it():
     rest = np.zeros((4, 3))
-    frames = np.zeros((15, 4, 3))
-    frames[10:, :, 2] = -0.08  # 0.08 mm down
-    last5 = range(10, 15)
-    assert not plausibility.gravity_sag(rest, frames, np.arange(4), [0, 0, -9810], 1.0, last5).passed  # below 0.1
-    assert plausibility.gravity_sag(rest, frames, np.arange(4), [0, 0, -9810], 0.67, last5).passed  # above 0.067
-    assert plausibility.gravity_sag(rest, frames[:12], np.arange(4), [0, 0, -9810], 1.0, last5).passed is None
-    early = plausibility.gravity_sag(rest, frames, np.arange(4), [0, 0, -9810], 0.67, range(6, 11))  # mostly before the sag
-    assert early.numbers["frames"] == [6, 10] and early.numbers["mean_sag_along_gravity_mm"] == pytest.approx(0.08 / 5)
+    est = plausibility.SagEstimate(0.1, 25.0, 1.06e-9, 0.015, 0.67)
+    g, free, last5 = [0, 0, -9810], np.arange(4), range(10, 15)
+
+    def with_sag(sag, frames=15):
+        shifted = np.zeros((frames, 4, 3))
+        shifted[10:, :, 2] = -sag
+        return plausibility.gravity_sag(rest, shifted, free, g, est, last5)
+
+    passed = with_sag(0.095)
+    assert passed.passed and passed.numbers["expected_sag_mm"] == 0.1 and passed.numbers["free_length_mm"] == 25.0
+    assert passed.numbers["range_mm"] == pytest.approx([0.01, 1.0]) and passed.numbers["frames"] == [10, 14]
+    assert with_sag(0.0101).passed and with_sag(0.99).passed
+    assert with_sag(0.0099).passed is False  # more than 10 times below
+    assert with_sag(1.01).passed is False  # more than 10 times above
+    assert with_sag(-0.1).passed is False  # up, the gravity flip
+    assert with_sag(0.1, frames=12).passed is None  # the motion ends before the frames to average
+    assert plausibility.gravity_sag(rest, np.zeros((15, 4, 3)), free, g, None, last5).passed is None  # no estimate
+    assert plausibility.gravity_sag(rest, np.zeros((15, 4, 3)), free[:0], g, est, last5).passed is None  # no free vertex
+    early = plausibility.gravity_sag(rest, np.where(np.arange(15)[:, None, None] >= 10, [0, 0, -0.08], 0.0) * np.ones((15, 4, 3)),
+                                     free, g, est, range(6, 11))  # mostly before the sag: 0.08 / 5 mm on average
+    assert early.numbers["frames"] == [6, 10] and early.numbers["mean_sag_along_gravity_mm"] == pytest.approx(0.016)
+
+
+@needs_febio
+def test_check_c_range_follows_the_material_a_stiffer_bar_is_expected_to_sag_less(tmp_path):
+    soft, _, _ = hanging(tmp_path / "soft", 1.0, E=0.005, settle=14)
+    stiff, _, _ = hanging(tmp_path / "stiff", 1.0, E=0.05, settle=14)
+    a, b = soft.report["checks"]["c"], stiff.report["checks"]["c"]
+    assert a["passed"] and b["passed"], (a, b)
+    assert a["numbers"]["expected_sag_mm"] == pytest.approx(10 * b["numbers"]["expected_sag_mm"])
+    assert a["numbers"]["mean_sag_along_gravity_mm"] == pytest.approx(10 * b["numbers"]["mean_sag_along_gravity_mm"], rel=0.05)
+    assert 0.1 < a["numbers"]["mean_sag_along_gravity_mm"] / a["numbers"]["expected_sag_mm"] < 10
 
 
 # --- the placeholder motion and the command line ------------------------------------------------

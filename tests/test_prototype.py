@@ -63,7 +63,9 @@ def test_the_whole_motion_runs_and_all_three_checks_pass(prototype):
         checks = r.report["checks"]
         assert checks["a"]["numbers"]["frames_logged"] == 50
         assert checks["b"]["numbers"]["hard_display_vertices_max_deviation_mm"] < 1e-3
-        assert 0.067 <= checks["c"]["numbers"]["mean_sag_along_gravity_mm"] <= 6.7
+        c = checks["c"]["numbers"]  # the model's estimate on the lips is about 0.146 mm (L = 25 mm); measured about 0.095
+        assert checks["c"]["passed"] and 0.1 < c["expected_sag_mm"] < 0.2 and 20 < c["free_length_mm"] < 30
+        assert c["expected_sag_mm"] / 10 <= c["mean_sag_along_gravity_mm"] <= c["expected_sag_mm"] * 10
         assert not any(s["flag"] for s in r.report["spring_slip"].values()), r.report["spring_slip"]
 
 

@@ -60,7 +60,8 @@ GENERATOR_SETTINGS = [
     ("generator.motion_between_frames", "linear", "the rigid bodies' translation and rotation vector are interpolated "
      "linearly between frames (exact for a fixed hinge)"),
     ("plausibility.hard_tolerance_mm", plausibility.HARD_TOLERANCE_MM, "docs/07 section 3"),
-    ("plausibility.sag_range_mm_at_k1", list(plausibility.SAG_RANGE_MM), "docs/07 section 3, provisional; times k"),
+    ("plausibility.sag_factor", plausibility.SAG_FACTOR, "check (c) passes when the measured sag is within this factor "
+     "of the model's estimate, rho |g| k L^2 / (2 E), either way"),
 ]
 
 class SceneRunError(Exception):
@@ -212,7 +213,10 @@ def run_scene(scene_path, trajectory_path, runs_dir: Path, exe: Path, name: str 
         settled = settle is not None and _still_until(model, settle)
         report["settled_shape"] = {"available": settled, "frame": settle if settled else None}
         if settled:
-            checks["c"] = plausibility.gravity_sag(model.display, display, free, model.gravity, model.k,
+            material = model.scene.soft_tissues[0].material.params
+            estimate = plausibility.expected_sag(model.display, free, attached, model.gravity,
+                                                 material["density_t_per_mm3"].value, material["E_mpa"].value, model.k)
+            checks["c"] = plausibility.gravity_sag(model.display, display, free, model.gravity, estimate,
                                                    range(max(0, settle - SETTLE_FRAMES + 1), settle + 1))
         else:
             if settle is None:
