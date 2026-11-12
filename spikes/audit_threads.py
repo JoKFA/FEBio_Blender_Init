@@ -38,14 +38,16 @@ def main() -> None:
         subprocess.run(febio.command("model.feb", "model.log", "model.xplt", exe), cwd=d, env=env,
                        capture_output=True, timeout=3600)
         seconds = time.perf_counter() - t0
-        hist = febio.read_node_data(d / "model.log", "positions")
-        ids = sorted(hist.values[0])
-        pos = np.array([[frame[n] for n in ids] for frame in hist.values])
+        # from the data file the .feb names (a generated run's positions.txt), else from the log
+        series = febio.read_node_series(d / "model.feb", d / "model.log")
+        if not len(series.times):
+            raise SystemExit(f"{threads} threads: FEBio wrote no node positions; see {d / 'model.log'}")
+        pos = series.values
         if base is None:
             base = pos
         diff = float(np.abs(pos - base).max()) if pos.shape == base.shape else float("nan")
-        print(f"threads {threads:2d}: {seconds:6.1f} s, {seconds / max(len(hist.times), 1):.3f} s per frame, "
-              f"{len(hist.times)} frames, largest difference from 1 thread {diff:.3e} mm (FEBio coordinates)", flush=True)
+        print(f"threads {threads:2d}: {seconds:6.1f} s, {seconds / len(series.times):.3f} s per frame, "
+              f"{len(series.times)} frames, largest difference from 1 thread {diff:.3e} mm (FEBio coordinates)", flush=True)
         (d / "model.xplt").unlink(missing_ok=True)
 
 
