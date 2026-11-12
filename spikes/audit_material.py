@@ -48,7 +48,7 @@ def main() -> None:
         shutil.copytree(source, folder)
         young = edit_young(folder / "scene.json", factor)
         r = simulate.run_scene(folder / "scene.json", trajectory, work / "runs", exe, f"material-{factor:g}")
-        display = np.array(json.loads((r.run_dir / "physics" / "display.json").read_text(encoding="utf-8"))["positions"])
+        display = simulate.read_display(r.run_dir / simulate.DISPLAY)["positions"]
         results.append((label, young, r, display))
         print(f"ran {label}: E = {young:g} MPa, run {r.status}, FEBio {r.report['timing']['febio_s']} s", flush=True)
     base = results[0][3]

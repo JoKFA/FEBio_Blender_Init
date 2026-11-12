@@ -6,6 +6,11 @@ one from an existing .feb. Nothing below the seam knows where the .feb came from
 
 A run ends in exactly one of: complete (physics/ written), failed, cancelled. Only a complete run has result
 files; failed and cancelled runs keep the log and a provenance record that says why.
+
+A generated .feb has FEBio write the node positions to positions.txt next to it (the log would hold them all, 20 MB
+for the lip run). After a complete run that raw file is read into physics/positions.npy (float64, frames x nodes x 3,
+geometric mm) with a small physics/positions.json header, and then deleted, like model.xplt; a failed or cancelled
+run deletes it too. Stand-in .feb files that log the positions into the logfile are read from the log instead.
 """
 
 import datetime
