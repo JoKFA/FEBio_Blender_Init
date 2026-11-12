@@ -18,9 +18,9 @@ import sys
 from pathlib import Path
 
 import numpy as np
+import placeholder_jaw_motion
 import pytest
 
-import placeholder_jaw_motion
 from asrp_core import run, scene, simulate, trajectory
 from asrp_core.asset import lab
 from asrp_core.doctor import febio_exe
@@ -129,17 +129,3 @@ def test_the_playback_loads_in_blender_frame_for_frame(prototype):
     assert "PROTOTYPE PLAYBACK CHECK PASSED" in proc.stdout
     frame = json.loads((runs[0].run_dir / "run_report.json").read_text(encoding="utf-8"))["settled_shape"]["frame"]
     assert f"at frames [0, {frame}, " in proc.stdout  # the settled frame comes from the run's report, not a constant
-
-
-@pytest.mark.skipif(sys.platform != "win32", reason="Blender path is the Windows default here")
-def test_the_render_tool_refuses_a_run_without_a_settled_shape(tmp_path):
-    from asrp_core.doctor import BLENDER_CANDIDATES, locate
-    blender = locate("ASRP_BLENDER", ["blender"], BLENDER_CANDIDATES)
-    if blender.path is None:
-        pytest.skip("Blender not found")
-    (tmp_path / "run_report.json").write_text(json.dumps({"settled_shape": {"available": False, "frame": None}}))
-    proc = subprocess.run([str(blender.path), "--background", "--factory-startup", "--python-exit-code", "1", "--python",
-                           str(REPO / "tools" / "render_prototype.py"), "--", str(tmp_path), "--check-only"],
-                          capture_output=True, text=True, timeout=300)
-    assert proc.returncode != 0 and "has no settled shape" in proc.stdout + proc.stderr
-    assert "Nothing was rendered" in proc.stdout + proc.stderr

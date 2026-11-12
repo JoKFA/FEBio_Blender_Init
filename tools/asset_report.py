@@ -90,7 +90,7 @@ def read_attachments(inv):
         dst_of[s.split(".")[0]].append((s, d))
     body_count = {}  # body -> vertex count of its zGeo
     for g in (n for n in inv["nodes"] if n["type"] == "zGeo"):
-        for s, d in dst_of[g["name"]]:
+        for _s, d in dst_of[g["name"]]:
             if d.endswith(".iGo") and nodes.get(d.split(".")[0], {}).get("type") in ("zTissue", "zBone", "zCloth"):
                 body_count[d.split(".")[0]] = (g["attrs"].get("iNMh") or {}).get("vertex_count") or 0
     geo_body = {s.split(".")[0]: d.split(".")[0] for s, d in inv["connections"]

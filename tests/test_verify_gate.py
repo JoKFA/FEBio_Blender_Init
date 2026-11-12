@@ -25,6 +25,16 @@ def test_the_verify_gate_runs_the_test_suite_with_the_slow_real_lip_tests_switch
     assert all(s[2] is None for s in seen if s[0] != "tests")  # and nothing else gets it
 
 
+def test_the_verify_gate_starts_with_the_ruff_lint_check(monkeypatch):
+    verify = load_verify()
+    seen = []
+    monkeypatch.setattr(verify, "step", lambda name, cmd, extra_env=None: seen.append((name, cmd)))
+    monkeypatch.setattr(verify, "locate", lambda *a, **k: SimpleNamespace(path=Path("blender.exe"), how=""))
+    verify.main()
+    name, cmd = seen[0]
+    assert name == "lint" and cmd[1:] == ["-m", "ruff", "check", "."]
+
+
 def test_step_passes_the_extra_environment_to_the_child(monkeypatch):
     verify = load_verify()
     captured = {}

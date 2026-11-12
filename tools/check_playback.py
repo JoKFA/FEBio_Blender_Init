@@ -19,9 +19,9 @@ REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "blender_addon"))
 sys.path.insert(0, str(REPO / "src"))  # asrp_core is stdlib-only, so Blender can read the log with it
 
+import asrp_blender  # noqa: E402
 import bpy  # noqa: E402
 
-import asrp_blender  # noqa: E402
 from asrp_core import febio  # noqa: E402
 
 out = Path(tempfile.mkdtemp(prefix="asrp_playback_"))

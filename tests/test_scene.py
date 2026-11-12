@@ -5,9 +5,9 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+from hinge import hinge_angle
 
 from asrp_core import cli, scene, tetmesh
-from hinge import hinge_angle
 
 HERE = Path(__file__).resolve().parent
 S1 = HERE / "fixtures" / "s1"

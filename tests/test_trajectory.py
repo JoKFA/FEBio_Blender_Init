@@ -5,9 +5,9 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+from hinge import hinge_angle
 
 from asrp_core import trajectory
-from hinge import hinge_angle
 from asrp_core.trajectory import TrajectoryError, apply, hinge_transforms
 
 S1 = Path(__file__).resolve().parent / "fixtures" / "s1"

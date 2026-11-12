@@ -384,7 +384,7 @@ def main(out: Path) -> int:
         if not cond:
             fails.append(name)
 
-    print("Step 1: cube on 4 springs (K = %g N/mm each, cube side %g mm, rho %g t/mm3)" % (K1, CUBE_A, RHO))
+    print(f"Step 1: cube on 4 springs (K = {K1:g} N/mm each, cube side {CUBE_A:g} mm, rho {RHO:g} t/mm3)")
     print(f"{'run':<22}{'theory mm':>11}{'measured mm':>13}{'error %':>10}{'lateral mm':>12}{'s':>7}")
     for k in (1.0, 2.0):
         r = cube_on_springs(out, k, True)
