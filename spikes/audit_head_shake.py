@@ -8,15 +8,16 @@ follows a new driver `head` and the lip-corner anchor follows it too (the jaw st
 moves alike).
 
 Today's solver settings put the generator's numerical damping at its strongest (rhoi = 0), which damps fast
-motion more than a tuned run would. So it is run four ways: today's settings at 1 and 4 substeps per frame, and
-with most of that damping taken away (rhoi = 0.9, set on the generator from here; there is no physical damping
-either way) at 4 and 8 substeps. Each case is run twice, with the shake and with the head still, and the two are
+motion more than a tuned run would. So it is run five ways: today's settings at 1 and 4 substeps per frame, and
+with less and less of that damping (rhoi = 0.5, 0.7, 0.9, set on the generator from here; there is no physical
+damping either way) at 4 substeps. A case whose run fails is reported and the next one goes on. Each case is run
+twice, with the shake and with the head still, and the two are
 subtracted, so what is left is the shake's effect alone (the gravity settle and its ringing are in both).
 
     uv run python spikes/audit_head_shake.py <scene folder> <an empty work folder>
 
 Prints, per case: the largest and the mean distance of the free display vertices from where the head carries
-them, during the shake and after it. Eight runs, about a quarter of an hour. docs/13 E-09 quotes the numbers.
+them, during the shake and after it. Ten runs, about half an hour. docs/13 E-09 quotes the numbers.
 """
 
 import json
@@ -30,9 +31,9 @@ import numpy as np
 from asrp_core import generate, simulate, trajectory
 from asrp_core.doctor import febio_exe
 
-# (substeps per frame, the generator's rhoi): today's settings first, then with most of the numerical damping
-# taken away (rhoi 0.9) at 4 and 8 substeps, to see whether the small number is the damping's doing.
-CASES = ((1, 0.0), (4, 0.0), (4, 0.9), (8, 0.9))
+# (substeps per frame, the generator's rhoi): today's settings first, then with less and less of the numerical
+# damping, to see whether the small number is the damping's doing. On 2026-11-12 the last case did not finish.
+CASES = ((1, 0.0), (4, 0.0), (4, 0.5), (4, 0.7), (4, 0.9))
 START, CYCLES, PERIOD, AFTER = 16, 3, 10, 40
 AMPLITUDE_UNITS = 5.0
 SETTLE = 14
@@ -95,11 +96,16 @@ def main() -> None:
             r = simulate.run_scene(folder / "scene.json", folder / f"{case}.json", work / "runs", exe,
                                    f"{case}-{substeps}-{rhoi:g}")
             if r.status != "complete":
-                raise SystemExit(f"{case} with {substeps} substeps, rhoi {rhoi:g}: run {r.status}: "
-                                 f"{r.report['checks']['a']['message']}")
+                failure = r.report["checks"]["a"]["message"]
+                print(f"  {case}, {substeps} substep(s) per frame, rhoi {rhoi:g}: run {r.status} "
+                      f"(FEBio finished {r.report['checks']['a']['numbers'].get('frames_logged', '?')} frames): {failure}",
+                      flush=True)
+                break
             shown[case] = (simulate.read_display(r.run_dir / simulate.DISPLAY)["positions"], xs, r)
             print(f"ran {case}, {substeps} substep(s) per frame, rhoi {rhoi:g}: FEBio {r.report['timing']['febio_s']} s, "
                   f"plausibility {'passed' if r.passed else 'NOT passed'}", flush=True)
+        if len(shown) < 2:
+            continue
         (shake, xs, _), (still, _, _) = shown["shake"], shown["still"]
         carried = np.zeros_like(shake)
         carried[:, :, 0] = np.array(xs)[:, None]

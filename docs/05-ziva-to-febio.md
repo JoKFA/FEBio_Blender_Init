@@ -210,6 +210,7 @@ E·h = 0.02 MPa × 2.5 mm（节点间距）= 0.05 N/mm 是组织自己的刚度�
 | 坑 16 | **FEBio 把读不懂的数字当成 0，不报错**：numpy 的数写成文字是 `np.float64(0.1)`，FEBio 读成 0，刚体就一动不动，日志里正常结束 | 生成器里每个数都经 `generate._num`（Python 的 `float` 再 `repr`）写出 | T-06a 试验时刚体转动全变成 0；`tests/test_generate.py` 的 `test_numbers_reach_the_feb_as_plain_floats` |
 | 坑 17 | **FEBio 多线程求解时，同一个 `.feb` 两次的结果在日志最后一位不同**（约 10⁻¹¹ mm）；回放文件要逐位相同就不行（float32 舍入偶尔会翻过去） | 我们启动的每个 FEBio 都加环境变量 `OMP_NUM_THREADS=1`（`febio.ENV`，记进溯源）。代价：嘴唇 50 帧从 27 秒变成 45 秒。**2026-11-11 更新（ADR-38）**：默认改为 4 线程（`febio.DEFAULT_THREADS`，同时设 `OMP_NUM_THREADS` 和 `MKL_NUM_THREADS`，`asrp run --threads N` 可改）；需要回放文件逐位相同时用 `--threads 1`。上面"每个 FEBio 都加 `OMP_NUM_THREADS=1`"是当时的做法 | 同一个方块 `.feb` 多线程连跑三次，日志数据三个不同的哈希；单线程三次完全相同；`test_same_input_twice_gives_the_same_playback_files`（单线程以前它失败）；2026-11-11 实测（`spikes/audit_threads.py`，原型机 `.feb`，50 步）：4 线程比 1 线程最多差 1×10⁻¹⁰ mm（满足 1×10⁻⁹ mm，只是回放文件不保证逐位相同）；各线程数的用时只记在 [10](10-decisions.md) ADR-38 的证据里 |
 | 坑 18 | **不属于任何单元的计算点，FEBio 只给一个警告就删掉**（"isolated vertices removed"），它们在位置记录里就没有结果 | 生成器发现四面体网格里有不属于任何四面体的计算点就报错；每个刚体都带一个小四面体，弹簧的锚点属于弹簧单元 | T-06a 试验；`test_a_tet_mesh_node_in_no_tet_stops_the_generator` |
+| 坑 19 | **数值阻尼调低而没有物理阻尼，真实嘴唇会算崩**：甩头的运动，`rhoi` 从 0 调到 0.9（每帧 4 步），甩头结束后嘴唇一直振荡，约第 51 帧出现负体积，重试 34 次后失败；0.5 和 0.7 能算完，但晃动从 0.08 mm 涨到 0.26 和 0.90 mm | `rhoi` 现在固定为 0（坑 2 的"已知限制"）。要保留动态效果，先做物理阻尼，再调数值阻尼（T-28）；头部运动按关键帧加切线还原，不用正弦 | `spikes/audit_head_shake.py`，[13](13-explanations.md) E-09 发现五 |
 
 ## 6. 这份文档什么时候要更新
 
