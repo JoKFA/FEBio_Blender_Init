@@ -1,7 +1,9 @@
 """tools/lip_attachments.py: the export logic on a tiny inventory, and the position check on the real
 OBJs in data/lab_export/ (docs/09 T-03). The real-data tests skip when those files are missing."""
 
+import hashlib
 import json
+import os
 from pathlib import Path
 
 import numpy as np
@@ -121,3 +123,17 @@ def test_upper_and_lower_groups_are_apart_in_height():
     m = measure()
     gap = m["upper_centroid_y"] - m["lower_centroid_y"]
     assert gap > 20, gap  # scene units, Y up
+
+
+INVENTORY = Path(os.environ.get("ASRP_INVENTORY", REPO / "data" / "asset_inventory.json"))
+
+
+@pytest.mark.skipif(not (INVENTORY.exists() and EXPORT.exists()),
+                    reason="data/asset_inventory.json (or ASRP_INVENTORY) or the export is not here")
+def test_export_matches_the_inventory_it_was_made_from():
+    raw = INVENTORY.read_bytes()
+    export = json.loads(EXPORT.read_text(encoding="utf-8"))
+    assert export["inventory_sha256"] == hashlib.sha256(raw).hexdigest()
+    rebuilt = build(json.loads(raw), export["inventory_sha256"])
+    assert len(rebuilt["groups"]) == 4 and all(g["count"] > 0 for g in rebuilt["groups"])
+    assert rebuilt["groups"] == export["groups"]

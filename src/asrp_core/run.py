@@ -43,6 +43,9 @@ class Prepared:
     command: list[str]  # the asrp command line, paths reduced to names, as recorded in provenance
     parameters: dict = field(default_factory=dict)
     extra_inputs: dict[str, Path] = field(default_factory=dict)  # name inside the run folder -> source file
+    # ADR-36: the .feb is written at real size with coordinates x k; FEBio's positions come back scaled by k
+    # and are divided by it before they are saved, so positions.json is always geometric mm.
+    length_scale: float = 1.0
 
 
 @dataclass
@@ -96,8 +99,19 @@ def read_progress(run_dir: Path) -> Progress:
     return Progress(febio.steps_done(run_dir / LOG_NAME), record["parameters"].get("total_frames"), record["status"])
 
 
-def write_positions(log: Path, out: Path) -> int:
-    """physics/positions.json: every node's position (mm) at every frame, parsed from the log. Returns frames."""
+_ABS_PATH = re.compile(r"(?:[A-Za-z]:[\\/]|\\\\|(?<![\w.])/(?=[\w.-]+/))[^\s'\"<>|,;]*")
+
+
+def scrub_paths(text: str, run_dir: Path) -> str:
+    """Reduce local absolute paths in a message to names relative to the run folder (or just the file name)."""
+    for base in {str(run_dir), str(run_dir.resolve()), run_dir.as_posix(), run_dir.resolve().as_posix()}:
+        text = re.sub(re.escape(base) + r"[\\/]*", "", text)
+    return _ABS_PATH.sub(lambda m: re.split(r"[\\/]", m.group(0).rstrip("\\/"))[-1], text)
+
+
+def write_positions(log: Path, out: Path, length_scale: float = 1.0) -> int:
+    """physics/positions.json: every node's position (geometric mm: FEBio's coordinates / k) at every frame,
+    parsed from the log. Returns frames."""
     hist = febio.read_node_data(log, "positions")
     if not hist.times:
         raise RunError("The FEBio log has no node positions. The .feb must output "
@@ -106,7 +120,7 @@ def write_positions(log: Path, out: Path) -> int:
     out.parent.mkdir(exist_ok=True)
     out.write_text(json.dumps({
         "format": POSITIONS_FORMAT, "units": "mm", "times_s": hist.times, "node_ids": ids,
-        "positions": [[list(frame[n]) for n in ids] for frame in hist.values],
+        "positions": [[[c / length_scale for c in frame[n]] for n in ids] for frame in hist.values],
     }), encoding="utf-8")
     return len(hist.times)
 
@@ -167,7 +181,7 @@ def execute(
         "command": prepared.command,
         "inputs": provenance.hash_files(run_dir, input_names),
         # The FEBio arguments (-noconfig, fixed names) are part of the recipe: they decide what FEBio reads.
-        "parameters": {**prepared.parameters, "total_frames": total, "timeout_s": timeout,
+        "parameters": {**prepared.parameters, "length_scale": prepared.length_scale, "total_frames": total, "timeout_s": timeout,
                        "febio_args": febio.command(FEB_NAME, LOG_NAME, PLOT_NAME, Path("febio4"))[1:]},
         "software": provenance.software(None),
         "outputs": {},
@@ -197,7 +211,7 @@ def execute(
                 if total is not None and frames != total:
                     failure = febio.Failure(None, f"FEBio finished {frames} of {total} time steps")
                 else:
-                    record["result"] = {"frames_written": write_positions(log, run_dir / POSITIONS)}
+                    record["result"] = {"frames_written": write_positions(log, run_dir / POSITIONS, prepared.length_scale)}
                     record["outputs"] = provenance.hash_files(run_dir, [POSITIONS])
                     status = "complete"
             else:
@@ -221,12 +235,20 @@ def _finish(run_dir: Path, record: dict, status: str, failure, frames: int, proc
     if status != "complete":
         shutil.rmtree(run_dir / "physics", ignore_errors=True)  # a failed run shows no results, ever (04 sec. 9)
         record["outputs"] = {}
-    (run_dir / PLOT_NAME).unlink(missing_ok=True)  # derived, large, not part of the run folder (04 sec. 4)
+    for attempt in range(50):  # Windows may hold the killed FEBio's file handle for a moment
+        try:
+            (run_dir / PLOT_NAME).unlink(missing_ok=True)  # derived, large, not part of the run folder (04 sec. 4)
+            break
+        except PermissionError:
+            if attempt == 49:
+                raise
+            time.sleep(0.1)
     (run_dir / CANCEL_FILE).unlink(missing_ok=True)
     if status == "cancelled":
         failure = febio.Failure(None, "cancelled by the user")
     record["status"] = status
-    record["failure"] = {"frame": failure.frame, "message": failure.message} if failure else None
+    record["failure"] = ({"frame": failure.frame, "message": scrub_paths(failure.message, run_dir)}
+                         if failure else None)
     record["timing"]["finished_utc"] = datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds")
     provenance.write(run_dir, record)
     return Result(run_dir, status, frames, failure, proc.pid if proc else None)

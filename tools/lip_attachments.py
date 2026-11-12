@@ -1,6 +1,6 @@
 """Export the four lip attachment sets for T-06a: the lips as the source side (docs/09 T-03).
 
-    uv run python tools/lip_attachments.py --inventory E:/Codebase/asrp/data/asset_inventory.json
+    uv run python tools/lip_attachments.py --inventory data/asset_inventory.json
 
 Reads the inventory tools/mb_inventory.py wrote from the v36 .mb, takes the attachments that
 tools/asset_report.py's read_attachments() finds for the four lip groups, and writes

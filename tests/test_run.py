@@ -139,7 +139,7 @@ def test_progress_is_readable_while_the_run_goes(tmp_path):
         assert wait_for(lambda: run.read_progress(folder).done >= 3)
         p = run.read_progress(folder)
         assert (p.status, p.total) == ("running", 20000) and 3 <= p.done < 20000
-        assert any(0 < s.done < s.total for s in seen)
+        assert wait_for(lambda: any(0 < s.done < s.total for s in seen))  # the shell polls every 0.1 s
     finally:
         stop.set()
         t.join(60)
@@ -264,3 +264,27 @@ def test_the_process_check_can_tell_alive_from_gone():
     assert pid_alive(os.getpid()) and pid_alive(sleeper.pid)
     febio.kill_tree(sleeper)
     assert not pid_alive(sleeper.pid)
+
+
+def test_positions_are_divided_by_k_and_the_recorded_hash_matches(tmp_path):
+    feb = make_feb(tmp_path / "jaw.feb")
+    one = execute(feb, tmp_path / "runs")
+    prepared = run.standin(feb)
+    prepared.length_scale = 2.0
+
+    two = run.execute(prepared, tmp_path / "runs", EXE)
+
+    raw = positions(one)  # k = 1: FEBio's own coordinates
+    assert max_diff([[[c / 2 for c in p] for p in f] for f in raw], positions(two)) <= 1e-9
+    assert max_diff(raw, positions(two)) > 1.0  # the scaling really changed the numbers
+    record = provenance.read(two.run_dir)
+    assert record["parameters"]["length_scale"] == 2.0 and provenance.read(one.run_dir)["parameters"]["length_scale"] == 1.0
+    assert provenance.mismatches(two.run_dir) == []
+
+
+def test_local_paths_in_a_failure_message_are_reduced_to_names(tmp_path):
+    run_dir = tmp_path / "runs" / "2026-11-11_x_001"
+    msg = f"cannot open {run_dir}\\model.feb and C:\\Users\\someone\\data\\mesh.json and /home/u/proj/a.obj ok"
+    out = run.scrub_paths(msg, run_dir)
+    assert out == "cannot open model.feb and mesh.json and a.obj ok"
+    assert run.scrub_paths("plain text, no path", run_dir) == "plain text, no path"

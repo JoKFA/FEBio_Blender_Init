@@ -51,9 +51,11 @@ FEBio 是一个专门为生物力学开发、经过同行评审的开源有限�
 | 实验室资产能一条命令导入成场景描述，并通过 `asrp check`（T-02，里程碑 M1 完成；留下一处缺口：landmark 蒙皮矩阵还没换算成毫米和 Z 轴朝上，见 [09](09-roadmap-and-tasks.md) T-09） | `uv run asrp import-asset data/lab_export <输出文件夹>`，[09](09-roadmap-and-tasks.md) T-02 |
 | 读完实验室控制器源码：landmark 和物理的关系、优化时物理不在环（部分验证，11 的 Q20）、Hill 模型的位置、各实验怎么做、运动文件的格式；目标姿态已经拿到 | [03](03-asset.md) 第 13 节，[10](10-decisions.md) ADR-28 到 ADR-35，[13](13-explanations.md) E-05 |
 | 更正了粘连权重的读法（按强推断，默认值 1.0 待 A-33 确认）：上唇 74 个顶点连颅骨、下唇 76 个连下颌，嘴角经口角组织连骨头；第一阶段的粘连方案定了 | `uv run python tools/asset_report.py data/asset_inventory.json`，[03](03-asset.md) 第 6 节，ADR-32 |
+| 嘴唇的四组粘连顶点集已导出（T-03）：74、76、348、309 个顶点，位置核对通过（上唇贴颅骨、下唇贴下颌） | `uv run python tools/lip_attachments.py --inventory ...`，[09](09-roadmap-and-tasks.md) T-03 |
+| `asrp run --feb` 能跑现成的 `.feb`：运行文件夹、溯源、进度、取消、出错处理，位置除以 k 后才写入（T-08） | `uv run pytest tests/test_run.py -q`，[09](09-roadmap-and-tasks.md) T-08 |
 | 被哈希的数据在任何电脑上检出都逐字节相同（`.gitattributes`） | 打开 `core.autocrlf` 克隆后跑测试，[08](08-engineering-standards.md) 第 10 节 |
 
-下一步是原型机：T-03、T-07（第 1、2 步）、T-08 的外壳 → T-06a，见 [09 路线图与任务](09-roadmap-and-tasks.md) 第 1 节。
+下一步是原型机：T-07（第 1、2 步）→ T-06a，见 [09 路线图与任务](09-roadmap-and-tasks.md) 第 1 节。T-03、T-08 已完成。
 
 ## 谁参与、各自负责什么
 
@@ -68,6 +70,6 @@ FEBio 是一个专门为生物力学开发、经过同行评审的开源有限�
 
 1. **约 Ziva 机器，趁许可还有效拿到只有它能给的数据**（ADR-35）：Ziva 的完整设置和权重表、一条运动的参考结果、Ziva 存的各物体网格（尤其嘴角链条上的）。许可哪天到期（Q5）要先问清楚，现有的两条线索都没有核实。步骤见 [12 导出清单](12-lab-export-checklist.md) 第二部分；第二阶段要的多网格、多运动，脚本也已支持（T-19），可以同一次做。
 2. **把 5 个问题发给实验室，并要运动文件**：可以直接转发的一页在 [12](12-lab-export-checklist.md) 第三部分；运动文件 `combined_checkpoints.pkl` 不在源码仓库里（D2）。
-3. **原型机**：定义已确认（11 的 P-05），目标日期 2026-11-17；按 09 第 1 节的路径做 T-03、T-07、T-08 → T-06a。这几张卡都不等实验室。
+3. **原型机**：定义已确认（11 的 P-05），目标日期 2026-11-17；按 09 第 1 节的路径做 T-07（第 1、2 步）→ T-06a。这几张卡都不等实验室。
 
 第二阶段投入之前还有一道关：T-17、T-18 复核 FEBio 撑不撑得起第二阶段（ADR-26）；它们随时可以做，不挡 M3。

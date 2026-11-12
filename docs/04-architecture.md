@@ -53,11 +53,12 @@ landmark 段是物理之后的**可替换层**：顺序按实验室源码和论�
 | 场景描述 `asrp_core/scene.py` | 定义场景描述文件的格式，提供校验（缺什么、单位对不对） | 求解 | ✅ 已有（T-05） |
 | 运动 `asrp_core/trajectory.py` | 运动文件的格式和读写、铰链运动生成（代用运动） | 转换实验室轨迹（T-10 在同一个文件里加） | ✅ 最小格式已有（T-05）。`landmarks` 一节的读取和校验由 T-09 加进来 |
 | 四面体化 `asrp_core/tetmesh.py` | 把嘴唇的表面网格变成计算用的四面体网格，检查质量（连通、流形、亏格、上下唇分开、左右对称），写成 `data/tetmesh/` 下的文件，读回时校验哈希（为什么需要，见 [13](13-explanations.md) E-02） | 嵌入显示网格；运行时重新生成网格（只由 `tools/build_tetmesh.py` 显式生成，ADR-20） | ✅ 已有（T-04，ADR-20） |
-| FEBio 适配 `asrp_core/febio.py` | 把场景描述翻译成 FEBio 输入文件，调用 FEBio，读回结果 | 决定材料参数（参数从场景描述里来） | 部分已有：调用和读结果 |
+| FEBio 适配 `asrp_core/febio.py` | 把场景描述翻译成 FEBio 输入文件，调用 FEBio（含结束整个进程树），读回结果 | 决定材料参数（参数从场景描述里来） | 部分已有：调用、读结果、结束进程；生成输入归 T-06a |
+| 运行外壳 `asrp_core/run.py` | 一次运行 = 一个文件夹：拷入输入、启动 FEBio、进度、取消、出错处理、把位置除以 k 后写成 `physics/positions.json`、写溯源（T-08） | 生成 FEBio 输入（T-06a 通过 `run.Prepared` 接入） | ✅ 已有（替身模式，T-08） |
 | landmark 变形层 `asrp_core/skinning.py` | 用蒙皮权重把 landmark 的运动叠加到物理结果上 | — | 待开发 |
 | 回放包 `asrp_core/playback.py` | 把结果打包成 Blender 能直接播放的格式 | — | ✅ 已有 |
 | 对比 `asrp_core/compare.py` | 读入 Ziva 参考结果，计算误差，出报告和热力图数据 | — | 待开发 |
-| 溯源 `asrp_core/provenance.py` | 记录每次运行的输入指纹、软件版本、参数 | — | 待开发 |
+| 溯源 `asrp_core/provenance.py` | 记录每次运行的输入指纹、软件版本、参数 | — | ✅ 已有（T-08） |
 | 命令行 `asrp_core/cli.py` | 把上面的功能包装成命令（见第 7 节） | — | 部分已有 |
 | Blender 插件 `blender_addon/asrp_blender/` | 界面（见 [06](06-ui.md)），调用命令行，加载结果 | 任何计算 | 部分已有：环境检查、加载结果 |
 
@@ -82,7 +83,7 @@ runs/2026-11-03_neutral-to-AA_001/
 
 `runs/` 不进 git。`data/` 里提交的有 `lab_export/`、`preview/`、`briefing/`、`tetmesh/`（四面体网格是只读输入，ADR-19、ADR-20），其余不进。四面体网格是**显式生成一次、落盘并记哈希的输入**，运行时只读，不在运行中重新生成（fTetWild 同输入多次运行结果不同，见 ADR-20 和 [13](13-explanations.md) E-03）。需要分享某次运行时，把整个文件夹打包发送。
 
-替身模式（T-08）的运行文件夹只有 `model.feb`、`model.log`、`physics/positions.json`（每帧每个节点的位置，毫米）、`provenance.json`，FEBio 的 `.xplt` 运行结束后删掉；失败和取消的运行没有 `physics/`；`provenance.json` 里不写任何本机绝对路径，输入按文件夹内的名字记哈希，所以整个文件夹复制到别处也能原样重跑。
+替身模式（T-08）的运行文件夹只有 `model.feb`、`model.log`、`physics/positions.json`（每帧每个节点的位置，几何毫米：已除以 k，ADR-36）、`provenance.json`，FEBio 的 `.xplt` 运行结束后删掉；失败和取消的运行没有 `physics/`；`provenance.json` 里不写任何本机绝对路径，输入按文件夹内的名字记哈希，所以整个文件夹复制到别处也能原样重跑。
 
 ## 5. 主要文件的内容
 
@@ -183,6 +184,7 @@ Blender 插件的每个按钮都对应其中一条命令。界面能做的事，
 |---|---|
 | `src/asrp_core/doctor.py` | 环境检查 |
 | `src/asrp_core/febio.py` | FEBio 适配的"调用"和"读结果"部分 |
+| `src/asrp_core/run.py`、`provenance.py` | 运行外壳、溯源（T-08） |
 | `src/asrp_core/playback.py` | 回放包 |
 | `src/asrp_core/scene.py`、`trajectory.py` | 场景描述、运动（T-05） |
 | `src/asrp_core/asset/` | 资产导入（T-02） |

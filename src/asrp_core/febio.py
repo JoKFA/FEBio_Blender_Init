@@ -102,14 +102,27 @@ def start(feb: Path, log_name: str, plot_name: str, exe: Path, out) -> subproces
     )
 
 
-def kill_tree(proc: subprocess.Popen) -> None:
-    """End FEBio and anything it started. Process.kill() alone leaves children behind on Windows."""
+def kill_tree(proc: subprocess.Popen, timeout: float = 10) -> None:
+    """End FEBio and anything it started. Process.kill() alone leaves children behind on Windows, so taskkill
+    /T goes first; if it fails, kill the process itself. Raises if the process is still alive after `timeout`."""
     if proc.poll() is None:
         if sys.platform == "win32":
-            subprocess.run(["taskkill", "/PID", str(proc.pid), "/T", "/F"], capture_output=True)
+            try:
+                subprocess.run(["taskkill", "/PID", str(proc.pid), "/T", "/F"], capture_output=True, timeout=timeout)
+            except (OSError, subprocess.SubprocessError):
+                pass
+            if proc.poll() is None:
+                proc.kill()
         else:
-            os.killpg(proc.pid, signal.SIGKILL)
-    proc.wait()
+            try:
+                os.killpg(proc.pid, signal.SIGKILL)
+            except OSError:
+                proc.kill()
+    try:
+        proc.wait(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        raise RuntimeError(f"FEBio (process {proc.pid}) did not stop within {timeout:g} s after being killed. "
+                           "End it in Task Manager.") from None
 
 
 def total_steps(feb: Path) -> int | None:

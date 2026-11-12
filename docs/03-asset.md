@@ -122,7 +122,7 @@
 
 嘴唇作为出发方、带粘连权重的顶点一共 **807 个**（不重复计数，占 10,240 个的 7.9%）：存下来的非零 733 个，按默认值 74 个。上唇、下唇、两侧嘴角这四组互不重叠。
 
-**位置核对**（T-03：`tools/lip_attachments.py` 导出的四组，用 `data/lab_export/` 的 OBJ 量，由 `tests/test_lip_attachments.py` 断言；场景单位，Y 朝上；复现：`uv run python tools/lip_attachments.py --inventory E:/Codebase/asrp/data/asset_inventory.json`，再 `uv run python -m pytest tests/test_lip_attachments.py`）：74 个上唇顶点离颅骨最近顶点的距离中位数 3.28（最大 7.93），离下颌中位数 29.60（最大 33.83）；76 个下唇顶点正好反过来，离下颌中位数 3.28（最大 7.74），离颅骨中位数 29.10（最大 33.79）。两组重心一上一下，y 分别为 -70.56 和 -104.59，相差 34.03。着色截图 `data/preview/lip_attachments.png`。所以这 74 个就是贴着上颌骨的上唇顶点，和下唇挂下颌是对称的一对。
+**位置核对**（T-03：`tools/lip_attachments.py` 导出的四组，用 `data/lab_export/` 的 OBJ 量，由 `tests/test_lip_attachments.py` 断言；场景单位，Y 朝上；复现：`uv run python tools/lip_attachments.py --inventory data/asset_inventory.json`（清单不进 git，由 `tools/mb_inventory.py` 从 v36 生成，第 9 节），再 `uv run python -m pytest tests/test_lip_attachments.py`）：74 个上唇顶点离颅骨最近顶点的距离中位数 3.28（最大 7.93），离下颌中位数 29.60（最大 33.83）；76 个下唇顶点正好反过来，离下颌中位数 3.28（最大 7.74），离颅骨中位数 29.10（最大 33.79）。两组重心一上一下，y 分别为 -70.56 和 -104.59，相差 34.03。着色截图 `data/preview/lip_attachments.png`。所以这 74 个就是贴着上颌骨的上唇顶点，和下唇挂下颌是对称的一对。
 
 **嘴角经口角组织间接连到骨头**。沿粘连往外追（`tools/asset_report.py` 的"chain outward from the lip"一节；数字是权重大于 0 的出发方顶点数）：
 
