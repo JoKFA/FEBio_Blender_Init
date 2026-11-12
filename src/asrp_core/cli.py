@@ -160,7 +160,9 @@ def run_scene(args: argparse.Namespace, show) -> int:
               f"reported only); generate {t['generate_s']} s, post {t['post_s']} s")
     print(f"report     {result.run_dir / simulate.REPORT}")
     if result.status == "complete":
-        print(f"run COMPLETE: {r['frames']} frames; plausibility {'PASSED' if result.passed else 'FAILED'}")
+        skipped = r.get("not_run", {})
+        note = f" ({len(skipped)} not run: {'; '.join(f'{k}: {m}' for k, m in skipped.items())})" if skipped else ""
+        print(f"run COMPLETE: {r['frames']} frames; plausibility {'PASSED' if result.passed else 'FAILED'}{note}")
         return 0 if result.passed else 1
     if result.status == "cancelled":
         print("run CANCELLED; FEBio stopped, no results written")

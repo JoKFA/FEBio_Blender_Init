@@ -217,16 +217,25 @@ def run_scene(scene_path, trajectory_path, runs_dir: Path, exe: Path, name: str 
             anchor_rest, [{g.name: g.target for g in model.groups}[sp.group] for sp in model.springs], anchor_frames, transforms)
         attached = np.unique(np.concatenate([g.vertices for g in model.groups])) if model.groups else np.zeros(0, int)
         free = np.setdiff1d(np.arange(len(model.display)), attached)
-        checks["c"] = plausibility.gravity_sag(model.display, display, free, model.gravity, model.k)
+        settled = _still_until_settled(model)
+        report["settled_shape"] = {"available": bool(settled and model.frames > SETTLED_FRAME)}
+        if settled:
+            checks["c"] = plausibility.gravity_sag(model.display, display, free, model.gravity, model.k)
+        else:
+            reason = "运动在第 14 帧之前就开始了"
+            checks["c"] = plausibility.Check("gravity sag", None, reason)
+            report["settled_shape"]["reason"] = f"{reason}: the shape after the gravity-only settle (frame {SETTLED_FRAME}) is not written"
         report["spring_slip"] = slips(model, node_frames)
-        _write_results(run_dir, model, node_frames, display)
+        _write_results(run_dir, model, node_frames, display, settled)
         record["outputs"] = provenance.hash_files(run_dir, [run.POSITIONS, DISPLAY, f"{SETTLED}.json", f"{SETTLED}.obj",
                                                             "playback.json", "playback.pc2"]
-                                                  if model.frames > SETTLED_FRAME else
+                                                  if settled and model.frames > SETTLED_FRAME else
                                                   [run.POSITIONS, DISPLAY, "playback.json", "playback.pc2"])
     report["checks"] = {key: c.to_json() for key, c in checks.items()}
-    passed = status == "complete" and all(c.passed for c in checks.values())
+    # Only an explicit False is a failure; None is "not run" (the reason is in the check). (a) must always run.
+    passed = status == "complete" and checks["a"].passed is True and all(c.passed is not False for c in checks.values())
     report["passed"] = passed
+    report["not_run"] = {key: c.message for key, c in checks.items() if c.passed is None}
     febio_s = record.get("timing", {}).get("febio_seconds")
     steps = model.frames - 1
     report["timing"] = {
@@ -244,7 +253,21 @@ def run_scene(scene_path, trajectory_path, runs_dir: Path, exe: Path, name: str 
     return SceneRun(run_dir, status, report, passed)
 
 
-def _write_results(run_dir: Path, model: generate.Model, node_frames: np.ndarray, display: np.ndarray) -> None:
+def _still_until_settled(model: generate.Model) -> bool:
+    """True when every moving body stays at its rest transform (identity) through frames 0..SETTLED_FRAME, so
+    those frames are the gravity-only settle the settled shape and check (c) assume."""
+    eye = np.eye(4).ravel()
+    for b in model.bodies.values():
+        if b.transforms is None:
+            continue
+        for t in b.transforms[:SETTLED_FRAME + 1]:
+            if np.abs(np.asarray(t, dtype=float).ravel() - eye).max() > 1e-9:
+                return False
+    return True
+
+
+def _write_results(run_dir: Path, model: generate.Model, node_frames: np.ndarray, display: np.ndarray,
+                   settled: bool = True) -> None:
     (run_dir / "physics").mkdir(exist_ok=True)
     (run_dir / DISPLAY).write_text(json.dumps({
         "format": DISPLAY_FORMAT, "units": "mm", "fps": model.fps, "frames": model.frames,
@@ -252,7 +275,7 @@ def _write_results(run_dir: Path, model: generate.Model, node_frames: np.ndarray
         "note": "frame 0 is the rest pose (FEBio logs no frame 0); positions are geometric mm (FEBio's / k)",
         "positions": display.tolist(),
     }), encoding="utf-8", newline="\n")
-    if model.frames > SETTLED_FRAME:
+    if settled and model.frames > SETTLED_FRAME:
         f = SETTLED_FRAME
         (run_dir / f"{SETTLED}.json").write_text(json.dumps({
             "format": "asrp-settled/1", "units": "mm", "frame": f, "time_s": f / model.fps,

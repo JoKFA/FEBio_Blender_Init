@@ -310,8 +310,7 @@ def test_the_run_folder_holds_its_inputs_results_and_report(hard_plate):
     _, c, _, r = hard_plate
     d = r.run_dir
     for name in ("scene.json", "trajectory.json", "tissue.obj", "tissue_tet.json", "skull.obj", "plate.obj", "model.feb",
-                 "physics/positions.json", "physics/display.json", "physics/settled_frame14.json",
-                 "physics/settled_frame14.obj", "playback.json", "playback.pc2", "run_report.json", "provenance.json"):
+                 "physics/positions.json", "physics/display.json", "playback.json", "playback.pc2", "run_report.json", "provenance.json"):
         assert (d / name).is_file(), name
     record = json.loads((d / "provenance.json").read_text())
     assert record["mode"] == "generated" and record["parameters"]["length_scale"] == 1.0
@@ -322,8 +321,6 @@ def test_the_run_folder_holds_its_inputs_results_and_report(hard_plate):
     scene_params = list(scene_module.parameters(json.loads((d / "scene.json").read_text())))
     assert len(scene_params) > 5 and all(f"scene.{w}" in where for w, _ in scene_params)
     assert any("ADR-32" in n for n in report["attachments_not_built"])
-    settled = json.loads((d / "physics" / "settled_frame14.json").read_text())
-    assert settled["frame"] == 14 and np.allclose(settled["display"], display(d)[14])
     manifest = json.loads((d / "playback.json").read_text())
     assert manifest["frame_count"] == 30 and len(manifest["vertices"]) == len(c["display"])
 
@@ -487,3 +484,38 @@ def test_the_generator_escapes_names_even_if_validation_let_one_through(tmp_path
     model.hard = {n: (bad if t == "skull" else t) for n, t in model.hard.items()}
     root = ET.fromstring(generate._feb(model))  # raises ParseError if a name went in raw
     assert any(e.get("name") == f"rb_{bad}" for e in root.iter())
+
+
+# --- PR #8 review: not-run checks are not failures; the settled shape needs a still settling phase ---
+
+
+@needs_febio
+def test_a_spring_only_scene_and_a_short_trajectory_pass_with_the_unrun_checks_listed(tmp_path):
+    cs.write(tmp_path / "spring", attachments=[("top", "plate", "spring", 1.0, at_z(10.0))])
+    r = run(tmp_path / "spring", cs.still(8), "spring_only")
+    checks = r.report["checks"]
+    assert checks["b"]["passed"] is None and "b" in r.report["not_run"]
+    assert checks["a"]["passed"] is True and r.passed, {k: (c["passed"], c["message"]) for k, c in checks.items()}
+
+    cs.write(tmp_path / "short", attachments=[("top", "skull", "hard", None, at_z(10.0))])
+    s = run(tmp_path / "short", cs.still(8), "short")
+    assert s.report["checks"]["c"]["passed"] is None and "c" in s.report["not_run"] and s.passed
+
+
+@needs_febio
+def test_a_still_settling_phase_writes_the_settled_shape_and_a_motion_from_frame_1_does_not(tmp_path):
+    cs.write(tmp_path / "still", attachments=[("top", "skull", "hard", None, at_z(10.0))])
+    ok = run(tmp_path / "still", cs.still(20), "still")
+    assert ok.report["settled_shape"]["available"]
+    settled = json.loads((ok.run_dir / "physics" / "settled_frame14.json").read_text())
+    assert settled["frame"] == 14 and np.allclose(settled["display"], display(ok.run_dir)[14])
+    assert (ok.run_dir / "physics" / "settled_frame14.obj").exists()
+
+    c, _ = plate_box(tmp_path / "moving", "hard")
+    r = run(c["scene"].parent, TURN, "moving")  # turns from frame 1
+    assert r.status == "complete" and r.report["checks"]["a"]["passed"]
+    assert not (r.run_dir / "physics" / "settled_frame14.json").exists()
+    assert not (r.run_dir / "physics" / "settled_frame14.obj").exists()
+    c_check = r.report["checks"]["c"]
+    assert c_check["passed"] is None and c_check["message"] == "运动在第 14 帧之前就开始了"
+    assert r.report["settled_shape"]["available"] is False and r.passed

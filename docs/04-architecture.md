@@ -78,7 +78,7 @@ runs/2026-11-03_neutral-to-AA_001/
   landmarks/          场景引用的 landmark 蒙皮权重（原样拷贝）
   model.feb           生成的 FEBio 输入
   model.log           FEBio 日志（包含每帧节点位置）
-  physics/            物理段结果（含第 14 帧沉降后的形状、每帧每块组织的应变能）
+  physics/            物理段结果（含第 14 帧沉降后的形状、每帧每块组织的应变能；只有第 0 到 14 帧所有被用到的驱动源都停在静止位置时才写沉降形状，否则运行报告说明它不可用）
   final/              叠加 landmark 段之后的结果
   playback.json       回放包（Blender 加载用）
   playback.pc2
