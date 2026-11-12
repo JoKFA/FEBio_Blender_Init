@@ -198,6 +198,8 @@ def check_rows(report) -> list[tuple[str, str, str, str]] | None:
             rows.append((key, key, "NOT RUN", "The report has no entry for this check"))
             continue
         if not isinstance(c, dict) or c.get("passed") not in (True, False, None):
+            if key not in CHECK_KEYS:  # an extra entry this panel does not know and cannot read: leave it out
+                continue
             return None
         verdict = {True: "PASS", False: "FAIL"}.get(c.get("passed"), "NOT RUN")
         rows.append((key, str(c.get("name") or key), verdict, str(c.get("message") or "")))

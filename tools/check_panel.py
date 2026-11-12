@@ -508,6 +508,10 @@ def case_layout(run1, tmp):
     odd = json.loads(json.dumps(original))
     odd["checks"]["z"] = {"name": "Zeta thing", "passed": True, "message": ""}
     assert "(z) Zeta thing" in [r[1] for r in checks_log(odd) if r[0] == "label"]
+    odd["checks"]["y"] = "not a check entry"  # an unreadable EXTRA entry is left out; the five known checks still show
+    rows = asrp_blender.check_rows(odd)
+    assert rows is not None and "y" not in [r[0] for r in rows] and [r[0] for r in rows][:5] == list(asrp_blender.CHECK_KEYS)
+    del odd["checks"]["y"]
 
     # the reported-only rows: present when the report has the keys, absent when it has not, and the not-settled alert
     full = json.loads(json.dumps(original))
