@@ -2,8 +2,18 @@ import argparse
 import json
 from dataclasses import asdict
 
-from asrp_core import __version__
+from asrp_core import __version__, febio
 from asrp_core.doctor import run_checks
+
+
+def thread_count(text: str) -> int:
+    try:
+        n = int(text)
+    except ValueError:
+        n = 0
+    if n < 1:
+        raise argparse.ArgumentTypeError(f"{text!r} is not a thread count; give a whole number, 1 or more")
+    return n
 
 
 def cmd_doctor(args: argparse.Namespace) -> int:
@@ -106,7 +116,7 @@ def cmd_run(args: argparse.Namespace) -> int:
 
     try:
         prepared = run.standin(Path(args.feb))
-        result = run.execute(prepared, Path(args.runs_dir), febio_exe(), args.name, show, None, args.timeout)
+        result = run.execute(prepared, Path(args.runs_dir), febio_exe(), args.name, show, None, args.timeout, args.threads)
     except (run.RunError, FileNotFoundError) as e:
         print(f"ERROR  {e}")
         return 1
@@ -131,7 +141,7 @@ def run_scene(args: argparse.Namespace, show) -> int:
 
     try:
         result = simulate.run_scene(Path(args.scene), Path(args.trajectory), Path(args.runs_dir), febio_exe(),
-                                    args.name, show, None, args.timeout)
+                                    args.name, show, None, args.timeout, args.threads)
     except (simulate.SceneRunError, run.RunError, FileNotFoundError) as e:
         print(f"ERROR  {e}")
         print("run NOT STARTED")
@@ -201,6 +211,9 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--runs-dir", default="runs", help="where run folders go (default: runs; English-only path)")
     r.add_argument("--name", help="name for the run folder (default: the trajectory's or the .feb's name)")
     r.add_argument("--timeout", type=float, default=3600, help="stop FEBio after this many seconds")
+    r.add_argument("--threads", type=thread_count, default=febio.DEFAULT_THREADS,
+                   help=f"FEBio threads (default {febio.DEFAULT_THREADS}, never more than this machine's CPUs); "
+                        "1 gives bit-identical results, more gives results within 1e-9 mm")
     r.set_defaults(func=cmd_run)
 
     args = parser.parse_args(argv)

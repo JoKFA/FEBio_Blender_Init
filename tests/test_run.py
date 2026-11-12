@@ -1,6 +1,7 @@
 """T-08: the run shell (stand-in mode) against real FEBio, on the small S1 model (46 nodes x 45 frames, <1 s)."""
 
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -194,6 +195,38 @@ def test_runs_are_reproducible_to_1e_9_mm(tmp_path):
     moved = max_diff(pa, [pa[0]] * len(pa))
     assert moved > 1.0  # the model really moves (the jaw opens), so "equal" is not "nothing happened"
     assert max_diff(pa, pb) <= 1e-9
+
+
+def test_one_thread_is_bit_identical_and_the_threads_actually_used_are_recorded(tmp_path):
+    feb = make_feb(tmp_path / "jaw.feb")
+    a = execute(feb, tmp_path / "runs", threads=1)
+    b = execute(feb, tmp_path / "runs", threads=1)
+    assert max_diff(positions(a), positions(b)) == 0  # exactly, not within 1e-9
+    assert provenance.read(a.run_dir)["parameters"]["febio_env"] == {"OMP_NUM_THREADS": "1", "MKL_NUM_THREADS": "1"}
+    default = execute(feb, tmp_path / "runs")
+    want = str(min(febio.DEFAULT_THREADS, os.cpu_count()))
+    assert provenance.read(default.run_dir)["parameters"]["febio_env"] == {"OMP_NUM_THREADS": want, "MKL_NUM_THREADS": want}
+    assert max_diff(positions(a), positions(default)) <= 1e-9
+
+
+def test_the_thread_count_is_capped_at_the_cpus_and_a_bad_one_is_refused(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(os, "cpu_count", lambda: 2)
+    assert febio.DEFAULT_THREADS == 4 and febio.threads_used() == 2 and febio.threads_used(1) == 1
+    assert febio.threads_used(16) == 2
+    env = febio.environment(16)
+    assert env["OMP_NUM_THREADS"] == "2" and env["MKL_NUM_THREADS"] == "2"
+    monkeypatch.setattr(os, "cpu_count", lambda: 32)
+    assert febio.threads_used() == 4 and febio.environment()["OMP_NUM_THREADS"] == "4"
+    for bad in (0, -1, 2.5, True):
+        with pytest.raises(ValueError, match="threads must be a whole number, at least 1"):
+            febio.threads_used(bad)
+    feb = make_feb(tmp_path / "jaw.feb")
+    with pytest.raises(ValueError, match="threads must be"):
+        execute(feb, tmp_path / "runs", threads=0)
+    assert not (tmp_path / "runs").exists()  # refused before a run folder was made
+    with pytest.raises(SystemExit):
+        cli.main(["run", "--feb", str(feb), "--threads", "0"])
+    assert "not a thread count" in capsys.readouterr().err
 
 
 def test_a_copied_run_folder_reruns_from_its_own_files_alone(tmp_path):

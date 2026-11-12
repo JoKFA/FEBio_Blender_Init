@@ -64,7 +64,8 @@ def test_s1_dynamic_jaw_runs_in_real_febio(tmp_path):
 
 
 def test_s1_repeats_within_tolerance(tmp_path):
-    """Reproducibility standard (docs ADR-15): same input -> positions within 1e-9 mm, identical playback cache.
+    """Reproducibility standard (docs ADR-15, ADR-37): at the default threads the same input twice agrees within
+    1e-9 mm at every node and frame; with one thread the playback cache is identical byte for byte.
 
     The raw FEBio log is not compared: it contains timestamps.
     """
@@ -78,8 +79,10 @@ def test_s1_repeats_within_tolerance(tmp_path):
 
     runs = [run_and_check(tmp_path / name) for name in ("a", "b")]
     a, b = (febio.read_node_data(tmp_path / name / "s1.log", "positions") for name in ("a", "b"))
-
     assert a.times == b.times and len(a.values) == runs[0]["frames"]
     worst = max(math.dist(fa[n], fb[n]) for fa, fb in zip(a.values, b.values) for n in fa)
     assert worst <= 1e-9
-    assert (tmp_path / "a" / "playback.pc2").read_bytes() == (tmp_path / "b" / "playback.pc2").read_bytes()
+
+    for name in ("c", "d"):
+        run_and_check(tmp_path / name, threads=1)
+    assert (tmp_path / "c" / "playback.pc2").read_bytes() == (tmp_path / "d" / "playback.pc2").read_bytes()

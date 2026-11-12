@@ -30,7 +30,7 @@ from pathlib import Path
 
 import numpy as np
 
-from asrp_core import embed, generate, playback, plausibility, provenance, run
+from asrp_core import embed, febio, generate, playback, plausibility, provenance, run
 from asrp_core import scene as scene_module
 
 REPORT = "run_report.json"
@@ -129,7 +129,7 @@ def _parameters(model: generate.Model, trajectory_path: Path) -> list[dict]:
 
 
 def run_scene(scene_path, trajectory_path, runs_dir: Path, exe: Path, name: str | None = None,
-              on_progress=None, cancel=None, timeout: float = 3600) -> SceneRun:
+              on_progress=None, cancel=None, timeout: float = 3600, threads: int = febio.DEFAULT_THREADS) -> SceneRun:
     scene_path, trajectory_path = Path(scene_path), Path(trajectory_path)
     t0 = time.perf_counter()
     try:
@@ -145,7 +145,7 @@ def run_scene(scene_path, trajectory_path, runs_dir: Path, exe: Path, name: str 
             {"generator": {w.split(".", 1)[1]: v for w, v, _ in GENERATOR_SETTINGS if w.startswith("generator.")}
              | {"spring_offset_delta_febio_mm": model.delta}},
             _inputs(model, trajectory_path), length_scale=model.k)
-        result = run.execute(prepared, runs_dir, exe, name or trajectory_path.stem, on_progress, cancel, timeout)
+        result = run.execute(prepared, runs_dir, exe, name or trajectory_path.stem, on_progress, cancel, timeout, threads)
     run_dir = result.run_dir
     t1 = time.perf_counter()
     record = provenance.read(run_dir)

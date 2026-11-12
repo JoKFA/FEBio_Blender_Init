@@ -14,14 +14,29 @@ NORMAL_TERMINATION = "N O R M A L   T E R M I N A T I O N"
 ERROR_TERMINATION = "E R R O R   T E R M I N A T I O N"
 
 
-# FEBio's multi-threaded solver gives positions that differ in the last logged digit (about 1e-11 mm) from run to
-# run; with one thread the log is the same every time (docs/05 pit 17, T-06a). Bit-identical playback files need
-# that (docs/07 section 2), so every FEBio we start runs single-threaded.
-ENV = {"OMP_NUM_THREADS": "1"}
+# FEBio's multi-threaded solver gives positions that differ in the last logged digit (about 1e-10 mm on the lips)
+# from run to run; with one thread the log is the same every time (docs/05 pit 17, T-06a). Four threads halve the
+# time of the lip run (56 s -> 27 s, spikes/audit_threads.py), so that is the default; `--threads 1` gives
+# bit-identical results. The standard at the default: the same input twice agrees within 1e-9 mm at every node
+# and frame.
+DEFAULT_THREADS = 4
 
 
-def environment() -> dict:
-    return {**os.environ, **ENV}
+def threads_used(requested: int = DEFAULT_THREADS) -> int:
+    """The thread count FEBio will really get: the request, but never more than this machine's CPUs."""
+    if isinstance(requested, bool) or not isinstance(requested, int) or requested < 1:
+        raise ValueError(f"threads must be a whole number, at least 1, got {requested!r}")
+    return min(requested, os.cpu_count() or 1)
+
+
+def thread_env(threads: int = DEFAULT_THREADS) -> dict:
+    """The two variables that set FEBio's thread count (OpenMP and MKL), as recorded in provenance."""
+    n = str(threads_used(threads))
+    return {"OMP_NUM_THREADS": n, "MKL_NUM_THREADS": n}
+
+
+def environment(threads: int = DEFAULT_THREADS) -> dict:
+    return {**os.environ, **thread_env(threads)}
 
 
 def command(feb_name: str, log_name: str, plot_name: str, exe: Path) -> list[str]:
@@ -39,7 +54,7 @@ class Run:
     seconds: float
 
 
-def run(feb: Path, exe: Path, timeout: float = 600) -> Run:
+def run(feb: Path, exe: Path, timeout: float = 600, threads: int = DEFAULT_THREADS) -> Run:
     """Solve one .feb. The log and plot files land next to it."""
     log = feb.with_suffix(".log")
     started = time.perf_counter()
@@ -49,7 +64,7 @@ def run(feb: Path, exe: Path, timeout: float = 600) -> Run:
         capture_output=True,
         text=True,
         timeout=timeout,
-        env=environment(),
+        env=environment(threads),
     )
     seconds = time.perf_counter() - started
     text = log.read_text(errors="replace") if log.exists() else ""
@@ -103,14 +118,14 @@ def read_node_data(log: Path, name: str, delim: str = ",") -> NodeHistory:
     return NodeHistory(times, values)
 
 
-def start(feb: Path, log_name: str, plot_name: str, exe: Path, out) -> subprocess.Popen:
+def start(feb: Path, log_name: str, plot_name: str, exe: Path, out, threads: int = DEFAULT_THREADS) -> subprocess.Popen:
     """Start FEBio without waiting, in the .feb's folder. `out` takes stdout and stderr (a file, never a pipe
     nobody reads). On Windows the child gets its own process group so cancelling it does not touch us."""
     flags = subprocess.CREATE_NEW_PROCESS_GROUP if sys.platform == "win32" else 0
     return subprocess.Popen(
         command(feb.name, log_name, plot_name, exe),
         cwd=feb.parent, stdin=subprocess.DEVNULL, stdout=out, stderr=subprocess.STDOUT, creationflags=flags,
-        env=environment(),
+        env=environment(threads),
         start_new_session=sys.platform != "win32",
     )
 

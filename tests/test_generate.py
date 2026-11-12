@@ -10,7 +10,7 @@ import pytest
 
 import cube_scene as cs
 import placeholder_jaw_motion
-from asrp_core import cli, embed, generate, plausibility, simulate, tetmesh, trajectory
+from asrp_core import cli, embed, febio, generate, plausibility, simulate, tetmesh, trajectory
 from asrp_core import scene as scene_module
 from asrp_core.asset import coords
 from asrp_core.doctor import febio_exe
@@ -37,9 +37,9 @@ def display(run_dir: Path) -> np.ndarray:
     return np.array(json.loads((run_dir / "physics" / "display.json").read_text())["positions"])
 
 
-def run(folder: Path, transforms, name: str, settle=None):
+def run(folder: Path, transforms, name: str, settle=None, threads=febio.DEFAULT_THREADS):
     traj = cs.motion(folder, transforms, settle=settle)
-    return simulate.run_scene(folder / "scene.json", traj, folder.parent / "runs", febio_exe(), name)
+    return simulate.run_scene(folder / "scene.json", traj, folder.parent / "runs", febio_exe(), name, threads=threads)
 
 
 # --- the embedding (zEmbedder stand-in) --------------------------------------------------------
@@ -298,11 +298,25 @@ def test_stiffer_springs_converge_to_the_hard_result(hard_plate, tmp_path):
 
 
 @needs_febio
-def test_same_input_twice_gives_the_same_playback_files(hard_plate):
+def test_same_input_twice_agrees_within_1e_9_mm_at_the_default_threads(hard_plate):
     folder, c, _, first = hard_plate
     again = run(c["scene"].parent, TURN, "hard")
+    a, b = display(first.run_dir), display(again.run_dir)
+    assert a.shape == b.shape and np.abs(a - b).max() <= 1e-9
+    assert np.abs(a - a[0]).max() > 1.0  # the plate really turns, so "equal" is not "nothing moved"
+    tets = [json.loads((r.run_dir / "physics" / "positions.json").read_text())["positions"] for r in (first, again)]
+    assert np.abs(np.array(tets[0]) - np.array(tets[1])).max() <= 1e-9
+
+
+@needs_febio
+def test_same_input_twice_gives_the_same_playback_files_with_one_thread(hard_plate):
+    folder, c, _, _ = hard_plate
+    first = run(c["scene"].parent, TURN, "hard_1a", threads=1)
+    again = run(c["scene"].parent, TURN, "hard_1b", threads=1)
     for name in ("playback.json", "playback.pc2", "physics/display.json"):
         assert (first.run_dir / name).read_bytes() == (again.run_dir / name).read_bytes(), name
+    assert json.loads((first.run_dir / "provenance.json").read_text())["parameters"]["febio_env"] == {
+        "OMP_NUM_THREADS": "1", "MKL_NUM_THREADS": "1"}
 
 
 @needs_febio
