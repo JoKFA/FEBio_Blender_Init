@@ -706,3 +706,67 @@ def test_a_driver_that_moves_before_the_settle_ends_gives_no_settled_shape_and_n
     c_check = r.report["checks"]["c"]
     assert c_check["passed"] is None and "starts on or before frame 14" in c_check["message"]
     assert r.report["settled_shape"]["available"] is False and r.report["settled_shape"]["frame"] is None and r.passed
+
+
+# --- review: post-processing that breaks after FEBio finished must not look complete -------------
+
+
+def _assert_failed_after_febio(r, tmp_path, *, text):
+    assert r.status == "failed" and r.passed is False
+    assert not (r.run_dir / "physics").exists()
+    assert not (r.run_dir / "playback.json").exists() and not (r.run_dir / "playback.pc2").exists()
+    prov = json.loads((r.run_dir / "provenance.json").read_text())
+    assert prov["status"] == "failed" and prov["outputs"] == {} and text in prov["failure"]["message"]
+    rep = cs.report(r.run_dir)
+    assert rep["status"] == "failed" and rep["passed"] is False and "settled_shape" not in rep
+    a = rep["checks"]["a"]
+    assert a["passed"] is False and text in a["message"]
+    assert str(tmp_path) not in json.dumps(rep) and str(tmp_path) not in json.dumps(prov)  # paths are scrubbed
+
+
+@needs_febio
+def test_a_failure_while_embedding_after_febio_finished_makes_the_run_failed(tmp_path, monkeypatch):
+    cs.write(tmp_path / "box", attachments=[("top", "skull", "hard", None, at_z(10.0))])
+
+    def boom(*a, **k):
+        raise RuntimeError(f"cannot embed in {tmp_path / 'secret' / 'x.bin'}")
+
+    monkeypatch.setattr(embed, "apply", boom)
+    r = run(tmp_path / "box", cs.still(6), "embed_boom", settle=2)
+    _assert_failed_after_febio(r, tmp_path, text="cannot embed in x.bin")
+
+
+@needs_febio
+def test_a_failure_while_writing_the_playback_files_removes_what_was_written(tmp_path, monkeypatch):
+    cs.write(tmp_path / "box", attachments=[("top", "skull", "hard", None, at_z(10.0))])
+    real = simulate.playback.write_surface_bundle
+
+    def half_then_boom(run_dir, *a, **k):
+        real(run_dir, *a, **k)
+        raise OSError("disk full")
+
+    monkeypatch.setattr(simulate.playback, "write_surface_bundle", half_then_boom)
+    r = run(tmp_path / "box", cs.still(6), "playback_boom")
+    _assert_failed_after_febio(r, tmp_path, text="disk full")
+
+
+@needs_febio
+def test_a_number_that_is_not_valid_json_in_the_report_fails_the_run(tmp_path, monkeypatch):
+    cs.write(tmp_path / "box", attachments=[("top", "skull", "hard", None, at_z(10.0))])
+    monkeypatch.setattr(simulate, "slips", lambda model, frames: {"g": {"ratio": float("nan")}})
+    r = run(tmp_path / "box", cs.still(6), "nan")
+    assert r.status == "failed"
+    text = (r.run_dir / "run_report.json").read_text()
+    assert "NaN" not in text and json.loads(text)["status"] == "failed"
+
+
+@needs_febio
+def test_ctrl_c_during_post_processing_is_not_swallowed(tmp_path, monkeypatch):
+    cs.write(tmp_path / "box", attachments=[("top", "skull", "hard", None, at_z(10.0))])
+
+    def interrupt(*a, **k):
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(embed, "apply", interrupt)
+    with pytest.raises(KeyboardInterrupt):
+        run(tmp_path / "box", cs.still(6), "ctrl_c")
