@@ -3,6 +3,7 @@ import json
 import math
 from pathlib import Path
 
+import numpy as np
 import pytest
 
 from asrp_core import trajectory
@@ -116,19 +117,58 @@ def max_gap(ms_a, ms_b):
 def test_blend_factor_zero_is_the_identity_and_one_is_the_parent():
     jaw = hinge_transforms(PIVOT, AXIS, [math.radians(a) for a in (0, 5, 12, -3, 20)])
     ident = [[1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]] * len(jaw)
-    assert max_gap(trajectory.blend_transforms(jaw, PIVOT, AXIS, 0.0), ident) < 1e-9
-    assert max_gap(trajectory.blend_transforms(jaw, PIVOT, AXIS, 1.0), jaw) < 1e-9
+    assert max_gap(trajectory.blend_transforms(jaw, 0.0), ident) < 1e-9
+    assert max_gap(trajectory.blend_transforms(jaw, 1.0), jaw) < 1e-9
     assert max_gap(jaw, ident) > 1.0  # the jaw really moves the points, so the two checks above can fail
 
 
-def test_blend_factor_half_at_20_degrees_turns_10_degrees_about_the_same_pivot_and_axis():
-    [jaw] = hinge_transforms(PIVOT, AXIS, [math.radians(20)])
-    [half] = trajectory.blend_transforms([jaw], PIVOT, AXIS, 0.5)
-    [by_hand] = hinge_transforms(PIVOT, AXIS, [math.radians(10)])
-    assert max_gap([half], [by_hand]) < 1e-9
-    assert abs(trajectory.hinge_angle(half, AXIS) - math.radians(10)) < 1e-12
-    assert max_gap([half], [jaw]) > 1.0  # and it is not the 20 degree turn
-    assert all(abs(a - b) < 1e-9 for a, b in zip(apply(half, PIVOT), PIVOT))  # the pivot stays
+def test_blend_of_a_pure_hinge_turn_is_the_turn_by_factor_times_the_angle_about_the_same_hinge():
+    angles = [math.radians(a) for a in (0, 5, 12, -3, 20, 90, 150)]
+    jaw = hinge_transforms(PIVOT, AXIS, angles)
+    for factor in (0.0, 0.25, 0.5, 1.0):
+        got = trajectory.blend_transforms(jaw, factor)
+        want = hinge_transforms(PIVOT, AXIS, [factor * a for a in angles])
+        assert max(abs(p - q) for u, v in zip(got, want) for p, q in zip(u, v)) < 1e-12, factor
+    half = trajectory.blend_transforms(jaw[4:5], 0.5)
+    assert abs(trajectory.hinge_angle(half[0], AXIS) - math.radians(10)) < 1e-12
+    assert max_gap(half, jaw[4:5]) > 1.0  # and it is not the 20 degree turn
+    assert all(abs(a - b) < 1e-9 for a, b in zip(apply(half[0], PIVOT), PIVOT))  # the pivot stays
+
+
+def general_motion(angle, axis, shift):
+    """A turn about a tilted axis through a pivot, then a translation: not a hinge turn."""
+    [m] = hinge_transforms((4.0, -20.0, 7.0), axis, [angle])
+    m = list(m)
+    m[3] += shift[0]
+    m[7] += shift[1]
+    m[11] += shift[2]
+    return m
+
+
+def compose(a, b):
+    return [float(v) for v in (np.array(a).reshape(4, 4) @ np.array(b).reshape(4, 4)).ravel()]
+
+
+def test_blending_a_general_motion_twice_adds_the_factors():
+    motion = [general_motion(0.7, (1.0, 2.0, -0.5), (3.0, -1.0, 2.0)), general_motion(-0.2, (0.0, 1.0, 1.0), (0.0, 5.0, 0.1)),
+              general_motion(1e-10, (1.0, 0.0, 0.0), (0.2, 0.0, 0.0))]
+    for a, b in ((0.3, 0.45), (0.5, 0.5), (0.1, 0.9)):
+        got = [compose(x, y) for x, y in zip(trajectory.blend_transforms(motion, a), trajectory.blend_transforms(motion, b))]
+        want = trajectory.blend_transforms(motion, a + b)
+        assert max(abs(p - q) for u, v in zip(got, want) for p, q in zip(u, v)) < 1e-12, (a, b)
+    # and it is not nothing: half of the first motion moves a point by millimetres
+    assert max_gap(trajectory.blend_transforms(motion, 0.5), trajectory.blend_transforms(motion, 0.0)) > 1.0
+
+
+def test_blend_keeps_the_translation_of_a_pure_translation():
+    [m] = trajectory.blend_transforms([[1, 0, 0, 4.0, 0, 1, 0, -2.0, 0, 0, 1, 0.5, 0, 0, 0, 1]], 0.5)
+    assert [m[3], m[7], m[11]] == pytest.approx([2.0, -1.0, 0.25], abs=1e-12)
+
+
+def test_blend_refuses_a_turn_of_180_degrees():
+    [m] = hinge_transforms(PIVOT, AXIS, [math.pi])
+    with pytest.raises(ValueError, match="180 degrees"):
+        trajectory.blend_transforms([m], 0.5)
 
 
 def test_hinge_angle_is_signed_and_works_for_a_tilted_axis():

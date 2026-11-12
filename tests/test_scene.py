@@ -3,6 +3,7 @@ import json
 import shutil
 from pathlib import Path
 
+import numpy as np
 import pytest
 
 from asrp_core import cli, scene, tetmesh
@@ -355,30 +356,29 @@ def test_a_scene_with_an_anchor_on_a_derived_driver_reads_back_and_checks_with_t
     assert scene.load(tmp_path / "again.json") == s
 
 
-def test_a_jaw_that_is_not_a_pure_hinge_turn_makes_the_blend_warn(tmp_path, capsys):
+def test_a_jaw_that_is_not_a_pure_hinge_turn_no_longer_warns_and_the_blend_follows_all_of_it(tmp_path):
     from asrp_core import trajectory
     folder = copy_s1(tmp_path)
     path = edit_scene(folder, with_anchor)
-    pivot, axis = [5.0, -30.0, 0.0], [1.0, 0.0, 0.0]
-    clean = trajectory.hinge_transforms(pivot, axis, [0.0, 0.1, 0.2])
+    pivot = [5.0, -30.0, 0.0]
+    a = trajectory.hinge_transforms(pivot, [1.0, 0.0, 0.0], [0.0, 0.1, 0.2])
+    b = trajectory.hinge_transforms(pivot, [0.0, 1.0, 0.0], [0.0, 0.05, 0.1])
+    c = trajectory.hinge_transforms(pivot, [0.0, 0.0, 1.0], [0.0, 0.03, 0.06])
+    mixed = [[float(v) for v in (np.array(x).reshape(4, 4) @ np.array(y).reshape(4, 4) @ np.array(z).reshape(4, 4)).ravel()]
+             for x, y, z in zip(a, b, c)]
+    for m in mixed:
+        m[3] += 0.5  # and it slides along x
     t = trajectory.read(folder / "trajectory.json")
     t.frames = 3
-    t.drivers = {"jaw_hinge": clean}
-    trajectory.write(folder / "pure.json", t)
-    assert not [w for w in scene.check(path, folder / "pure.json").warnings if "pure rotation" in w]
-    slid = [list(m) for m in clean]
-    slid[2][3] += 0.5  # the jaw also slides 0.5 mm along x
-    t.drivers = {"jaw_hinge": slid}
-    trajectory.write(folder / "slid.json", t)
-    report = scene.check(path, folder / "slid.json")
-    [w] = [w for w in report.warnings if "pure rotation" in w]
-    assert report.ok and "corner_blend" in w and "frame 2" in w and "drops the rest" in w
-    off_axis = trajectory.hinge_transforms(pivot, [0.0, 1.0, 0.0], [0.0, 0.0, 0.1])  # a turn about y
-    t.drivers = {"jaw_hinge": [clean[0], clean[1], off_axis[2]]}
-    trajectory.write(folder / "off.json", t)
-    assert [w for w in scene.check(path, folder / "off.json").warnings if "pure rotation" in w]
-    assert cli.main(["check", str(path), str(folder / "slid.json")]) == 0
-    assert "WARNING  trajectory: driver 'jaw_hinge' is not a pure rotation" in capsys.readouterr().out
+    t.drivers = {"jaw_hinge": mixed}
+    trajectory.write(folder / "mixed.json", t)
+    report = scene.check(path, folder / "mixed.json")
+    assert report.ok and not [w for w in report.warnings if "pure rotation" in w], report.warnings
+    motion = scene.driver_motion(report.scene, report.trajectory)
+    # the derived driver is half of the whole motion, translation included: twice it is the jaw
+    twice = [(np.array(m).reshape(4, 4) @ np.array(m).reshape(4, 4)).ravel() for m in motion["corner_blend"]]
+    assert max(abs(p - q) for u, v in zip(twice, mixed) for p, q in zip(u, v)) < 1e-9
+    assert max(abs(m[3]) for m in motion["corner_blend"]) > 1e-3  # the test motion really moves the points
 
 
 def test_a_scene_without_anchors_is_written_without_the_field():
@@ -410,15 +410,14 @@ def test_a_blend_factor_of_exactly_zero_or_one_is_allowed(tmp_path, alpha):
     assert scene.check(edit_scene(folder, lambda d: with_anchor(d, factor=alpha))).ok
 
 
-def test_a_derived_driver_of_a_driver_without_a_hinge_or_of_another_derived_one_is_an_error(tmp_path):
+def test_a_derived_driver_of_another_derived_one_is_an_error_and_a_source_without_a_hinge_is_fine(tmp_path):
     folder = copy_s1(tmp_path)
 
     def no_hinge(d):
         d["drivers"][0]["hinge"] = None
         with_anchor(d)
 
-    report, text = errors_of(edit_scene(folder, no_hinge))
-    assert not report.ok and "which has no hinge" in text
+    assert scene.check(edit_scene(folder, no_hinge), folder / "trajectory.json").ok
 
     folder = copy_s1(tmp_path / "chain")
 

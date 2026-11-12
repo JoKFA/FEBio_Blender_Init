@@ -202,7 +202,8 @@ class Hinge:
 
 @dataclass
 class Blend:
-    """A derived driver: `factor` times the rotation of driver `of`, about that driver's hinge."""
+    """A derived driver: `factor` times the whole rigid motion of driver `of` (a pure hinge turn gives the turn by
+    `factor` times the angle about the same hinge)."""
 
     of: str
     factor: Param
@@ -778,11 +779,6 @@ def _check_references(scene: Scene, base: Path, report: Report) -> None:
                 f"driver {d.name!r} is derived from {parent.name!r}, which is itself derived; derive it from "
                 f"{parent.blend.of!r} directly (derived drivers do not chain)"
             )
-        elif parent.hinge is None:
-            report.errors.append(
-                f"driver {d.name!r} is derived from {parent.name!r}, which has no hinge; a derived driver "
-                "turns about its source's hinge, so give the source a hinge (docs/04 section 5.1)"
-            )
         if d.name in followed:
             followed.add(d.blend.of)  # the source is in use through the driver derived from it
     for d in sorted(drivers - followed):
@@ -875,20 +871,6 @@ def _check_trajectory(scene: Scene, path: Path, report: Report) -> None:
             f"trajectory: driver {d!r} is derived from {derived[d].blend.of!r} in the scene, so its own motion "
             "in the trajectory is ignored"
         )
-    by_name = {d.name: d for d in scene.drivers}
-    for name in sorted(derived):
-        parent = by_name.get(derived[name].blend.of)
-        if parent is None or parent.hinge is None or parent.name not in traj.drivers:
-            continue
-        deviation, frame = trajectory_module.hinge_deviation(traj.drivers[parent.name], parent.hinge.pivot_mm,
-                                                             parent.hinge.axis)
-        if deviation > trajectory_module.HINGE_TOLERANCE:
-            report.warnings.append(
-                f"trajectory: driver {parent.name!r} is not a pure rotation about the scene's hinge "
-                f"(translation or off-axis rotation of {deviation:.2e} at frame {frame}, limit "
-                f"{trajectory_module.HINGE_TOLERANCE:g}); the derived driver {name!r} (a blend of it) keeps only the "
-                f"angle about the hinge and drops the rest, so the lip-corner anchor does not follow that part"
-            )
     for d in sorted(set(traj.drivers) - used - set(derived)):
         report.warnings.append(f"trajectory: driver {d!r} moves no bone in this scene; its motion is ignored")
 
@@ -912,7 +894,7 @@ def check(scene_path, trajectory_path=None) -> Report:
 
 def driver_motion(scene: Scene, traj: trajectory_module.Trajectory) -> dict[str, list[list[float]]]:
     """Every driver's 4x4 transform per frame: the trajectory's own, plus each derived driver
-    computed from its source's motion and hinge (docs/04 section 5.1). Raises ValueError if the
+    computed from its source's motion (docs/04 section 5.1). Raises ValueError if the
     scene and trajectory do not fit; run `check` first for a readable list of what is wrong."""
     out = {}
     by_name = {d.name: d for d in scene.drivers}
@@ -929,10 +911,9 @@ def driver_motion(scene: Scene, traj: trajectory_module.Trajectory) -> dict[str,
         if d.name not in used:
             continue
         parent = by_name.get(d.blend.of)
-        if parent is None or parent.hinge is None or parent.blend is not None:
-            raise ValueError(f"driver {d.name!r}: its source {d.blend.of!r} is missing, derived or has no hinge")
+        if parent is None or parent.blend is not None:
+            raise ValueError(f"driver {d.name!r}: its source {d.blend.of!r} is missing or is itself derived")
         if d.blend.of not in traj.drivers:
             raise ValueError(f"driver {d.name!r}: the trajectory has no motion for its source {d.blend.of!r}")
-        out[d.name] = trajectory_module.blend_transforms(
-            traj.drivers[d.blend.of], parent.hinge.pivot_mm, parent.hinge.axis, d.blend.factor.value)
+        out[d.name] = trajectory_module.blend_transforms(traj.drivers[d.blend.of], d.blend.factor.value)
     return out
