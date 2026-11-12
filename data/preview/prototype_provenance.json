@@ -85,7 +85,7 @@
   "software": {
     "asrp": "0.0.1",
     "asrp_source": {
-      "commit": "29e696d8b921a450a93a3eb6c8ab1cf39ca12075",
+      "commit": "83ac48e81303de9313ed2812e142f4a5db83e322",
       "dirty": false
     },
     "python": "3.13.6",
@@ -98,7 +98,7 @@
       "bytes": 48647
     },
     "physics/positions.npy": {
-      "sha256": "cb7440cc17a6066ff104316564235b7e789ae3e80d182a994f7bf7444731e5d5",
+      "sha256": "633589404fba78f9ff7f987cdaf7fe84a10165431b9a2f5f39e6a1be835483ea",
       "bytes": 9824528
     },
     "physics/display.json": {
@@ -106,16 +106,16 @@
       "bytes": 271
     },
     "physics/display.npy": {
-      "sha256": "3812ba0b4eac644fb9c48da6672a4a12aea75bdc91efc3c0620fab8a6f36a0c0",
+      "sha256": "46b23785525b2d4c4caa5e11f10cd30b2ecfb5c5850d176c14d6ee7094152215",
       "bytes": 12533888
     },
     "physics/settled_frame14.json": {
-      "sha256": "7425b40dc69acb7c2bfb8140cf63c58a291b409d93b1a061705b1683a3b9fbde",
-      "bytes": 1054925
+      "sha256": "a585e739841c37b205829e4065c29324c8f47381538f7266d1ae10170f7ea49b",
+      "bytes": 1054922
     },
     "physics/settled_frame14.obj": {
-      "sha256": "6b13381f7a04ac22596b120e3747f5431f2ee58e67c884a42595a25d3d589b39",
-      "bytes": 948608
+      "sha256": "3eae4ce91528b680e6d2a99ea88a3a5ff7f797078986c15c65ff2c9bcc4d2eeb",
+      "bytes": 948604
     },
     "playback.json": {
       "sha256": "37f819e135ee6d36f8385a804a828430d551edc13e794b10a3f4f177e3668102",
@@ -126,15 +126,15 @@
       "bytes": 6266912
     },
     "run_report.json": {
-      "sha256": "bfad8a1c0930f80fc91a761974e05cf1ce03daa7114f1c4d544149b6743de885",
-      "bytes": 22021
+      "sha256": "60c5df06fa35c188f60f03ca7ffda8eb09c7dbeded3328feebb1001e591fb8f5",
+      "bytes": 22103
     }
   },
   "failure": null,
   "timing": {
-    "started_utc": "2026-11-12T07:14:59+00:00",
-    "febio_seconds": 28.562,
-    "finished_utc": "2026-11-12T07:15:28+00:00"
+    "started_utc": "2026-11-12T07:37:30+00:00",
+    "febio_seconds": 30.021,
+    "finished_utc": "2026-11-12T07:38:01+00:00"
   },
   "result": {
     "frames_written": 50

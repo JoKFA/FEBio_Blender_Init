@@ -7,6 +7,7 @@ import numpy as np
 import pytest
 
 from asrp_core import cli, scene, tetmesh
+from hinge import hinge_angle
 
 HERE = Path(__file__).resolve().parent
 S1 = HERE / "fixtures" / "s1"
@@ -492,7 +493,7 @@ def test_driver_motion_gives_the_derived_driver_half_the_jaw_angle_about_the_sam
     report = scene.check(path, folder / "trajectory.json")
     motion = scene.driver_motion(report.scene, report.trajectory)
     assert set(motion) == {"jaw_hinge", "corner_blend"}
-    angles = [trajectory.hinge_angle(m, (1, 0, 0)) for m in motion["jaw_hinge"]]
+    angles = [hinge_angle(m, (1, 0, 0)) for m in motion["jaw_hinge"]]
     assert max(abs(a) for a in angles) > 0.05  # the S1 jaw really opens, so this is not a check on nothing
     hinge = report.scene.drivers[0].hinge
     expected = trajectory.hinge_transforms(hinge.pivot_mm, hinge.axis, [a / 2 for a in angles])

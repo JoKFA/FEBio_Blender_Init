@@ -13,14 +13,16 @@
     physics/settled_frame<n>.json the shape after the gravity-only settle, at the trajectory's
     physics/settled_frame<n>.obj  settle_until_frame n (14 for the lab's controller, ADR-30: its starting
                                   point): tet nodes and display mesh, and the display mesh as an OBJ with
-                                  its faces. Written only when the trajectory names n and every driver
-                                  in use is at rest through frame n
+                                  its faces. Written only when the trajectory names n >= 1 and every
+                                  driver in use is at rest through frame n
     playback.json, playback.pc2   the display mesh and its point cache for Blender (`playback`)
     run_report.json               every temporary value and its source, the scene's simplifications,
                                   the generator's report, max|u|/δ per spring group, the plausibility
                                   checks a, b, b2, c, d (`plausibility`), return_to_settled (how far
                                   the tet nodes are from the settled shape once the drivers are back
-                                  at rest; reported only), timing
+                                  at rest; reported only), motion (the largest
+                                  distance of any display vertex from its rest position over all frames,
+                                  and the frame it occurs at), timing
 
 A failed or cancelled run gets run_report.json (with check (a) failed) but no physics results.
 """
@@ -41,7 +43,8 @@ REPORT = "run_report.json"
 DISPLAY = "physics/display.json"  # the header; the numbers are in DISPLAY_ARRAY
 DISPLAY_ARRAY = "physics/display.npy"
 DISPLAY_FORMAT = "asrp-display/2"
-SETTLE_FRAMES = 5  # check (c) averages this many frames ending at settle_until_frame (one frame aliases the ringing)
+SETTLE_FRAMES = 5  # check (c) averages up to this many frames ending at settle_until_frame (one frame aliases the
+# ringing); never frame 0, the rest pose, whose sag is exactly 0
 SLIP_LIMIT = 0.1  # docs/05 section 3: max|u| / δ above this, the spring result is off by more than ~2 %
 
 # Settings the generator chose (all "ours"), for the run report next to the scene's own parameters.
@@ -170,76 +173,92 @@ def run_scene(scene_path, trajectory_path, runs_dir: Path, exe: Path, name: str 
     checks = {}
     status = result.status
     failure_text = result.failure.message if result.failure else None
-    positions = logged = None
-    if status == "complete":
-        positions = run.read_positions(run_dir / run.POSITIONS)
-        logged = [round(t * model.fps) for t in positions["times_s"]]
-        check_a = plausibility.motion_completed("complete", model.frames, logged, retries)
-        if not check_a.passed:  # FEBio reached the end time but dropped a frame: no results, like any failed run (T-08)
-            status, failure_text = "failed", check_a.message
-            shutil.rmtree(run_dir / "physics", ignore_errors=True)
-            record["outputs"] = {}
-            record["failure"] = {"frame": None, "message": check_a.message}
-            report["status"] = "failed"
-    if status != "complete":
-        checks["a"] = (check_a if logged is not None else
-                       plausibility.motion_completed(status, model.frames, [], retries, failure_text))
-        checks["b"] = plausibility.Check("hard attachments follow their bones", None, "the run did not complete")
-        checks["b2"] = plausibility.Check("spring anchors follow their rigid bodies", None, "the run did not complete")
-        checks["c"] = plausibility.Check("gravity sag", None, "the run did not complete")
-        checks["d"] = plausibility.Check("the tet mesh stays valid", None, "the run did not complete")
-    else:
-        checks["a"] = check_a
-        index = {nid: i for i, nid in enumerate(positions["node_ids"])}
-        tissue = [index[n + 1] for n in range(len(model.mesh.nodes))]
-        node_frames = np.full((model.frames, len(model.mesh.nodes), 3), np.nan)
-        node_frames[0] = model.mesh.nodes
-        for f, frame in zip(logged, positions["positions"]):
-            if 0 < f < model.frames:
-                node_frames[f] = np.asarray(frame)[tissue]
-        display = np.stack([embed.apply(model.embedding, p) for p in node_frames])
-        groups = [{"name": g.name, "kind": g.kind, "target": g.target, "nodes": g.nodes, "vertices": g.vertices}
-                  for g in model.groups]
-        transforms = {name: b.transforms for name, b in model.bodies.items()}
-        checks["b"] = plausibility.follows_bones(groups, model.mesh.nodes, node_frames, model.display, display, transforms)
-        rest_febio = generate.node_rest_febio(model)
-        anchor_ids = [sp.anchor for sp in model.springs]
-        anchor_rest = np.array([rest_febio[a] for a in anchor_ids]).reshape(-1, 3) / model.k
-        anchor_frames = np.full((model.frames, len(anchor_ids), 3), np.nan)
-        anchor_frames[0] = anchor_rest
-        for f, frame in zip(logged, positions["positions"]):
-            if 0 < f < model.frames:
-                anchor_frames[f] = np.asarray(frame)[[index[a] for a in anchor_ids]]
-        checks["b2"] = plausibility.anchors_follow_bodies(
-            anchor_rest, [{g.name: g.target for g in model.groups}[sp.group] for sp in model.springs], anchor_frames, transforms)
-        attached = np.unique(np.concatenate([g.vertices for g in model.groups])) if model.groups else np.zeros(0, int)
-        free = np.setdiff1d(np.arange(len(model.display)), attached)
-        settle = model.trajectory.settle_until_frame
-        settled = settle is not None and _still_until(model, settle)
-        report["settled_shape"] = {"available": settled, "frame": settle if settled else None}
-        if settled:
-            material = model.scene.soft_tissues[0].material.params
-            estimate = plausibility.expected_sag(model.display, free, attached, model.gravity,
-                                                 material["density_t_per_mm3"].value, material["E_mpa"].value, model.k)
-            checks["c"] = plausibility.gravity_sag(model.display, display, free, model.gravity, estimate,
-                                                   range(max(0, settle - SETTLE_FRAMES + 1), settle + 1))
+    positions = logged = check_a = None
+    try:
+        if status == "complete":
+            positions = run.read_positions(run_dir / run.POSITIONS)
+            logged = [round(t * model.fps) for t in positions["times_s"]]
+            check_a = plausibility.motion_completed("complete", model.frames, logged, retries)
+            if not check_a.passed:  # FEBio reached the end time but dropped a frame: no results, like any failed run (T-08)
+                status, failure_text = "failed", check_a.message
+                shutil.rmtree(run_dir / "physics", ignore_errors=True)
+                record["outputs"] = {}
+                record["failure"] = {"frame": None, "message": check_a.message}
+                report["status"] = "failed"
+        if status != "complete":
+            checks = _unrun_checks(check_a if logged is not None else
+                                   plausibility.motion_completed(status, model.frames, [], retries, failure_text))
         else:
-            if settle is None:
-                reason = "the trajectory does not say where the gravity-only settle ends (settle_until_frame)"
+            checks["a"] = check_a
+            index = {nid: i for i, nid in enumerate(positions["node_ids"])}
+            tissue = [index[n + 1] for n in range(len(model.mesh.nodes))]
+            node_frames = np.full((model.frames, len(model.mesh.nodes), 3), np.nan)
+            node_frames[0] = model.mesh.nodes
+            for f, frame in zip(logged, positions["positions"]):
+                if 0 < f < model.frames:
+                    node_frames[f] = np.asarray(frame)[tissue]
+            display = np.stack([embed.apply(model.embedding, p) for p in node_frames])
+            moved = np.linalg.norm(display - model.display[None], axis=2)  # (frames, vertices), geometric mm
+            at = int(np.argmax(moved.max(axis=1)))
+            report["motion"] = {"max_display_distance_mm": float(moved[at].max()), "frame": at}
+            groups = [{"name": g.name, "kind": g.kind, "target": g.target, "nodes": g.nodes, "vertices": g.vertices}
+                      for g in model.groups]
+            transforms = {name: b.transforms for name, b in model.bodies.items()}
+            checks["b"] = plausibility.follows_bones(groups, model.mesh.nodes, node_frames, model.display, display, transforms)
+            rest_febio = generate.node_rest_febio(model)
+            anchor_ids = [sp.anchor for sp in model.springs]
+            anchor_rest = np.array([rest_febio[a] for a in anchor_ids]).reshape(-1, 3) / model.k
+            anchor_frames = np.full((model.frames, len(anchor_ids), 3), np.nan)
+            anchor_frames[0] = anchor_rest
+            for f, frame in zip(logged, positions["positions"]):
+                if 0 < f < model.frames:
+                    anchor_frames[f] = np.asarray(frame)[[index[a] for a in anchor_ids]]
+            checks["b2"] = plausibility.anchors_follow_bodies(
+                anchor_rest, [{g.name: g.target for g in model.groups}[sp.group] for sp in model.springs], anchor_frames, transforms)
+            attached = np.unique(np.concatenate([g.vertices for g in model.groups])) if model.groups else np.zeros(0, int)
+            free = np.setdiff1d(np.arange(len(model.display)), attached)
+            settle = model.trajectory.settle_until_frame
+            settled = settle is not None and settle >= 1 and _still_until(model, settle)
+            report["settled_shape"] = {"available": settled, "frame": settle if settled else None}
+            if settled:
+                material = model.scene.soft_tissues[0].material.params
+                estimate = plausibility.expected_sag(model.display, free, attached, model.gravity,
+                                                     material["density_t_per_mm3"].value, material["E_mpa"].value, model.k)
+                checks["c"] = plausibility.gravity_sag(model.display, display, free, model.gravity, estimate,
+                                                       range(max(1, settle - SETTLE_FRAMES + 1), settle + 1))
             else:
-                reason = f"the motion starts on or before frame {settle}, the end of the gravity-only settle"
-            checks["c"] = plausibility.Check("gravity sag", None, reason)
-            report["settled_shape"]["reason"] = f"{reason}: the shape after the settle is not written"
-        checks["d"] = plausibility.tet_mesh_valid(model.mesh.nodes, model.mesh.tets, node_frames)
-        if settled:
-            report["return_to_settled"] = plausibility.return_to_settled(
-                node_frames, settle, [b.transforms for b in model.bodies.values()])
-        report["spring_slip"] = slips(model, node_frames)
-        _write_results(run_dir, model, node_frames, display, settle if settled else None)
-        files = [run.POSITIONS, run.POSITIONS_ARRAY, DISPLAY, DISPLAY_ARRAY, "playback.json", "playback.pc2"]
-        if settled:
-            files[4:4] = [f"{settled_path(settle)}.json", f"{settled_path(settle)}.obj"]
-        record["outputs"] = provenance.hash_files(run_dir, files)
+                if settle is None:
+                    reason = "the trajectory does not say where the gravity-only settle ends (settle_until_frame)"
+                elif settle == 0:
+                    reason = "settle_until_frame is 0: there is no frame after the rest pose in the gravity-only settle"
+                else:
+                    reason = f"the motion starts on or before frame {settle}, the end of the gravity-only settle"
+                checks["c"] = plausibility.Check("gravity sag", None, reason)
+                report["settled_shape"]["reason"] = f"{reason}: the shape after the settle is not written"
+            checks["d"] = plausibility.tet_mesh_valid(model.mesh.nodes, model.mesh.tets, node_frames)
+            if settled:
+                report["return_to_settled"] = plausibility.return_to_settled(
+                    node_frames, settle, [b.transforms for b in model.bodies.values()])
+            report["spring_slip"] = slips(model, node_frames)
+            _write_results(run_dir, model, node_frames, display, settle if settled else None)
+            files = [run.POSITIONS, run.POSITIONS_ARRAY, DISPLAY, DISPLAY_ARRAY, "playback.json", "playback.pc2"]
+            if settled:
+                files[4:4] = [f"{settled_path(settle)}.json", f"{settled_path(settle)}.obj"]
+            record["outputs"] = provenance.hash_files(run_dir, files)
+        # An invalid number (NaN, inf) in the report is a failed run, never a silently written one.
+        json.dumps({**report, "checks": {key: c.to_json() for key, c in checks.items()}}, allow_nan=False)
+    except Exception as e:  # FEBio finished but our own post-processing broke: the run must not look complete
+        status = "failed"
+        failure_text = run.scrub_paths(f"post-processing failed after FEBio finished: {type(e).__name__}: {e}", run_dir)
+        shutil.rmtree(run_dir / "physics", ignore_errors=True)
+        for name in ("playback.json", "playback.pc2"):
+            (run_dir / name).unlink(missing_ok=True)
+        for key in ("settled_shape", "return_to_settled", "spring_slip", "motion"):
+            report.pop(key, None)
+        report["status"] = "failed"
+        record["outputs"] = {}
+        record["failure"] = {"frame": None, "message": failure_text}
+        checks = _unrun_checks(plausibility.motion_completed("failed", model.frames, [], retries, failure_text))
     report["checks"] = {key: c.to_json() for key, c in checks.items()}
     # Only an explicit False is a failure; None is "not run" (the reason is in the check). (a) must always run.
     passed = status == "complete" and checks["a"].passed is True and all(c.passed is not False for c in checks.values())
@@ -251,7 +270,8 @@ def run_scene(scene_path, trajectory_path, runs_dir: Path, exe: Path, name: str 
         "generate_s": round(generated_s, 3), "febio_s": febio_s, "post_s": round(time.perf_counter() - t1, 3),
         "febio_s_per_frame": round(febio_s / steps, 3) if febio_s else None,
     }
-    (run_dir / REPORT).write_text(json.dumps(report, indent=2, ensure_ascii=False) + "\n", encoding="utf-8", newline="\n")
+    (run_dir / REPORT).write_text(json.dumps(report, indent=2, ensure_ascii=False, allow_nan=False) + "\n",
+                                       encoding="utf-8", newline="\n")
     record["outputs"] = {**record.get("outputs", {}), **provenance.hash_files(run_dir, [REPORT])} \
         if status == "complete" else {}
     record.pop("format", None)
@@ -260,9 +280,18 @@ def run_scene(scene_path, trajectory_path, runs_dir: Path, exe: Path, name: str 
     return SceneRun(run_dir, status, report, passed)
 
 
+def _unrun_checks(check_a: plausibility.Check) -> dict:
+    """The five checks of a run that did not complete: (a) as given, the others not run."""
+    return {"a": check_a,
+            "b": plausibility.Check("hard attachments follow their bones", None, "the run did not complete"),
+            "b2": plausibility.Check("spring anchors follow their rigid bodies", None, "the run did not complete"),
+            "c": plausibility.Check("gravity sag", None, "the run did not complete"),
+            "d": plausibility.Check("the tet mesh stays valid", None, "the run did not complete")}
+
+
 def read_display(path: Path) -> dict:
     """The display header plus "positions": a float64 array (frames, vertices, 3), geometric mm."""
-    data = run.load_array(path, "positions")
+    data = run.load_array(path, "positions", ("frames", "vertex_count"))
     shape = data["positions"].shape
     if list(shape) != [data["frames"], data["vertex_count"], 3]:
         raise run.RunError(f"{path.name} says {data['frames']} frames of {data['vertex_count']} vertices but its "

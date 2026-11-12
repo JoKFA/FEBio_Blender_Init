@@ -7,6 +7,7 @@ import numpy as np
 import pytest
 
 from asrp_core import trajectory
+from hinge import hinge_angle
 from asrp_core.trajectory import TrajectoryError, apply, hinge_transforms
 
 S1 = Path(__file__).resolve().parent / "fixtures" / "s1"
@@ -155,7 +156,7 @@ def test_blend_of_a_pure_hinge_turn_is_the_turn_by_factor_times_the_angle_about_
         want = hinge_transforms(PIVOT, AXIS, [factor * a for a in angles])
         assert max(abs(p - q) for u, v in zip(got, want) for p, q in zip(u, v)) < 1e-12, factor
     half = trajectory.blend_transforms(jaw[4:5], 0.5)
-    assert abs(trajectory.hinge_angle(half[0], AXIS) - math.radians(10)) < 1e-12
+    assert abs(hinge_angle(half[0], AXIS) - math.radians(10)) < 1e-12
     assert max_gap(half, jaw[4:5]) > 1.0  # and it is not the 20 degree turn
     assert all(abs(a - b) < 1e-9 for a, b in zip(apply(half[0], PIVOT), PIVOT))  # the pivot stays
 
@@ -200,4 +201,4 @@ def test_hinge_angle_is_signed_and_works_for_a_tilted_axis():
     axis = (1.0, 2.0, -0.5)
     for deg in (-35, -1, 0, 7, 90, 170):
         [m] = hinge_transforms((1, 2, 3), axis, [math.radians(deg)])
-        assert abs(trajectory.hinge_angle(m, axis) - math.radians(deg)) < 1e-12, deg
+        assert abs(hinge_angle(m, axis) - math.radians(deg)) < 1e-12, deg

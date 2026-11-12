@@ -127,9 +127,18 @@ def save_array(header_path: Path, header: dict, array: np.ndarray, array_name: s
                            encoding="utf-8", newline="\n")
 
 
-def load_array(header_path: Path, key: str) -> dict:
-    """The header of `save_array` plus the array under `key`. Refuses a header that does not describe its array."""
-    header = json.loads(header_path.read_text(encoding="utf-8"))
+def load_array(header_path: Path, key: str, required: tuple[str, ...] = ()) -> dict:
+    """The header of `save_array` plus the array under `key`. Refuses a header that does not describe its array:
+    not valid JSON, not an object, or without the keys in `required`."""
+    try:
+        header = json.loads(header_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as e:  # ValueError covers JSONDecodeError and a bad encoding
+        raise RunError(f"Cannot read {header_path.name} as JSON ({e}). Run again.") from e
+    if not isinstance(header, dict):
+        raise RunError(f"{header_path.name} is not a JSON object, so it cannot describe an array. Run again.")
+    missing = [k for k in ("array", "shape", *required) if k not in header]
+    if missing:
+        raise RunError(f"{header_path.name} lacks {', '.join(missing)}. Run again.")
     name = header.get("array")
     if not isinstance(name, str) or Path(name).name != name:
         raise RunError(f"{header_path} does not name its array file as a plain file name next to it.")
@@ -154,6 +163,9 @@ def write_positions(feb: Path, log: Path, out: Path, length_scale: float = 1.0) 
     if not len(series.times):
         raise RunError("FEBio wrote no node positions. The .feb must output "
                        f'<node_data data="x;y;z" name="{febio.NODE_DATA_NAME}"> in its <logfile>.')
+    if not len(series.node_ids):
+        raise RunError(f"The node positions have frames but no node rows. The .feb's "
+                       f'<node_data name="{febio.NODE_DATA_NAME}"> must list rows as id,x,y,z with delim=",".')
     save_array(out, {"format": POSITIONS_FORMAT, "units": "mm", "times_s": series.times.tolist(),
                      "node_ids": series.node_ids.tolist()},
                series.values / length_scale, Path(POSITIONS_ARRAY).name)
@@ -162,7 +174,7 @@ def write_positions(feb: Path, log: Path, out: Path, length_scale: float = 1.0) 
 
 def read_positions(path: Path) -> dict:
     """The positions header plus "positions": a float64 array (frames, nodes, 3), geometric mm."""
-    data = load_array(path, "positions")
+    data = load_array(path, "positions", ("times_s", "node_ids"))
     shape = data["positions"].shape
     if len(shape) != 3 or shape[0] != len(data["times_s"]) or shape[1] != len(data["node_ids"]) or shape[2] != 3:
         raise RunError(f"{path.name} lists {len(data['times_s'])} frames and {len(data['node_ids'])} nodes but its "
@@ -290,8 +302,8 @@ def _finish(run_dir: Path, record: dict, status: str, failure, frames: int, proc
     for attempt in range(50):  # Windows may hold the killed FEBio's file handle for a moment
         try:
             (run_dir / PLOT_NAME).unlink(missing_ok=True)  # derived, large, not part of the run folder (04 sec. 4)
-            if data_file:  # likewise the raw node data: it is read into physics/positions.npy and not kept
-                (run_dir / data_file).unlink(missing_ok=True)
+            if data_file == febio.NODE_DATA_FILE:  # likewise the raw node data: it is read into physics/positions.npy
+                (run_dir / data_file).unlink(missing_ok=True)  # and not kept; a file with any other name is not ours
             break
         except PermissionError:
             if attempt == 49:

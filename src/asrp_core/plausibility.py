@@ -13,8 +13,8 @@ Five checks, each a function of plain arrays so that a test can make it fail on 
     transform puts its rest position, within ANCHOR_TOLERANCE_MM (geometric mm, after dividing by k). This is
     the real-data check of the rigid motion itself: (b) only covers the lips that are on the fixed skull.
 (c) `gravity_sag`: the display vertices no attachment holds, averaged over the last five frames of the
-    gravity-only settle (the trajectory's settle_until_frame n: frames n-4..n; one frame alone aliases the
-    undamped ringing, docs/05 pit 2), have moved along the scene's gravity direction by about the amount
+    gravity-only settle (the trajectory's settle_until_frame n: frames max(1, n-4)..n, never frame 0, the rest
+    pose, whose sag is 0; one frame alone aliases the undamped ringing, docs/05 pit 2; not run when n is 0), have moved along the scene's gravity direction by about the amount
     the model predicts (`expected_sag`): rho |g| k L^2 / (2 E) geometric mm, the sag of a bar of length L
     hanging from one end under its own weight, with rho and E the soft tissue's density and Young's
     modulus, k the physics length scale and L the largest distance from a free display vertex to the
@@ -214,7 +214,11 @@ def tet_mesh_valid(rest_nodes: np.ndarray, tets: np.ndarray, node_frames: np.nda
         if ratio.min() < lowest:
             lowest, lowest_frame = float(ratio.min()), f
         highest = max(highest, float(ratio.max()))
-    numbers = {"min_volume_ratio": lowest, "min_volume_ratio_frame": lowest_frame, "max_volume_ratio": highest,
+    def finite(x):  # None, never NaN or inf, in the report: JSON has no such number
+        return float(x) if np.isfinite(x) else None
+
+    numbers = {"min_volume_ratio": finite(lowest), "min_volume_ratio_frame": lowest_frame,
+               "max_volume_ratio": finite(highest),
                "inverted_tets": inverted, "frames_with_inverted_tets": frames_with, "tets": int(len(tets)),
                "frames": int(len(node_frames))}
     if inverted:
