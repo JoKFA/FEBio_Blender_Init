@@ -5,7 +5,8 @@ Writes into an output folder:
     scene.json           asrp-scene/1 (asrp_core.scene); passes `asrp check`
     meshes/<name>.obj    the five meshes in mm, Z up (asrp_core.asset.coords), faces as exported
     meshes/lips_tet.json a byte copy of the committed lip tet mesh (data/tetmesh/lips.json, ADR-20)
-    landmarks/skin_skinCluster7.json   a byte copy of the exported landmark skin weights
+    landmarks/skin_mm.json   the landmark skin converted to mm, Z up, column vectors (asrp-skin/1,
+                         asrp_core.asset.skin); the raw export is not copied, its sha256 is inside
     import_report.json   units, axes, meshes, every parameter and its source, what is missing, and
                          the result of the scene check
 
@@ -28,6 +29,7 @@ import numpy as np
 
 from asrp_core import __version__, scene, tetmesh
 from asrp_core.asset import coords
+from asrp_core.asset import skin as skin_module
 
 DEFAULT_MM_PER_SCENE_UNIT = 0.962  # paper appendix V, same as the lab controller (ADR-31); still a setting
 LIPS = "middleres_OrbicularisOris"
@@ -47,7 +49,8 @@ BONES = {
     "teeth_upper": ("middleres_TeethUp", "fixed", None),
     "teeth_lower": ("middleres_TeethDown", "prescribed", JAW_DRIVER),
 }
-SKIN = "skin_skinCluster7.json"
+SKIN = "skin_skinCluster7.json"  # the lab export's name
+SKIN_MM = "skin_mm.json"  # the converted file in the scene folder
 ATTACHMENTS = "lip_attachments.json"
 PHYSICS_LENGTH_SCALE = 0.67  # skull width 216.6 mm -> about 145 mm, a real person (ADR-31); ours
 # T-06a: the lip corner anchor turns this fraction of the jaw's angle (docs/05 section 3); ours.
@@ -267,11 +270,19 @@ def import_asset(export: Path, out: Path, tet_mesh: Path,
     if missing:
         raise AssetError(f"joints.json lacks {len(missing)} landmarks named in {SKIN} (e.g. {missing[0]}); re-export")
     rest = coords.to_mm_zup([joints[n]["world_position"] for n in names], mm_per_scene_unit)
-    shutil.copyfile(skin_file, out / "landmarks" / SKIN)
+    try:
+        converted = skin_module.convert(skin, joints, mm_per_scene_unit)
+    except skin_module.SkinConvertError as e:
+        raise AssetError(str(e)) from e
+    converted["source"] = {"file": SKIN, "sha256": _sha256(skin_file)}
+    skin_target = out / "landmarks" / SKIN_MM
+    skin_target.write_text(json.dumps(converted, separators=(",", ":"), ensure_ascii=False) + "\n",
+                           encoding="utf-8", newline="\n")
     landmarks = scene.Landmarks(
-        names, rest.tolist(), scene.FileRef(f"landmarks/{SKIN}", _sha256(out / "landmarks" / SKIN)),
-        "weights index the lips' vertices; the file is a byte copy of the export, so its matrices are "
-        "still in scene units, Maya order (T-09 reads them)",
+        names, rest.tolist(), scene.FileRef(f"landmarks/{SKIN_MM}", _sha256(skin_target)),
+        "weights index the lips' vertices; the file is the export converted to mm, Z up, column vectors "
+        "(asrp-skin/1: names, rest_world, bind_pre, geom, weights; the raw export's sha256 is in 'source'); "
+        "read it with asrp_core.skinning.load",
     )
 
     # Folder and file names plus hashes, not the paths as typed: the same export imported on

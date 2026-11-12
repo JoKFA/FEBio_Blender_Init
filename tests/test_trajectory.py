@@ -202,3 +202,65 @@ def test_hinge_angle_is_signed_and_works_for_a_tilted_axis():
     for deg in (-35, -1, 0, 7, 90, 170):
         [m] = hinge_transforms((1, 2, 3), axis, [math.radians(deg)])
         assert abs(hinge_angle(m, axis) - math.radians(deg)) < 1e-12, deg
+
+
+# --- the landmarks section (T-09) -------------------------------------------------------------------------
+
+
+def with_landmarks(names=("oor_01", "oor_02"), frames=46):
+    data = json.loads((S1 / "trajectory.json").read_text())
+    data["landmarks"] = {"names": list(names),
+                         "translations_mm": [[[0.1 * f, 0.0, -0.5]] * len(names) for f in range(frames)]}
+    return data
+
+
+def test_a_trajectory_with_landmarks_round_trips_unchanged_and_one_frame_per_line(tmp_path):
+    first = trajectory.from_json(with_landmarks())
+    trajectory.write(tmp_path / "a.json", first)
+    second = trajectory.read(tmp_path / "a.json")
+    assert second == first
+    trajectory.write(tmp_path / "b.json", second)
+    assert (tmp_path / "a.json").read_bytes() == (tmp_path / "b.json").read_bytes()
+    text = (tmp_path / "a.json").read_text()
+    assert text.count("\n") < 46 * 3 + 20  # drivers and landmarks each take a line per frame, not one per number
+    assert "\r" not in text
+
+
+def test_landmark_translations_gives_frames_by_landmarks_by_xyz():
+    traj = trajectory.from_json(with_landmarks())
+    names, t = trajectory.landmark_translations(traj)
+    assert names == ["oor_01", "oor_02"] and t.shape == (46, 2, 3) and t.dtype == np.float64
+    assert t[10, 1].tolist() == [1.0, 0.0, -0.5]
+    assert trajectory.landmark_translations(trajectory.read(S1 / "trajectory.json")) is None
+
+
+def break_landmarks(change):
+    data = with_landmarks()
+    change(data["landmarks"])
+    return data
+
+
+@pytest.mark.parametrize("data,message", [
+    (break_landmarks(lambda lm: lm.pop("translations_mm")), "'translations_mm' is missing"),
+    (break_landmarks(lambda lm: lm.pop("names")), "'names' is missing"),
+    (break_landmarks(lambda lm: lm["translations_mm"].pop()), "45 frames but the file says frames = 46"),
+    (break_landmarks(lambda lm: lm["translations_mm"].__setitem__(3, lm["translations_mm"][3][:1])),
+     r"frame 3: 1 entries for 2 landmarks"),
+    (break_landmarks(lambda lm: lm["translations_mm"].__setitem__(3, [[0.0, 0.0, 0.0], [0.0, 0.0]])),
+     r"frame 3, landmark 'oor_02': expected three"),
+    (break_landmarks(lambda lm: lm["translations_mm"].__setitem__(5, [[0.0, float("nan"), 0.0]] * 2)),
+     r"frame 5, landmark 'oor_01': expected three finite"),
+    (break_landmarks(lambda lm: lm["translations_mm"].__setitem__(5, [[0.0, 0.0, float("inf")]] * 2)), "finite"),
+    (break_landmarks(lambda lm: lm.__setitem__("names", ["oor_01", "oor_01"])), "'oor_01' twice"),
+    (break_landmarks(lambda lm: lm.__setitem__("names", ["oor_01", ""])), "non-empty strings"),
+])
+def test_a_broken_landmarks_section_is_refused_with_the_place_and_the_fix(data, message):
+    with pytest.raises(TrajectoryError, match=message):
+        trajectory.from_json(data)
+
+
+def test_landmarks_that_are_not_an_object_are_refused():
+    data = with_landmarks()
+    data["landmarks"] = [1, 2]
+    with pytest.raises(TrajectoryError, match="must be an object"):
+        trajectory.from_json(data)

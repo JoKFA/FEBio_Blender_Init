@@ -856,8 +856,22 @@ def _check_trajectory(scene: Scene, path: Path, report: Report) -> None:
             f"trajectory: {traj.fps} frames per second, the scene's solver runs at {scene.solver.fps.value}; "
             "they must match"
         )
+    if traj.landmarks is not None:
+        if scene.landmarks is None:
+            report.errors.append(
+                "trajectory: it moves landmarks but the scene lists none; import the lab asset (it carries the "
+                "landmarks) or take the 'landmarks' section out of the trajectory"
+            )
+        else:
+            known = set(scene.landmarks.names)
+            unknown = [n for n in traj.landmarks["names"] if n not in known]
+            if unknown:
+                report.errors.append(
+                    f"trajectory: {len(unknown)} landmark names are not in the scene (first: {unknown[0]!r}); "
+                    "use the names listed in scene.json under landmarks.names"
+                )
     derived = {d.name: d for d in scene.drivers if d.blend is not None}
-    have = ', '.join(sorted(traj.drivers)) or 'none'
+    have =', '.join(sorted(traj.drivers)) or 'none'
 
     def need(who: str, driver: str) -> None:
         d = derived.get(driver)
