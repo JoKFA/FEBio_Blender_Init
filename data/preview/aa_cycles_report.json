@@ -1,0 +1,426 @@
+{
+ "format": "asrp-aa-cycles/1",
+ "what": "the AA motion (variants A and B) out and back ten times; spikes/audit_cycles_aa.py",
+ "cycles": 10,
+ "frames_per_half": 36,
+ "mesh_health_definition": "spikes/audit_aa_folds.py: faces of the lips whose normal points the other way against the rest lips (dot < 0), edges shorter than 0.5x their rest length, on final/display.npy at the open frame",
+ "command": [
+  "uv run python spikes/audit_cycles_aa.py make <work>/aa_a.json <work>/cycles_a.json",
+  "uv run python spikes/audit_cycles_aa.py make <work>/aa_b.json <work>/cycles_b.json",
+  "uv run asrp run <work>/scene/scene.json <work>/cycles_a.json --runs-dir <work>/runs --name aa-cycles-a",
+  "uv run asrp run <work>/scene/scene.json <work>/cycles_b.json --runs-dir <work>/runs --name aa-cycles-b",
+  "uv run python spikes/audit_cycles_aa.py analyse <run a> <run b> --out data/preview/aa_cycles_report.json"
+ ],
+ "a": {
+  "frames": 735,
+  "return_frames": [
+   86,
+   158,
+   230,
+   302,
+   374,
+   446,
+   518,
+   590,
+   662,
+   734
+  ],
+  "open_frames": [
+   50,
+   122,
+   194,
+   266,
+   338,
+   410,
+   482,
+   554,
+   626,
+   698
+  ],
+  "checks": {
+   "a": {
+    "passed": true
+   },
+   "b": {
+    "passed": true
+   },
+   "b2": {
+    "passed": true
+   },
+   "c": {
+    "passed": true
+   },
+   "d": {
+    "passed": true
+   }
+  },
+  "all_passed": true,
+  "not_run": {},
+  "check_d": {
+   "min_volume_ratio": 0.8102608528798902,
+   "min_volume_ratio_frame": 50,
+   "max_volume_ratio": 3.347347677098996,
+   "inverted_tets": 0,
+   "frames_with_inverted_tets": 0,
+   "tets": 26721,
+   "frames": 735
+  },
+  "return_to_settled_report": {
+   "returns_found": 10,
+   "max_mm": 0.0004871675089244454,
+   "mean_mm": 0.00014090730868084413
+  },
+  "physics_return_max_mm": {
+   "values": [
+    0.0004871675089244454,
+    0.0004871675089244454,
+    0.0004871675089244454,
+    0.0004871675089244454,
+    0.0004871675089244454,
+    0.0004871675089244454,
+    0.0004871675089244454,
+    0.0004871675089244454,
+    0.0004871675089244454,
+    0.0004871675089244454
+   ],
+   "first": 0.0004871675089244454,
+   "last": 0.0004871675089244454,
+   "largest": 0.0004871675089244454,
+   "largest_at_cycle": 1,
+   "slope_per_cycle": -2.581447340026721e-21,
+   "slope_sign": "flat"
+  },
+  "physics_return_mean_mm": {
+   "values": [
+    0.000140907308681173,
+    0.0001409073086804162,
+    0.00014090730868193498,
+    0.00014090730868041503,
+    0.00014090730868116717,
+    0.00014090730868037007,
+    0.00014090730868040823,
+    0.0001409073086803727,
+    0.00014090730868115405,
+    0.0001409073086810298
+   ],
+   "first": 0.000140907308681173,
+   "last": 0.0001409073086810298,
+   "largest": 0.00014090730868193498,
+   "largest_at_cycle": 3,
+   "slope_per_cycle": -2.8804555827751483e-17,
+   "slope_sign": "flat"
+  },
+  "final_return_max_mm": {
+   "values": [
+    0.000486510959096071,
+    0.000486510959096071,
+    0.000486510959096071,
+    0.000486510959096071,
+    0.000486510959096071,
+    0.000486510959096071,
+    0.000486510959096071,
+    0.000486510959096071,
+    0.000486510959096071,
+    0.000486510959096071
+   ],
+   "first": 0.000486510959096071,
+   "last": 0.000486510959096071,
+   "largest": 0.000486510959096071,
+   "largest_at_cycle": 1,
+   "slope_per_cycle": -3.3888887683812013e-22,
+   "slope_sign": "flat"
+  },
+  "final_return_mean_mm": {
+   "values": [
+    0.00012678544766872406,
+    0.0001267854476687239,
+    0.00012678544767041438,
+    0.00012678544766871173,
+    0.00012678544766871154,
+    0.00012678544766871403,
+    0.0001267854476687104,
+    0.00012678544766869755,
+    0.0001267854476687116,
+    0.00012678544766866188
+   ],
+   "first": 0.00012678544766872406,
+   "last": 0.00012678544766866188,
+   "largest": 0.00012678544767041438,
+   "largest_at_cycle": 3,
+   "slope_per_cycle": -5.59475580033196e-17,
+   "slope_sign": "flat"
+  },
+  "final_open_max_mm": {
+   "values": [
+    0.0,
+    1.0729195309977513e-11,
+    1.0729195309977513e-11,
+    1.2110490388295148e-10,
+    1.0729195309977513e-11,
+    1.0756728840988217e-11,
+    1.0756728840988217e-11,
+    1.2921885783612197e-12,
+    1.0756728840988217e-11,
+    1.0756728840988217e-11
+   ],
+   "first": 0.0,
+   "last": 1.0756728840988217e-11,
+   "largest": 1.2110490388295148e-10,
+   "largest_at_cycle": 4,
+   "slope_per_cycle": -1.7042347331332857e-12,
+   "slope_sign": "down"
+  },
+  "final_open_mean_mm": {
+   "values": [
+    0.0,
+    5.0218008462547814e-15,
+    4.514844851059505e-15,
+    2.44039529371658e-14,
+    5.032024533928141e-15,
+    6.8259308795559635e-15,
+    2.096683693634735e-15,
+    2.640235154393071e-16,
+    6.057733660394873e-15,
+    6.839591784577634e-15
+   ],
+   "first": 0.0,
+   "last": 6.839591784577634e-15,
+   "largest": 2.44039529371658e-14,
+   "largest_at_cycle": 4,
+   "slope_per_cycle": -1.0651001395689186e-16,
+   "slope_sign": "down"
+  },
+  "mesh_health_open": {
+   "cycle_1": {
+    "faces": 20480,
+    "flipped (dot < 0)": 12,
+    "turned > 60 deg (dot < 0.5)": 81,
+    "edges > 2x": 24,
+    "edges < 0.5x": 125,
+    "edge ratio min / max": [
+     0.116,
+     3.053
+    ],
+    "smallest face area ratio": 0.103
+   },
+   "cycle_10": {
+    "faces": 20480,
+    "flipped (dot < 0)": 12,
+    "turned > 60 deg (dot < 0.5)": 81,
+    "edges > 2x": 24,
+    "edges < 0.5x": 125,
+    "edge ratio min / max": [
+     0.116,
+     3.053
+    ],
+    "smallest face area ratio": 0.103
+   }
+  }
+ },
+ "b": {
+  "frames": 735,
+  "return_frames": [
+   86,
+   158,
+   230,
+   302,
+   374,
+   446,
+   518,
+   590,
+   662,
+   734
+  ],
+  "open_frames": [
+   50,
+   122,
+   194,
+   266,
+   338,
+   410,
+   482,
+   554,
+   626,
+   698
+  ],
+  "checks": {
+   "a": {
+    "passed": true
+   },
+   "b": {
+    "passed": true
+   },
+   "b2": {
+    "passed": true
+   },
+   "c": {
+    "passed": true
+   },
+   "d": {
+    "passed": true
+   }
+  },
+  "all_passed": true,
+  "not_run": {},
+  "check_d": {
+   "min_volume_ratio": 0.8102608528798902,
+   "min_volume_ratio_frame": 50,
+   "max_volume_ratio": 3.347347677098996,
+   "inverted_tets": 0,
+   "frames_with_inverted_tets": 0,
+   "tets": 26721,
+   "frames": 735
+  },
+  "return_to_settled_report": {
+   "returns_found": 10,
+   "max_mm": 0.0004871675089244454,
+   "mean_mm": 0.00014090730867903045
+  },
+  "physics_return_max_mm": {
+   "values": [
+    0.0004871675089244454,
+    0.0004871675089244454,
+    0.0004871675089244454,
+    0.0004871675089244454,
+    0.0004871675089244454,
+    0.0004871675089244454,
+    0.0004871675089244454,
+    0.0004871675089244454,
+    0.0004871675089244454,
+    0.0004871675089244454
+   ],
+   "first": 0.0004871675089244454,
+   "last": 0.0004871675089244454,
+   "largest": 0.0004871675089244454,
+   "largest_at_cycle": 1,
+   "slope_per_cycle": -2.581447340026721e-21,
+   "slope_sign": "flat"
+  },
+  "physics_return_mean_mm": {
+   "values": [
+    0.0001409073086786128,
+    0.0001409073086793205,
+    0.00014090730867934807,
+    0.00014090730867934794,
+    0.00014090730867855704,
+    0.00014090730867855856,
+    0.00014090730867918335,
+    0.00014090730867872506,
+    0.00014090730867930197,
+    0.00014090730867934935
+   ],
+   "first": 0.0001409073086786128,
+   "last": 0.00014090730867934935,
+   "largest": 0.00014090730867934935,
+   "largest_at_cycle": 10,
+   "slope_per_cycle": 1.7526802233613337e-17,
+   "slope_sign": "flat"
+  },
+  "final_return_max_mm": {
+   "values": [
+    0.000486510959096071,
+    0.000486510959096071,
+    0.000486510959096071,
+    0.000486510959096071,
+    0.000486510959096071,
+    0.000486510959096071,
+    0.000486510959096071,
+    0.000486510959096071,
+    0.000486510959096071,
+    0.000486510959096071
+   ],
+   "first": 0.000486510959096071,
+   "last": 0.000486510959096071,
+   "largest": 0.000486510959096071,
+   "largest_at_cycle": 1,
+   "slope_per_cycle": -3.3888887683812013e-22,
+   "slope_sign": "flat"
+  },
+  "final_return_mean_mm": {
+   "values": [
+    0.00012678544766773974,
+    0.0001267854476677285,
+    0.0001267854476677249,
+    0.00012678544766772475,
+    0.00012678544766772803,
+    0.00012678544766772852,
+    0.0001267854476676645,
+    0.00012678544766738566,
+    0.00012678544766771472,
+    0.00012678544766772572
+   ],
+   "first": 0.00012678544766773974,
+   "last": 0.00012678544766772572,
+   "largest": 0.00012678544766773974,
+   "largest_at_cycle": 1,
+   "slope_per_cycle": -1.2716265162419378e-17,
+   "slope_sign": "flat"
+  },
+  "final_open_max_mm": {
+   "values": [
+    0.0,
+    1.0756728840988217e-11,
+    1.0756728840988217e-11,
+    1.0729195309977513e-11,
+    1.0729195309977513e-11,
+    1.0756728840988217e-11,
+    1.0729195309977513e-11,
+    1.187383524836605e-13,
+    1.0756728840988217e-11,
+    1.2110490388295148e-10
+   ],
+   "first": 0.0,
+   "last": 1.2110490388295148e-10,
+   "largest": 1.2110490388295148e-10,
+   "largest_at_cycle": 10,
+   "slope_per_cycle": 6.283525551727585e-12,
+   "slope_sign": "up"
+  },
+  "final_open_mean_mm": {
+   "values": [
+    0.0,
+    1.8401340157571734e-15,
+    2.102884991248173e-15,
+    5.2972701908553936e-15,
+    4.512004580180771e-15,
+    2.358468373939507e-15,
+    4.2514863835387344e-15,
+    3.2112713096305034e-17,
+    1.822792202008268e-15,
+    2.498440229660101e-14
+   ],
+   "first": 0.0,
+   "last": 2.498440229660101e-14,
+   "largest": 2.498440229660101e-14,
+   "largest_at_cycle": 10,
+   "slope_per_cycle": 1.2672332057831284e-15,
+   "slope_sign": "up"
+  },
+  "mesh_health_open": {
+   "cycle_1": {
+    "faces": 20480,
+    "flipped (dot < 0)": 27,
+    "turned > 60 deg (dot < 0.5)": 81,
+    "edges > 2x": 15,
+    "edges < 0.5x": 146,
+    "edge ratio min / max": [
+     0.117,
+     4.172
+    ],
+    "smallest face area ratio": 0.055
+   },
+   "cycle_10": {
+    "faces": 20480,
+    "flipped (dot < 0)": 27,
+    "turned > 60 deg (dot < 0.5)": 81,
+    "edges > 2x": 15,
+    "edges < 0.5x": 146,
+    "edge ratio min / max": [
+     0.117,
+     4.172
+    ],
+    "smallest face area ratio": 0.055
+   }
+  }
+ }
+}

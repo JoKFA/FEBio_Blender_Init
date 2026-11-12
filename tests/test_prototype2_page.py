@@ -1,4 +1,4 @@
-"""docs/15-prototype.md section 8 (prototype two) shows the numbers of six archived files, written by a tool.
+"""docs/15-prototype.md section 8 (prototype two) shows the numbers of the archived files, written by a tool.
 
 tools/prototype2_numbers.py writes every table of numbers between marker comments, and this test (so
 tools/verify.py) fails when the page and data/preview/aa_*.json, landmark_layer_check.json disagree. The same
@@ -182,3 +182,81 @@ def test_a_failing_layer_check_is_rendered_as_failing(tmp_path):
 
     block = render(tmp_path, layer=bad)["p2-layer-check"]
     assert "**不通过**" in line_with(block, "实验室自己的公式") and "**抓不出错**" in block
+
+
+# --- section 8.8, ten round trips (T-29) -------------------------------------------------------------
+
+CYCLE_BLOCKS = ("p2-cycles-conditions", "p2-cycles-checks", "p2-cycles-physics", "p2-cycles-physics-report",
+                "p2-cycles-final", "p2-cycles-trend", "p2-cycles-health")
+
+
+def test_the_cycle_blocks_are_in_the_page_with_ten_rows():
+    tool = load_tool()
+    text = tool.base.read_text(DOC)
+    spans, _ = tool.find_blocks(text)
+    blocks = tool.load()
+    for name in CYCLE_BLOCKS:
+        assert name in spans and name in blocks, name
+    n = tool.load_all()["cycles"]["cycles"]
+    assert n == 10
+    assert len(blocks["p2-cycles-physics"].splitlines()) == 2 + n and len(blocks["p2-cycles-final"].splitlines()) == 2 + n
+
+
+def test_the_cycle_page_says_what_the_card_requires():
+    text = section8(load_tool())
+    sub = text[text.index("### 8.8 来回 10 次"):]
+    assert "几乎是按构造通过" in sub and "绝对量" in sub and "不是一段段累加" in sub
+    assert "不回答实验室的观察" in sub and "P-06" in sub and "A-39" in sub
+    assert "不说哪一种对" in sub and "P-07" in sub
+
+
+def test_the_archived_cycle_files_agree_with_each_other():
+    d = load_tool().load_all()
+    cy = d["cycles"]
+    for key, run_key in (("a", "cycles_a_report"), ("b", "cycles_b_report")):
+        r = d[run_key]
+        assert r["frames"] == cy[key]["frames"] == 15 + 2 * 36 * cy["cycles"]
+        assert r["passed"] == cy[key]["all_passed"]
+        assert r["checks"]["d"]["numbers"]["inverted_tets"] == cy[key]["check_d"]["inverted_tets"]
+        assert len(cy[key]["return_frames"]) == len(cy[key]["open_frames"]) == cy["cycles"]
+        assert r["return_to_settled"]["frames"] == cy[key]["return_frames"]  # the report finds the same returns
+        # the report's aggregate is the largest of the ten per-return values (the same measurement, two ways)
+        assert abs(r["return_to_settled"]["max_mm"] - cy[key]["physics_return_max_mm"]["largest"]) <= 1e-9 * max(1.0, r["return_to_settled"]["max_mm"])
+        for name in ("physics_return_max_mm", "final_return_max_mm", "final_open_max_mm"):
+            assert len(cy[key][name]["values"]) == cy["cycles"]
+
+
+def test_a_failed_cycle_check_a_flipped_face_and_a_growing_series_are_rendered_as_such(tmp_path):
+    def fail(report):
+        report["checks"]["d"]["passed"] = False
+        report["checks"]["d"]["message"] = "7 tets are inverted"
+        report["passed"] = False
+
+    blocks = render(tmp_path, cycles_b_report=fail)
+    row = line_with(blocks["p2-cycles-checks"], "(d) 四面体网格保持有效")
+    assert "**不通过**：7 tets are inverted" in row and row.count("通过：翻转") == 1
+
+    def grow(cy):
+        cy["a"]["physics_return_max_mm"].update(slope_sign="up", slope_per_cycle=1.5e-3, last=0.0123, first=0.001)
+        cy["b"]["mesh_health_open"]["cycle_10"]["flipped (dot < 0)"] = 123
+
+    blocks = render(tmp_path, cycles=grow)
+    assert "上升" in line_with(blocks["p2-cycles-trend"], "物理：回到起点，最大")
+    assert "翻面 123 /" in blocks["p2-cycles-health"]
+
+
+def test_the_reading_paragraph_of_8_8_is_true_of_the_archive():
+    """8.8 says: no return value grows, the open pose repeats to rounding, the surface health counts do not increase.
+    If the archive ever says otherwise, this fails and the paragraph has to be rewritten."""
+    cy = load_tool().load_all()["cycles"]
+    for key in ("a", "b"):
+        for name in ("physics_return_max_mm", "physics_return_mean_mm", "final_return_max_mm", "final_return_mean_mm"):
+            s = cy[key][name]
+            assert s["first"] > 0, name  # the check can fail: a zero would mean nothing was measured
+            assert s["largest"] <= s["first"] * (1 + 1e-6), (key, name)
+        assert cy[key]["final_open_max_mm"]["largest"] < 1e-6
+        h1, hn = (cy[key]["mesh_health_open"][f"cycle_{c}"] for c in (1, cy["cycles"]))
+        assert h1["flipped (dot < 0)"] > 0 and h1["edges < 0.5x"] > 0  # present from the first opening
+        assert hn["flipped (dot < 0)"] <= h1["flipped (dot < 0)"] and hn["edges < 0.5x"] <= h1["edges < 0.5x"]
+        assert cy[key]["check_d"]["inverted_tets"] == 0 and cy[key]["all_passed"] is True
+    assert cy["b"]["mesh_health_open"]["cycle_1"]["flipped (dot < 0)"] > cy["a"]["mesh_health_open"]["cycle_1"]["flipped (dot < 0)"]
