@@ -36,7 +36,7 @@ from pathlib import Path
 
 import numpy as np
 
-from asrp_core import embed, febio, generate, playback, plausibility, provenance, run
+from asrp_core import embed, febio, generate, plausibility, playback, provenance, run
 from asrp_core import scene as scene_module
 
 REPORT = "run_report.json"

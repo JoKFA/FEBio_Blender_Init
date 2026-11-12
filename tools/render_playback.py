@@ -13,9 +13,8 @@ sys.dont_write_bytecode = True
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "blender_addon"))
 
-import bpy  # noqa: E402
-
 import asrp_blender  # noqa: E402
+import bpy  # noqa: E402
 
 args = sys.argv[sys.argv.index("--") + 1 :]
 # Absolute paths: Blender resolves a relative render.filepath against its own base, not the cwd.

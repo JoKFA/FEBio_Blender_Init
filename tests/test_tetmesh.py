@@ -1,5 +1,5 @@
-import itertools
 import hashlib
+import itertools
 import json
 import math
 import subprocess
@@ -12,7 +12,14 @@ import pytest
 
 from asrp_core import tetmesh
 from asrp_core.doctor import febio_exe
-from asrp_core.tetmesh import TetMesh, min_dihedral_deg, quality, signed_volumes, surface_volume, tetrahedralize
+from asrp_core.tetmesh import (
+    TetMesh,
+    min_dihedral_deg,
+    quality,
+    signed_volumes,
+    surface_volume,
+    tetrahedralize,
+)
 
 REPO = Path(__file__).resolve().parents[1]
 LIPS = REPO / "data" / "lab_export" / "mesh_middleres_OrbicularisOris.obj"

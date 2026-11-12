@@ -5,11 +5,11 @@ import json
 import math
 from pathlib import Path
 
+import cube_scene as cs
 import numpy as np
+import placeholder_jaw_motion
 import pytest
 
-import cube_scene as cs
-import placeholder_jaw_motion
 from asrp_core import cli, embed, febio, generate, plausibility, simulate, tetmesh, trajectory
 from asrp_core import run as run_module
 from asrp_core import scene as scene_module
@@ -294,7 +294,7 @@ def test_a_plate_turning_about_a_tilted_axis_and_moving_is_followed(tmp_path):
     # rigid motion (here a tilted hinge plus a slide) is followed, not only a turn about x.
     folder = tmp_path / "tilted"
     pivot, axis = (2.0, -8.0, 12.0), (1.0, 1.0, 0.5)
-    c = cs.write(folder, hinge=(pivot, axis), attachments=[("top", "plate", "hard", None, at_z(10.0))])
+    cs.write(folder, hinge=(pivot, axis), attachments=[("top", "plate", "hard", None, at_z(10.0))])
     motion = [(np.array(slide).reshape(4, 4) @ np.array(turn).reshape(4, 4)).ravel().tolist()
               for turn, slide in zip(cs.turn(20, 15, 0.4, pivot, axis), cs.shift(20, 15, (1.0, -2.0, 0.5)))]
     r = run(folder, motion, "tilted")

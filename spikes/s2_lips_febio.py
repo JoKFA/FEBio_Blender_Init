@@ -30,6 +30,7 @@ from asrp_core.doctor import febio_exe
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "tools"))
 from build_tetmesh import read_lips_mm  # noqa: E402
+
 SAVED = REPO / "data" / "tetmesh" / "lips.json"
 JOINTS = REPO / "data" / "lab_export" / "joints.json"
 

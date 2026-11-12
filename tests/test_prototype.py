@@ -18,9 +18,9 @@ import sys
 from pathlib import Path
 
 import numpy as np
+import placeholder_jaw_motion
 import pytest
 
-import placeholder_jaw_motion
 from asrp_core import run, scene, simulate, trajectory
 from asrp_core.asset import lab
 from asrp_core.doctor import febio_exe

@@ -3,8 +3,8 @@ a hard bond. The full table and the limits are in spikes/s3_attachment.py; this 
 """
 
 import pytest
-
 import s3_attachment as s3
+
 from asrp_core.doctor import febio_exe
 
 

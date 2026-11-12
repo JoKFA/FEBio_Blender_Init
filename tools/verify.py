@@ -2,7 +2,8 @@
 
     uv run python tools/verify.py
 
-Runs, in order: the test suite (with ASRP_SLOW=1, so the real-lip run in tests/test_prototype.py is
+Runs, in order: the lint check (`ruff check .`; it does not enforce line length and nothing is
+reformatted), the test suite (with ASRP_SLOW=1, so the real-lip run in tests/test_prototype.py is
 included; it takes several minutes), `asrp doctor`, Blender's own validation of the add-on
 manifest, the Blender add-on round trip, and the FEBio -> Blender playback check. The two
 Blender scripts load the add-on from source, which skips packaging, so only the manifest
@@ -31,6 +32,7 @@ def step(name: str, cmd: list[str], extra_env: dict | None = None) -> None:
 
 
 def main() -> None:
+    step("lint", [sys.executable, "-m", "ruff", "check", "."])
     step("tests", [sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider"], {"ASRP_SLOW": "1"})
     step("asrp doctor", [sys.executable, "-m", "asrp_core.cli", "doctor"])
     blender = locate("ASRP_BLENDER", ["blender"], BLENDER_CANDIDATES)
