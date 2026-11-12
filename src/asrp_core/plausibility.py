@@ -12,8 +12,9 @@ Three checks, each a function of plain arrays so that a test can make it fail on
     lip-corner anchor rigid bodies, and to any other body a spring group goes to) sits where its rigid body's
     transform puts its rest position, within ANCHOR_TOLERANCE_MM (geometric mm, after dividing by k). This is
     the real-data check of the rigid motion itself: (b) only covers the lips that are on the fixed skull.
-(c) `gravity_sag`: the display vertices no attachment holds, averaged over frames 10-14 (the end of the
-    gravity-only settle; one frame alone aliases the undamped ringing, docs/05 pit 2), have moved along
+(c) `gravity_sag`: the display vertices no attachment holds, averaged over the last five frames of the
+    gravity-only settle (the trajectory's settle_until_frame n: frames n-4..n; one frame alone aliases the
+    undamped ringing, docs/05 pit 2), have moved along
     the scene's gravity direction by SAG_RANGE_MM at k = 1. docs/07 section 3: in geometric mm the sag
     grows about like k, so the range is multiplied by k. With k chosen by us this check only finds gross
     errors (a flipped sign, a unit off by 100); it does not prove the scale.
@@ -28,7 +29,6 @@ import numpy as np
 HARD_TOLERANCE_MM = 1e-3
 ANCHOR_TOLERANCE_MM = 1e-3
 SAG_RANGE_MM = (0.1, 10.0)  # at k = 1, docs/07 section 3 (provisional, T-06b tightens it)
-SAG_FRAMES = range(10, 15)
 
 
 @dataclass
@@ -125,8 +125,9 @@ def anchors_follow_bodies(rest: np.ndarray, targets: list[str], frames_pos: np.n
 
 
 def gravity_sag(rest_display: np.ndarray, display_frames: np.ndarray, free: np.ndarray, gravity, k: float,
-                frames=SAG_FRAMES, band=SAG_RANGE_MM) -> Check:
-    """(c). free: display vertex indices no attachment holds; gravity: the scene's physical gravity vector."""
+                frames: range, band=SAG_RANGE_MM) -> Check:
+    """(c). free: display vertex indices no attachment holds; gravity: the scene's physical gravity vector;
+    frames: the frames to average (the end of the gravity-only settle)."""
     lo, hi = band[0] * k, band[1] * k
     numbers = {"free_vertices": int(len(free)), "frames": [frames.start, frames.stop - 1], "range_mm": [lo, hi], "k": k}
     if len(display_frames) < frames.stop:

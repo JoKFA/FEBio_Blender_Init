@@ -79,6 +79,19 @@ def test_source_tag_is_optional_round_trips_and_a_bad_value_is_refused(tmp_path)
         trajectory.read(write(tmp_path, example() | {"source_tag": "mine"}))
 
 
+def test_settle_until_frame_is_optional_round_trips_and_must_be_a_frame_of_the_file(tmp_path):
+    assert trajectory.read(write(tmp_path, example())).settle_until_frame is None
+    assert "settle_until_frame" not in trajectory.read(write(tmp_path, example())).to_json()
+    for n in (0, 14, 45):  # the example has 46 frames
+        t = trajectory.read(write(tmp_path, example() | {"settle_until_frame": n}))
+        assert t.settle_until_frame == n and t.to_json()["settle_until_frame"] == n
+        trajectory.write(tmp_path / "again.json", t)
+        assert trajectory.read(tmp_path / "again.json").settle_until_frame == n
+    for bad in (-1, 46, 3.5, True, "14"):
+        with pytest.raises(TrajectoryError, match=r"settle_until_frame is .*from 0 to 45"):
+            trajectory.read(write(tmp_path, example() | {"settle_until_frame": bad}))
+
+
 def test_an_unknown_version_is_refused(tmp_path):
     data = example() | {"format_version": "asrp-trajectory/9"}
     with pytest.raises(TrajectoryError, match="asrp-trajectory/1"):

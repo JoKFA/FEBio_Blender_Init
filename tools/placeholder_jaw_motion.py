@@ -61,7 +61,7 @@ def build(scene_path: Path, driver: str = "jaw01", open_deg: float = OPEN_DEG) -
     return trajectory.Trajectory(
         fps=s.solver.fps.value, frames=FRAMES,
         drivers={driver: trajectory.hinge_transforms(hinge.pivot_mm, hinge.axis, angles)},
-        source_tag="ours",
+        source_tag="ours", settle_until_frame=STILL_UNTIL,
         source=(f"placeholder (T-06a, ours): {driver} still for frames 0-{STILL_UNTIL}, opens to {open_deg:g} degrees "
                 f"at frame {OPEN_AT}, closed again at frame {FRAMES - 1}; tools/placeholder_jaw_motion.py"),
     )

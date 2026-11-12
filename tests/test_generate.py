@@ -37,8 +37,8 @@ def display(run_dir: Path) -> np.ndarray:
     return np.array(json.loads((run_dir / "physics" / "display.json").read_text())["positions"])
 
 
-def run(folder: Path, transforms, name: str):
-    traj = cs.motion(folder, transforms)
+def run(folder: Path, transforms, name: str, settle=None):
+    traj = cs.motion(folder, transforms, settle=settle)
     return simulate.run_scene(folder / "scene.json", traj, folder.parent / "runs", febio_exe(), name)
 
 
@@ -171,11 +171,11 @@ def test_spring_stiffness_is_base_times_weight_shares_and_keeps_the_total(tmp_pa
 # --- textbook boxes in FEBio (docs/07 section 2) -----------------------------------------------
 
 
-def hanging(folder: Path, k: float, frames=30, E=0.03):  # stiff enough to stay in small strain
+def hanging(folder: Path, k: float, frames=30, E=0.03, settle=None):  # stiff enough to stay in small strain
     L = 20.0
     c = cs.write(folder, size=(2.0, 2.0, L), cells=(2, 2, 20), E=E, nu=0.0, k=k,
                  attachments=[("top", "skull", "hard", None, at_z(L))])
-    r = run(folder, cs.still(frames), folder.name)
+    r = run(folder, cs.still(frames), folder.name, settle)
     model = generate.build(c["scene"], folder / "motion.json")
     held_z = c["nodes"][sorted(model.hard)][:, 2]
     free_length = held_z.min()  # the hard attachment holds the top face's tets: one layer more (ADR-36)
@@ -388,13 +388,13 @@ def test_check_b_fails_when_a_hard_node_or_vertex_leaves_its_bone():
 
 @needs_febio
 def test_check_c_fails_when_the_gravity_flip_is_lost(tmp_path, monkeypatch):
-    r, _, _ = hanging(tmp_path / "right", 1.0, E=0.005)  # softer, so it sags more than the 0.1 mm floor
+    r, _, _ = hanging(tmp_path / "right", 1.0, E=0.005, settle=14)  # softer, so it sags more than the 0.1 mm floor
     assert r.report["checks"]["c"]["passed"], r.report["checks"]["c"]
     monkeypatch.setattr(generate, "FEBIO_GRAVITY_SIGN", 1.0)  # write the scene's gravity as it is (pit 1 forgotten)
     folder = tmp_path / "flipped"
     cs.write(folder, size=(2.0, 2.0, 20.0), cells=(2, 2, 20), E=0.005, nu=0.0,
              attachments=[("top", "skull", "hard", None, at_z(20.0))])
-    bad = run(folder, cs.still(30), "flipped")
+    bad = run(folder, cs.still(30), "flipped", settle=14)
     c = bad.report["checks"]["c"]
     assert bad.status == "complete" and c["passed"] is False and c["numbers"]["mean_sag_along_gravity_mm"] < 0
     assert not bad.passed
@@ -417,13 +417,16 @@ def test_check_b2_fails_when_an_anchor_leaves_its_rigid_body_or_the_angle_is_wro
     assert plausibility.anchors_follow_bodies(rest[:0], [], pos[:, :0], {}).numbers["anchor_nodes"] == 0
 
 
-def test_check_c_wants_frames_10_to_14_and_scales_its_range_with_k():
+def test_check_c_averages_the_frames_it_is_given_and_scales_its_range_with_k():
     rest = np.zeros((4, 3))
     frames = np.zeros((15, 4, 3))
     frames[10:, :, 2] = -0.08  # 0.08 mm down
-    assert not plausibility.gravity_sag(rest, frames, np.arange(4), [0, 0, -9810], 1.0).passed  # below 0.1
-    assert plausibility.gravity_sag(rest, frames, np.arange(4), [0, 0, -9810], 0.67).passed  # above 0.067
-    assert plausibility.gravity_sag(rest, frames[:12], np.arange(4), [0, 0, -9810], 1.0).passed is None
+    last5 = range(10, 15)
+    assert not plausibility.gravity_sag(rest, frames, np.arange(4), [0, 0, -9810], 1.0, last5).passed  # below 0.1
+    assert plausibility.gravity_sag(rest, frames, np.arange(4), [0, 0, -9810], 0.67, last5).passed  # above 0.067
+    assert plausibility.gravity_sag(rest, frames[:12], np.arange(4), [0, 0, -9810], 1.0, last5).passed is None
+    early = plausibility.gravity_sag(rest, frames, np.arange(4), [0, 0, -9810], 0.67, range(6, 11))  # mostly before the sag
+    assert early.numbers["frames"] == [6, 10] and early.numbers["mean_sag_along_gravity_mm"] == pytest.approx(0.08 / 5)
 
 
 # --- the placeholder motion and the command line ------------------------------------------------
@@ -505,19 +508,40 @@ def test_a_spring_only_scene_and_a_short_trajectory_pass_with_the_unrun_checks_l
 
 
 @needs_febio
-def test_a_still_settling_phase_writes_the_settled_shape_and_a_motion_from_frame_1_does_not(tmp_path):
+def test_the_settled_shape_is_written_at_the_frame_the_trajectory_names_and_not_without_one(tmp_path):
     cs.write(tmp_path / "still", attachments=[("top", "skull", "hard", None, at_z(10.0))])
-    ok = run(tmp_path / "still", cs.still(20), "still")
-    assert ok.report["settled_shape"]["available"]
+    ok = run(tmp_path / "still", cs.still(20), "still", settle=14)
+    assert ok.report["settled_shape"] == {"available": True, "frame": 14}
     settled = json.loads((ok.run_dir / "physics" / "settled_frame14.json").read_text())
     assert settled["frame"] == 14 and np.allclose(settled["display"], display(ok.run_dir)[14])
     assert (ok.run_dir / "physics" / "settled_frame14.obj").exists()
+    assert ok.report["checks"]["c"]["numbers"]["frames"] == [10, 14]
 
+    other = run(tmp_path / "still", cs.still(20), "still_at_7", settle=7)  # any frame the file names, not a constant
+    assert other.report["settled_shape"] == {"available": True, "frame": 7}
+    assert json.loads((other.run_dir / "physics" / "settled_frame7.json").read_text())["frame"] == 7
+    assert (other.run_dir / "physics" / "settled_frame7.obj").exists()
+    assert not (other.run_dir / "physics" / "settled_frame14.json").exists()
+    assert other.report["checks"]["c"]["numbers"]["frames"] == [3, 7]
+    assert "physics/settled_frame7.obj" in json.loads((other.run_dir / "provenance.json").read_text())["outputs"]
+
+    early = run(tmp_path / "still", cs.still(20), "still_at_2", settle=2)  # fewer than five frames: starts at frame 0
+    assert early.report["checks"]["c"]["numbers"]["frames"] == [0, 2]
+
+    none = run(tmp_path / "still", cs.still(20), "no_settle")  # the trajectory does not say
+    assert none.report["settled_shape"]["available"] is False and none.report["settled_shape"]["frame"] is None
+    assert not list((none.run_dir / "physics").glob("settled_frame*"))
+    c_check = none.report["checks"]["c"]
+    assert c_check["passed"] is None and "does not say where the gravity-only settle ends (settle_until_frame)" in c_check["message"]
+    assert none.passed and "physics/settled_frame14.json" not in json.loads((none.run_dir / "provenance.json").read_text())["outputs"]
+
+
+@needs_febio
+def test_a_driver_that_moves_before_the_settle_ends_gives_no_settled_shape_and_no_check_c(tmp_path):
     c, _ = plate_box(tmp_path / "moving", "hard")
-    r = run(c["scene"].parent, TURN, "moving")  # turns from frame 1
+    r = run(c["scene"].parent, TURN, "moving", settle=14)  # turns from frame 1, but the file says it is still to 14
     assert r.status == "complete" and r.report["checks"]["a"]["passed"]
-    assert not (r.run_dir / "physics" / "settled_frame14.json").exists()
-    assert not (r.run_dir / "physics" / "settled_frame14.obj").exists()
+    assert not list((r.run_dir / "physics").glob("settled_frame*"))
     c_check = r.report["checks"]["c"]
-    assert c_check["passed"] is None and c_check["message"] == "运动在第 14 帧之前就开始了"
-    assert r.report["settled_shape"]["available"] is False and r.passed
+    assert c_check["passed"] is None and "starts on or before frame 14" in c_check["message"]
+    assert r.report["settled_shape"]["available"] is False and r.report["settled_shape"]["frame"] is None and r.passed

@@ -98,10 +98,11 @@ def write(folder: Path, *, size=(10.0, 10.0, 10.0), cells=(4, 4, 4), E=0.015, nu
     return {"display": display, "nodes": nodes, "tets": tets, "scene": folder / "scene.json"}
 
 
-def motion(folder: Path, transforms, fps=30, name="motion.json") -> Path:
+def motion(folder: Path, transforms, fps=30, name="motion.json", settle=None) -> Path:
+    """settle: the trajectory's settle_until_frame (None: not stated, so check (c) is not run)."""
     path = folder / name
     trajectory.write(path, trajectory.Trajectory(fps, len(transforms), {DRIVER: [list(map(float, m)) for m in transforms]},
-                                                 "tests/cube_scene.py"))
+                                                 "tests/cube_scene.py", settle_until_frame=settle))
     return path
 
 

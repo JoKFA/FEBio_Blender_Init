@@ -8,9 +8,11 @@
    logs no frame 0, so frame 0 is the rest pose):
 
     physics/display.json          the display mesh at every frame, carried by the tet mesh (`embed`)
-    physics/settled_frame14.json  the shape after the gravity-only settle, frame 14 (ADR-30: the
-    physics/settled_frame14.obj   controller's starting point): tet nodes and display mesh, and the
-                                  display mesh as an OBJ with its faces
+    physics/settled_frame<n>.json the shape after the gravity-only settle, at the trajectory's
+    physics/settled_frame<n>.obj  settle_until_frame n (14 for the lab's controller, ADR-30: its starting
+                                  point): tet nodes and display mesh, and the display mesh as an OBJ with
+                                  its faces. Written only when the trajectory names n and every driver
+                                  in use is at rest through frame n
     playback.json, playback.pc2   the display mesh and its point cache for Blender (`playback`)
     run_report.json               every temporary value and its source, the scene's simplifications,
                                   the generator's report, max|u|/δ per spring group, the plausibility
@@ -31,11 +33,10 @@ import numpy as np
 from asrp_core import embed, generate, playback, plausibility, provenance, run
 from asrp_core import scene as scene_module
 
-SETTLED_FRAME = 14  # the last frame of the lab's gravity-only settle (ADR-30)
 REPORT = "run_report.json"
 DISPLAY = "physics/display.json"
 DISPLAY_FORMAT = "asrp-display/1"
-SETTLED = f"physics/settled_frame{SETTLED_FRAME}"
+SETTLE_FRAMES = 5  # check (c) averages this many frames ending at settle_until_frame (one frame aliases the ringing)
 SPEED_BUDGET_S_PER_FRAME = 2.5  # docs/02 N-07, provisional: about Ziva's 2.5 s per frame; reported only
 SLIP_LIMIT = 0.1  # docs/05 section 3: max|u| / δ above this, the spring result is off by more than ~2 %
 
@@ -207,20 +208,25 @@ def run_scene(scene_path, trajectory_path, runs_dir: Path, exe: Path, name: str 
             anchor_rest, [{g.name: g.target for g in model.groups}[sp.group] for sp in model.springs], anchor_frames, transforms)
         attached = np.unique(np.concatenate([g.vertices for g in model.groups])) if model.groups else np.zeros(0, int)
         free = np.setdiff1d(np.arange(len(model.display)), attached)
-        settled = _still_until_settled(model)
-        report["settled_shape"] = {"available": bool(settled and model.frames > SETTLED_FRAME)}
+        settle = model.trajectory.settle_until_frame
+        settled = settle is not None and _still_until(model, settle)
+        report["settled_shape"] = {"available": settled, "frame": settle if settled else None}
         if settled:
-            checks["c"] = plausibility.gravity_sag(model.display, display, free, model.gravity, model.k)
+            checks["c"] = plausibility.gravity_sag(model.display, display, free, model.gravity, model.k,
+                                                   range(max(0, settle - SETTLE_FRAMES + 1), settle + 1))
         else:
-            reason = "运动在第 14 帧之前就开始了"
+            if settle is None:
+                reason = "the trajectory does not say where the gravity-only settle ends (settle_until_frame)"
+            else:
+                reason = f"the motion starts on or before frame {settle}, the end of the gravity-only settle"
             checks["c"] = plausibility.Check("gravity sag", None, reason)
-            report["settled_shape"]["reason"] = f"{reason}: the shape after the gravity-only settle (frame {SETTLED_FRAME}) is not written"
+            report["settled_shape"]["reason"] = f"{reason}: the shape after the settle is not written"
         report["spring_slip"] = slips(model, node_frames)
-        _write_results(run_dir, model, node_frames, display, settled)
-        record["outputs"] = provenance.hash_files(run_dir, [run.POSITIONS, DISPLAY, f"{SETTLED}.json", f"{SETTLED}.obj",
-                                                            "playback.json", "playback.pc2"]
-                                                  if settled and model.frames > SETTLED_FRAME else
-                                                  [run.POSITIONS, DISPLAY, "playback.json", "playback.pc2"])
+        _write_results(run_dir, model, node_frames, display, settle if settled else None)
+        files = [run.POSITIONS, DISPLAY, "playback.json", "playback.pc2"]
+        if settled:
+            files[2:2] = [f"{settled_path(settle)}.json", f"{settled_path(settle)}.obj"]
+        record["outputs"] = provenance.hash_files(run_dir, files)
     report["checks"] = {key: c.to_json() for key, c in checks.items()}
     # Only an explicit False is a failure; None is "not run" (the reason is in the check). (a) must always run.
     passed = status == "complete" and checks["a"].passed is True and all(c.passed is not False for c in checks.values())
@@ -243,21 +249,25 @@ def run_scene(scene_path, trajectory_path, runs_dir: Path, exe: Path, name: str 
     return SceneRun(run_dir, status, report, passed)
 
 
-def _still_until_settled(model: generate.Model) -> bool:
-    """True when every moving body stays at its rest transform (identity) through frames 0..SETTLED_FRAME, so
+def settled_path(frame: int) -> str:
+    return f"physics/settled_frame{frame}"
+
+
+def _still_until(model: generate.Model, last: int) -> bool:
+    """True when every moving body stays at its rest transform (identity) through frames 0..last, so
     those frames are the gravity-only settle the settled shape and check (c) assume."""
     eye = np.eye(4).ravel()
     for b in model.bodies.values():
         if b.transforms is None:
             continue
-        for t in b.transforms[:SETTLED_FRAME + 1]:
+        for t in b.transforms[:last + 1]:
             if np.abs(np.asarray(t, dtype=float).ravel() - eye).max() > 1e-9:
                 return False
     return True
 
 
 def _write_results(run_dir: Path, model: generate.Model, node_frames: np.ndarray, display: np.ndarray,
-                   settled: bool = True) -> None:
+                   settle: int | None = None) -> None:
     (run_dir / "physics").mkdir(exist_ok=True)
     (run_dir / DISPLAY).write_text(json.dumps({
         "format": DISPLAY_FORMAT, "units": "mm", "fps": model.fps, "frames": model.frames,
@@ -265,14 +275,14 @@ def _write_results(run_dir: Path, model: generate.Model, node_frames: np.ndarray
         "note": "frame 0 is the rest pose (FEBio logs no frame 0); positions are geometric mm (FEBio's / k)",
         "positions": display.tolist(),
     }), encoding="utf-8", newline="\n")
-    if settled and model.frames > SETTLED_FRAME:
-        f = SETTLED_FRAME
-        (run_dir / f"{SETTLED}.json").write_text(json.dumps({
+    if settle is not None:
+        f = settle
+        (run_dir / f"{settled_path(f)}.json").write_text(json.dumps({
             "format": "asrp-settled/1", "units": "mm", "frame": f, "time_s": f / model.fps,
             "note": "the shape after the gravity-only settle, the controller's starting point (ADR-30)",
             "tet_nodes": node_frames[f].tolist(), "display": display[f].tolist(),
         }), encoding="utf-8", newline="\n")
-        _write_obj(run_dir / f"{SETTLED}.obj", display[f], model.faces,
+        _write_obj(run_dir / f"{settled_path(f)}.obj", display[f], model.faces,
                    f"{model.scene.soft_tissues[0].name}, frame {f} (settled under gravity), mm, Z up, asrp run (T-06a)")
     playback.write_surface_bundle(run_dir, model.display, model.faces, display.tolist(), model.fps,
                                   run_dir / run.FEB_NAME, model.scene.soft_tissues[0].name,

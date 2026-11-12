@@ -13,6 +13,10 @@ Format `asrp-trajectory/1`, one JSON object:
       "drivers": {                    # keyed by driver name (a joint name for the lab asset,
         "jaw01": [[16 numbers], ...]  #   e.g. jaw01); scene.json says which bones follow which
       },
+      "settle_until_frame": 14,       # optional: the last frame of the gravity-only settle (0 <= n < frames).
+                                      #   Every driver the scene uses must be at rest (identity) on frames
+                                      #   0..n. The run writes the settled shape at frame n and check (c)
+                                      #   (gravity sag) reads frames n-4..n; without it neither is done
       "landmarks": ...                # optional; its format is docs/04 section 5.2, T-09 reads and checks it
     }
 
@@ -49,6 +53,7 @@ class Trajectory:
     source: str = ""
     landmarks: object = None  # format in docs/04 section 5.2; T-09 adds reading and checks; kept as read
     source_tag: str | None = None  # "lab_setting" | "ziva_default" | "ours"; None: the file does not say
+    settle_until_frame: int | None = None  # last frame of the gravity-only settle; None: the file does not say
     extra: dict = field(default_factory=dict)  # unknown top-level keys, kept for the round trip
 
     def to_json(self) -> dict:
@@ -61,6 +66,8 @@ class Trajectory:
         }
         if self.source_tag is not None:
             data["source_tag"] = self.source_tag
+        if self.settle_until_frame is not None:
+            data["settle_until_frame"] = self.settle_until_frame
         if self.landmarks is not None:
             data["landmarks"] = self.landmarks
         return {**data, **self.extra}
@@ -236,7 +243,13 @@ def from_json(data) -> Trajectory:
             f"source_tag is {tag!r}; it must be one of {', '.join(SOURCE_TAGS)} (or leave it out if the "
             "origin of the motion is not known)"
         )
-    known = {"format_version", "fps", "frames", "source", "source_tag", "drivers", "landmarks"}
+    settle = data.get("settle_until_frame")
+    if settle is not None and (not isinstance(settle, int) or isinstance(settle, bool) or not 0 <= settle < frames):
+        raise TrajectoryError(
+            f"settle_until_frame is {settle!r}; it must be a whole frame number from 0 to {frames - 1} (the last "
+            "frame of the gravity-only settle), or leave it out if the motion has no such settle"
+        )
+    known = {"format_version", "fps", "frames", "source", "source_tag", "settle_until_frame", "drivers", "landmarks"}
     return Trajectory(
         fps=fps,
         frames=frames,
@@ -244,6 +257,7 @@ def from_json(data) -> Trajectory:
         source=data.get("source", ""),
         landmarks=data.get("landmarks"),
         source_tag=tag,
+        settle_until_frame=settle,
         extra={k: v for k, v in data.items() if k not in known},
     )
 
