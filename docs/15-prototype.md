@@ -14,9 +14,9 @@
 |---|---|---|
 | 整段运动算完了吗 | 51 帧全部算完（第 0 帧加 FEBio 算的 50 步），**重试 0 次** | 没有网格被压翻、没有哪一帧要重算 |
 | 算得多快 | 同一份输入在本机跑了七次：**0.9–2.0 秒/帧**，整段 45–102 秒（存档的这一次是 102 秒、2.05 秒/帧） | FEBio 只用一个 CPU 核（为了结果逐位可复现），机器同时在做别的事就会慢；七次都在暂定预算 2.5 秒/帧之内。实验室 Ziva 演示机上每帧约 1.5–2.5 秒（[14](14-ziva-demo-walkthrough.md) 第 2 节），两台机器、两种任务，只能当数量级参考 |
-| 嘴唇有没有"脱"骨头 | 上唇和颅骨粘住的地方，偏离**不到 10⁻¹⁰ mm**；用弹簧挂在下颌上的下唇，最远偏离 **0.033 mm**（张得最大的第 32 帧） | 贴骨头的地方确实跟着骨头走；弹簧处允许有一点点"滑"，滑得很小 |
+| 嘴唇有没有"脱"骨头 | 上唇和颅骨粘住的地方，偏离**不到 10⁻¹⁰ mm**；用弹簧挂在下颌上的下唇，最远偏离 **0.033 mm**（张得最大的第 32 帧） | 贴骨头的地方确实跟着骨头走（这一条按做法本来就该成立，它查的是管线有没有接对，不是物理证据）；弹簧处允许有一点点"滑"，滑得很小 |
 | 重力有没有往下拉 | 自由部分的嘴唇第 10–14 帧平均顺重力下沉 **0.095 mm** | 方向对；量级只是没有错到离谱，不证明准（第 5 节） |
-| 嘴唇动了多少 | 下颌张 12°，嘴唇上最远的点动了 **30.4 mm** | 肉眼可见的大幅度运动 |
+| 嘴唇动了多少 | 下颌张 12°，嘴唇上动得最多的顶点动了 **30.4 mm**（`tools/render_prototype.py` 打印的 max motion，在第 0、14、32、50 帧里取最大） | 肉眼可见的大幅度运动 |
 | 同样的输入，同样的输出吗 | 同一份输入跑两次，回放文件**逐字节相同** | 结果可以复现，不是随机的 |
 
 三张静态图（同一个侧视角度，可以逐张对照）：
@@ -24,7 +24,7 @@
 | 静止（第 0 帧） | 沉降后（第 14 帧） | 下颌张到最大（第 32 帧） |
 |---|---|---|
 | ![静止](../data/preview/prototype_rest.png) | ![沉降后](../data/preview/prototype_settled.png) | ![下颌张开](../data/preview/prototype_open.png) |
-| 嘴唇闭合，嘴唇的位置就是实验室网格的原样。 | 只有重力的 15 帧之后。肉眼看不出和左图的差别：平均只下沉 0.1 mm。这一帧的形状单独存下来，是控制器优化的起点（ADR-30）。 | 下唇跟着蓝色的下颌往下走，上唇留在颅骨上，嘴唇被拉开；侧视图里没有翻折或穿插。 |
+| 嘴唇闭合，嘴唇的位置就是实验室网格的原样。 | 只有重力的 15 帧之后。肉眼看不出和左图的差别：平均只下沉 0.1 mm。这一帧的形状单独存下来，是控制器优化的起点（ADR-30）。 | 下唇跟着蓝色的下颌往下走，上唇留在颅骨上，嘴唇被拉开；从这个侧视角度看不到翻折（牙齿没有画出来，也没有参与计算，见第 5 节）。 |
 
 ## 2. 自己跑一遍
 
@@ -46,7 +46,7 @@ uv run asrp run runs/prototype_scene/scene.json runs/prototype_scene/placeholder
 |---|---|---|
 | `import-asset` | `mesh lips 10240 vertices …`、`driver jaw01: pivot (0.00, -121.71, -54.65) mm …`、最后一行 `import PASSED: scene check 0 errors, 0 warnings`。中间的 `missing` 行是在说"这些值还是我们定的"，不是错误 | 几秒 |
 | `placeholder_jaw_motion.py` | `wrote …/placeholder_jaw.json: 51 frames at 30 fps, jaw01 opens to 12 degrees at frame 32` | 不到 1 秒 |
-| `asrp run` | 50 行 `progress   frame N / 50`，然后：<br>`generator  k 0.67, 6747 tet nodes, 26721 tets, 74 hard nodes, 1428 springs, display max distance 0.931 mm (limit 4.837)`<br>`check a … [PASS] motion completed: all 51 frames; FEBio cut and retried a step 0 times`<br>`check b / b2 / c … [PASS]`<br>`timing     FEBio 102.299 s, 2.046 s per frame …`<br>最后一行 `run COMPLETE: 51 frames; plausibility PASSED` | 约 2 分钟（本机 1 分 58 秒） |
+| `asrp run` | 50 行 `progress   frame N / 50`，然后：<br>`generator  k 0.67, 6747 tet nodes, 26721 tets, 74 hard nodes, 1428 springs, display max distance 0.931 mm (limit 4.837)`<br>`check a … [PASS] motion completed: all 51 frames; FEBio cut and retried a step 0 times`<br>`check b / b2 / c … [PASS]`<br>`timing     FEBio 102.299 s, 2.046 s per frame …`<br>最后一行 `run COMPLETE: 51 frames; plausibility PASSED` | 约 2 分钟 |
 
 任何一项检查不通过，`asrp run` 以非 0 退出，最后一行写 `run COMPLETE: … plausibility FAILED`；生成器拒绝的场景写 `run NOT STARTED`，不建运行文件夹；FEBio 失败写 `run FAILED: no results written`。
 
@@ -79,7 +79,7 @@ uv run asrp run runs/prototype_scene/scene.json runs/prototype_scene/placeholder
 | `physics/display.json` | 32 MB | 嘴唇显示网格（10,240 个顶点）每帧的位置 |
 | `physics/settled_frame14.json`、`.obj` | 1.0 MB、0.9 MB | 第 14 帧沉降后的形状（控制器的起点，ADR-30）；`.obj` 带面，可以直接拖进 Blender |
 | `playback.json`、`playback.pc2` | 1.0 MB、6.3 MB | 回放包：Load Result 加载的就是它 |
-| **`run_report.json`** | 21 KB | **运行报告：每个临时值和来源、没建的粘连、生成器报告、四项检查的数字、用时。第 4 节的数字都来自这里** |
+| **`run_report.json`** | 21 KB | **运行报告：每个临时值和来源、没建的粘连、生成器报告、四项检查的数字、用时。第 1、3 节的数字都来自这里** |
 | `provenance.json` | 3.9 KB | 溯源：输入文件的哈希、软件版本（asrp、Python、FEBio 4.13.0）、命令、开始和结束时间 |
 
 `import-asset` 写出的场景文件夹里还有 `import_report.json`（导入报告）。
@@ -95,7 +95,7 @@ uv run asrp run runs/prototype_scene/scene.json runs/prototype_scene/placeholder
 | 帧数 | 51（第 0 帧是静止姿态，FEBio 算 50 步；运动文件 30 帧/秒，约 1.7 秒） |
 | FEBio 重试 | 0 次（步长从没有被迫缩小） |
 | 用时（存档的这一次） | FEBio 102.3 s（2.05 秒/帧，单线程，[05](05-ziva-to-febio.md) 坑 17），生成 5.7 s，后处理 4.7 s。暂定预算 2.5 秒/帧（[02](02-requirements.md) N-07），只报告不判通过 |
-| 用时（同一份输入的七次） | 0.89、0.90、1.38、1.51、1.53、1.63、2.05 秒/帧。最快的两次是 T-06a 开发时测的；其余几次测的时候机器还在运行其他程序（另一个开发任务的测试，或别的应用）。除用时外，七次的检查数字完全相同 |
+| 用时（同一份输入的七次） | 0.89、0.90、1.38、1.51、1.53、1.63、2.05 秒/帧。最快的两次是 T-06a 开发时测的（刚度分档改成 2% 误差之前和之后各一次）；其余五次是写本页时用同一版代码跑的，测的时候机器还在运行其他程序（另一个开发任务的测试，或别的应用）。**只有 2.05 秒/帧那一次存了档**；后五次打印出来的四项检查数字逐字相同，其余几次没有存档，无法再核对 |
 | 同输入两次 | `playback.json`、`playback.pc2`、`physics/display.json`、`physics/settled_frame14.obj` 逐字节相同（写本文时又跑了一次核对；自动测试是 `ASRP_SLOW=1 uv run python -m pytest tests/test_prototype.py -q`）。要单线程，多线程时日志最后一位会不同 |
 
 ### 四项合理性检查
@@ -137,7 +137,7 @@ uv run asrp run runs/prototype_scene/scene.json runs/prototype_scene/placeholder
 
 ## 4. 数字的来源
 
-本页所有数字来自 2026-11-11 的一次参考运行：上面第 2 节的三条命令，在 `main`（提交 1f5c454）上，FEBio 4.13.0，Blender 5.2.1，Python 3.13.6；运行报告和溯源记录原样存在 `data/preview/prototype_run_report.json`、`prototype_provenance.json`。"同输入两次相同"来自同一份输入的第二次运行；七次用时来自 T-06a 开发时的两次运行、写本页时的两次、以及随后连续的三次（都是第 2 节的同一组命令）。动图和三张静态图由 `tools/render_prototype.py` 渲染；静态图重新渲染后肉眼没有差别，沿用仓库里已有的版本（[09](09-roadmap-and-tasks.md) T-06a 的结果记录的是首次运行的 0.90 秒/帧，其余数字与本页一致）。
+本页所有数字来自 2026-11-11（本机日期；溯源记录里记的是 UTC 时间，日期显示为 2026-11-12）的一次参考运行：上面第 2 节的三条命令，在 `main`（提交 1f5c454）上，FEBio 4.13.0，Blender 5.2.1，Python 3.13.6；运行报告和溯源记录原样存在 `data/preview/prototype_run_report.json`、`prototype_provenance.json`。"同输入两次相同"来自同一份输入的第二次运行；七次用时来自 T-06a 开发时的两次运行、写本页时的两次、以及随后连续的三次（都是第 2 节的同一组命令）。动图和三张静态图由 `tools/render_prototype.py` 渲染；静态图重新渲染后肉眼没有差别，沿用仓库里已有的版本（[09](09-roadmap-and-tasks.md) T-06a 的结果记录的是首次运行的 0.90 秒/帧，其余数字与本页一致）。
 
 ## 5. 这些结果说明什么、不说明什么
 
@@ -147,7 +147,7 @@ uv run asrp run runs/prototype_scene/scene.json runs/prototype_scene/placeholder
 
 | 局限 | 细节 | 在哪里看 |
 |---|---|---|
-| 材料是我们猜的 | neo-Hookean，E = 15 kPa、ν = 0.45、密度 1060 kg/m³：猜测接近 Ziva 的默认值，没有验证，等实验室的 Ziva 属性清单 | [05](05-ziva-to-febio.md) 第 4 节，[11](11-risks-and-questions.md) D6 |
+| 材料是我们猜的 | neo-Hookean，E = 15 kPa、ν = 0.45、密度 1060 kg/m³：猜测接近 Ziva 的默认值，没有验证，等实验室的 Ziva 属性清单 | [05](05-ziva-to-febio.md) 第 1 节 zMaterial 一行，[13](13-explanations.md) E-06，[11](11-risks-and-questions.md) D6 |
 | 粘连刚度、嘴角混合比例是我们定的 | 弹簧基础刚度按 100 × E × h 的规则取；嘴角锚转下颌角度的 α = 0.5。下唇跟随下颌的比例要等 Ziva 的"只有物理"结果才能定 | [05](05-ziva-to-febio.md) 第 3 节，[10](10-decisions.md) ADR-32，[11](11-risks-and-questions.md) Q17、A-35 |
 | 粘连顶点集是强推断 | 上唇 74、下唇 76 个顶点来自对 Ziva 权重表的读法，等 Ziva 机器导出的权重表确认 | [03](03-asset.md) 第 6 节，[11](11-risks-and-questions.md) A-33 |
 | 物理尺度 k = 0.67 是我们定的 | 来自会议结论（按真人大小算），不是 Ziva 的尺度 | [10](10-decisions.md) ADR-31，[05](05-ziva-to-febio.md) 第 2 节 |
@@ -155,6 +155,9 @@ uv run asrp run runs/prototype_scene/scene.json runs/prototype_scene/placeholder
 | 检查 (c) 很宽松 | 只抓符号错或 100 倍的错 | [07](07-validation.md) 第 3 节，本页第 3 节 |
 | 现在算的接近"慢动作" | 每帧只走一个时间步（33 毫秒），比嘴唇自己晃动的周期长，数值上把晃动和惯性都抹掉了，结果接近准静态（每一帧都像是慢慢摆到位的）。所以现在还不能拿它和 Ziva 比"动起来的样子"；子步数和阻尼是占位值，等 Ziva 属性清单 | [05](05-ziva-to-febio.md) 第 5 节坑 2，[09](09-roadmap-and-tasks.md) T-12 |
 | 只有物理层 | 让表情真正出现的 landmark 层（蒙皮权重已有）还没叠上；嘴周的肌肉、皮肤的粘连没建（第一阶段的简化，运行报告里写明） | [10](10-decisions.md) ADR-29、ADR-32，[09](09-roadmap-and-tasks.md) T-09 |
+| 没有碰撞，牙齿不在计算里 | 嘴唇不会被牙齿或对侧嘴唇挡住；牙齿没有粘连，所以没有写进 FEBio。实验室在 Ziva 里也关掉了碰撞 | [05](05-ziva-to-febio.md) 第 1、4 节，[10](10-decisions.md) ADR-37 |
+| 还没查网格粗细的影响 | 换一份网格、把网格加密、把时间步减半，结果会变多少，还没有量过 | [09](09-roadmap-and-tasks.md) T-06b，[07](07-validation.md) 第 6 节 |
+| 下唇的张嘴位移以后可能被算两遍 | 现在下唇几乎完全跟着下颌走；叠上 landmark 层以后，landmark 的运动里可能已经含有这部分位移（推断）。所以下唇绑多紧是参数，等 Ziva 的"只有物理"结果再定 | [11](11-risks-and-questions.md) Q17、Q20，[10](10-decisions.md) ADR-27 |
 | 没有和 Ziva 对比，没有实验验证 | 不能说"重现了 Ziva"或"在生物力学上准确" | [07](07-validation.md) 第 4、7 节 |
 
 ## 6. 它是怎么搭起来的（给开发者）
