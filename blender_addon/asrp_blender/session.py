@@ -25,6 +25,7 @@ PROGRESS = re.compile(r"^progress\s+frame\s+(\d+)\s*/\s*(\d+|\?)")
 FINAL_LINES = (("run COMPLETE", "complete"), ("run CANCELLED", "cancelled"), ("run NOT STARTED", "not_started"),
                ("run FAILED", "failed"))
 ENDED = ("complete", "failed", "cancelled", "not_started")
+CANCEL_WAIT_S = 10.0  # a cancel asked for before the run folder is known: kill the process after this many seconds
 EOF_GRACE_S = 5.0  # the process is gone but the pipe is still open (a grandchild holds it): stop waiting after this
 
 
@@ -41,9 +42,9 @@ def core_command(*args: str) -> list[str]:
     project = core_project()
     uv = shutil.which("uv")
     if project is None:
-        raise RuntimeError("asrp project not found; set ASRP_PROJECT")
+        raise RuntimeError("ASRP project not found; set ASRP_PROJECT")
     if uv is None:
-        raise RuntimeError("uv not found on PATH")
+        raise RuntimeError("Cannot find uv on PATH")
     return [uv, "run", "--project", str(project), "asrp", *args]
 
 
@@ -52,10 +53,12 @@ class RunSession:
 
     def __init__(self, launcher=None):
         self.launcher = launcher or core_command  # builds the command line; a test can put a stand-in here
+        self.cancel_wait_s = CANCEL_WAIT_S  # how long a cancel may wait for the run folder before the process is killed
         self.proc = None
         self.reset()
 
     def reset(self):
+        self.kill_tree()  # a session that is dropped must not leave its process tree behind (no-op if there is none)
         self.state = "idle"
         self.cancel_too_late = False  # a cancel was asked for, but the run had already finished and completed
         self.proc = None
@@ -67,6 +70,7 @@ class RunSession:
         self.exit_code: int | None = None
         self.passed: bool | None = None  # complete only: False when a plausibility check failed
         self.cancel_requested = False
+        self.cancel_requested_at = 0.0
         self.handled = False  # the UI has taken the outcome (loaded the results)
         self.load_error = ""
         self.started_at = 0.0
@@ -89,7 +93,7 @@ class RunSession:
 
     def start(self, scene: str, trajectory: str, runs_dir: str, name: str = "") -> None:
         if self.running:
-            raise RuntimeError("a run is already going")
+            raise RuntimeError("A run is already going")
         self.reset()  # an earlier run's outcome must not stay on show if this one cannot even start
         try:
             cmd = self.launcher("run", str(scene), str(trajectory), "--runs-dir", str(runs_dir),
@@ -99,7 +103,7 @@ class RunSession:
             self.proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding="utf-8",
                                          errors="replace", bufsize=1, env=env, stdin=subprocess.DEVNULL, **kw)
         except (RuntimeError, OSError) as exc:
-            self.state, self.error, self.handled = "not_started", f"the run could not be started: {exc}", True
+            self.state, self.error, self.handled = "not_started", f"The run could not be started: {exc}", True
             raise
         self.state = "running"
         self.started_at = time.monotonic()
@@ -126,6 +130,10 @@ class RunSession:
                 self._eof = True
             else:
                 self._take(line)
+        if (self.cancel_requested and self.run_dir is None and self._final is None
+                and time.monotonic() - self.cancel_requested_at > self.cancel_wait_s):
+            self.kill_tree()  # no run folder, so no cancel file can be written: stop the process, end as cancelled
+            self._final = "cancelled"
         code = self.proc.poll()
         if code is not None:
             if self._exit_seen_at is None:
@@ -164,21 +172,23 @@ class RunSession:
             final = "failed"
             if not self.error:
                 tail = [line for line in self.lines if line.strip()][-1:]
-                self.error = tail[0] if tail else f"the solver process ended with exit code {code} and printed nothing"
+                self.error = tail[0] if tail else f"The solver process ended with exit code {code} and printed nothing"
         if final == "complete" and code not in (0, 1):  # exit 1 means "a plausibility check failed"; anything else is a crash
             final = "failed"
-            self.error = f"the solver process ended with exit code {code} after reporting the run complete; no results are loaded"
+            self.error = f"The solver process ended with exit code {code} after reporting the run complete; no results are loaded"
         if final == "complete":
             self.passed = code == 0
             self.cancel_too_late = self.cancel_requested
-        if final == "failed" and not self.error:
-            self.error = f"the run failed (exit code {code})"
+        if final in ("failed", "not_started") and not self.error:
+            self.error = f"The run ended with exit code {code} and gave no reason"
         self.state = final
 
     def cancel(self) -> None:
         """Ask the run to stop. If the run folder is not known yet the request is kept and written when it is."""
         if not self.running:
             return
+        if not self.cancel_requested:
+            self.cancel_requested_at = time.monotonic()
         self.cancel_requested = True
         if self.run_dir is not None:
             self._write_cancel()
@@ -187,7 +197,7 @@ class RunSession:
         try:
             (self.run_dir / CANCEL_FILE).write_text("", encoding="ascii")
         except OSError as exc:
-            self.error = f"could not write the cancel file: {exc}"
+            self.error = f"Could not write the cancel file: {exc}"
 
     def kill_tree(self) -> None:
         """Stop the process and everything it started (uv -> python -> FEBio). On Windows: `taskkill /PID <pid> /T /F`."""
@@ -204,6 +214,8 @@ class RunSession:
         """The panel goes away (add-on unregister, Blender quits): leave no solver running behind it.
         Folder known: ask the core to cancel (it stops FEBio itself); with `wait` seconds given, wait for it and kill
         the tree if it is still there after that. Folder not known yet (FEBio has not started): kill the tree at once."""
+        if self.running:
+            self.poll()  # a run folder line that is still in the queue counts
         if self.running and self.proc is not None:
             if self.run_dir is None:
                 self.kill_tree()
@@ -217,11 +229,14 @@ class RunSession:
         self.state = "idle"
 
 
+EXIT_WAIT_S = 3.0  # how long Blender's exit waits for a cancelled run to stop (the core needs about 2 s) before killing the tree
+
+
 def register_exit_handler(session: RunSession):
-    """Blender quitting mid-run must not leave uv, python and FEBio running until the timeout. Returns the handler."""
+    """Fallback for a Blender that exits without calling unregister(): the same cleanup, from atexit. Returns the handler."""
 
     def handler():
-        session.close(wait=15.0)
+        session.close(wait=EXIT_WAIT_S)
 
     atexit.register(handler)
     return handler

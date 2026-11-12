@@ -9,7 +9,14 @@ from pathlib import Path
 import bpy
 from bpy.app.handlers import persistent
 
-from .session import ENDED, RunSession, core_command, core_project, register_exit_handler
+from .session import (
+    ENDED,
+    EXIT_WAIT_S,
+    RunSession,
+    core_command,
+    core_project,
+    register_exit_handler,
+)
 
 STATUS_ICONS = {"ok": "CHECKMARK", "warn": "INFO", "error": "ERROR"}
 PLAYBACK_FORMAT = "asrp-playback/1"
@@ -33,12 +40,12 @@ class ASRP_OT_check_backend(bpy.types.Operator):
             self.report({"ERROR"}, str(exc))
             return {"CANCELLED"}
         if not proc.stdout.strip():
-            self.report({"ERROR"}, f"asrp doctor printed nothing: {proc.stderr.strip()}")
+            self.report({"ERROR"}, f"The doctor command printed nothing: {proc.stderr.strip()}")
             return {"CANCELLED"}
         context.window_manager.asrp_status = proc.stdout
         checks = json.loads(proc.stdout)
         problems = [c["name"] for c in checks if c["status"] != "ok"]
-        self.report({"WARNING" if problems else "INFO"}, f"backend checks not ok: {problems}" if problems else "backend ready")
+        self.report({"WARNING" if problems else "INFO"}, f"Backend checks not ok: {problems}" if problems else "Backend ready")
         return {"FINISHED"}
 
 
@@ -48,10 +55,10 @@ def playback_cache(manifest: dict, version: str = "physics") -> str:
     versions = manifest.get("versions")
     if versions is None:
         if version != "physics":
-            raise ValueError(f"this result has only the physics version, not {version!r} (no landmark layer in the run)")
+            raise ValueError(f"This result has only the physics version, not {version!r} (no landmark layer in the run)")
         return manifest["cache"]
     if version not in versions:
-        raise ValueError(f"this result has the versions {sorted(versions)}, not {version!r}")
+        raise ValueError(f"This result has the versions {sorted(versions)}, not {version!r}")
     return versions[version]
 
 
@@ -120,7 +127,7 @@ class ASRP_OT_load_playback(bpy.types.Operator):
             self.report({"ERROR"}, str(exc))
             return {"CANCELLED"}
         entry = context.scene.asrp_results[index]
-        self.report({"INFO"}, f"loaded {entry.obj.name}: {manifest['frame_count']} frames at {manifest['fps']} fps")
+        self.report({"INFO"}, f"Loaded {entry.obj.name}: {manifest['frame_count']} frames at {manifest['fps']} fps")
         return {"FINISHED"}
 
 
@@ -147,10 +154,10 @@ _REPORTS: dict = {}
 def read_manifest(folder: Path) -> dict:
     path = Path(folder) / "playback.json"
     if not path.is_file():
-        raise ValueError(f"no playback.json in {folder}")
+        raise ValueError(f"No playback.json in {folder}")
     manifest = json.loads(path.read_text(encoding="utf-8"))
     if manifest.get("format") != PLAYBACK_FORMAT:
-        raise ValueError(f"unsupported bundle format {manifest.get('format')!r}")
+        raise ValueError(f"Unsupported bundle format {manifest.get('format')!r}")
     return manifest
 
 
@@ -184,7 +191,7 @@ def check_rows(report) -> list[tuple[str, str, str, str]] | None:
     for key in CHECK_KEYS:
         c = checks.get(key)
         if c is None:
-            rows.append((key, key, "NOT RUN", "the report has no entry for this check"))
+            rows.append((key, key, "NOT RUN", "The report has no entry for this check"))
             continue
         if not isinstance(c, dict) or c.get("passed") not in (True, False, None):
             return None
@@ -268,11 +275,13 @@ def add_run_folder(context, folder, show: bool = True, versions=None) -> list[in
     key = str(folder.resolve())
     if versions is None:
         versions = ["physics"] + (["final"] if "final" in (manifest.get("versions") or {}) else [])
-    for version in versions:
-        if any(e.run_dir == key and e.version == version and is_live(e.obj) for e in scene.asrp_results):
-            raise ValueError(f"{folder.name} ({version}) is already in the list")
+    loaded = [v for v in versions if any(e.run_dir == key and e.version == v and is_live(e.obj) for e in scene.asrp_results)]
+    versions = [v for v in versions if v not in loaded]  # what is already in the list stays; only the rest is added
+    if not versions:
+        raise ValueError(f"{folder.name} is already in the list")
     first = len(scene.asrp_results)
     names_before = {o.name for o in bpy.data.objects}
+    timeline = (scene.render.fps, scene.render.fps_base, scene.frame_start, scene.frame_end)
     try:
         for version in versions:
             obj = build_playback_object(context, manifest, folder, version)
@@ -282,6 +291,7 @@ def add_run_folder(context, folder, show: bool = True, versions=None) -> list[in
             entry.run_name, entry.run_dir, entry.version, entry.obj = folder.name, key, version, obj
             entry.frames, entry.fps = int(manifest["frame_count"]), int(manifest["fps"])
     except Exception:
+        scene.render.fps, scene.render.fps_base, scene.frame_start, scene.frame_end = timeline  # the load changed them
         for index in reversed(range(first, len(scene.asrp_results))):  # roll back the entries (and objects) added so far
             remove_entry(scene, index)
         for obj in [o for o in bpy.data.objects if o.name not in names_before]:  # an object built but not yet listed
@@ -330,14 +340,14 @@ def tick():
             SESSION.handled = True
             if state == "complete":  # also when a plausibility check failed: the results are loaded, failed checks shown
                 if SESSION.run_dir is None:
-                    raise ValueError("the run did not report its folder")
+                    raise ValueError("The run did not report its folder")
                 # After File > Open the results go to the scene that is current now, not to the one the run began in.
                 add_run_folder(bpy.context, SESSION.run_dir)
     except Exception as exc:  # noqa: BLE001  a timer that raises is unregistered silently: end in a visible error instead
         SESSION.handled = True
         SESSION.load_error = f"{type(exc).__name__}: {exc}" if not isinstance(exc, ValueError) else str(exc)
+        SESSION.kill_tree()  # whatever went wrong, no process tree stays running untracked (no-op if it has ended)
         if SESSION.state == "running":
-            SESSION.close()
             SESSION.state, SESSION.error = "failed", SESSION.load_error
     redraw()
     return None
@@ -353,8 +363,13 @@ def ensure_timer() -> None:
 def on_load_post(*_args) -> None:
     """A file was loaded: a run may still be going (or have just ended), so poll it again. The panel's list belongs to
     the new file; the finished run's results are added to the scene that is current then."""
-    if SESSION.state == "running" or (SESSION.state in ENDED and not SESSION.handled):
+    if SESSION.state == "running":
+        show_entry(bpy.context.scene, -1)  # the opened file's saved shown result is not this run's
         ensure_timer()
+    elif SESSION.state in ENDED and not SESSION.handled:
+        ensure_timer()
+    elif SESSION.state in ENDED:
+        SESSION.reset()  # the outcome of a run in another file is not this file's banner
 
 
 class ASRP_Result(bpy.types.PropertyGroup):
@@ -385,7 +400,7 @@ class ASRP_OT_run(bpy.types.Operator):
         if not runs_dir:
             project = core_project()
             if project is None:
-                self.report({"ERROR"}, "asrp project not found; set ASRP_PROJECT or choose a runs folder")
+                self.report({"ERROR"}, "ASRP project not found; set ASRP_PROJECT or choose a runs folder")
                 return {"CANCELLED"}
             runs_dir = str(project / "runs")
         # A new run: no older result may stay on screen as if it were this run's (docs/04 section 9).
@@ -406,7 +421,7 @@ class ASRP_OT_run(bpy.types.Operator):
 class ASRP_OT_cancel_run(bpy.types.Operator):
     bl_idname = "asrp.cancel_run"
     bl_label = "Cancel"
-    bl_description = "Stop the run; no results are kept"
+    bl_description = "Ask the running solver to stop. A cancelled run keeps no results; if the run has already finished, its results are kept"
 
     def execute(self, context):
         SESSION.cancel()
@@ -430,7 +445,7 @@ class ASRP_OT_load_run_folder(bpy.types.Operator):
         except (ValueError, KeyError, OSError) as exc:
             self.report({"ERROR"}, str(exc))
             return {"CANCELLED"}
-        self.report({"INFO"}, f"loaded {len(added)} result(s)")
+        self.report({"INFO"}, f"Loaded {len(added)} result{'' if len(added) == 1 else 's'}")
         return {"FINISHED"}
 
 
@@ -521,7 +536,7 @@ class ASRP_PT_run(bpy.types.Panel):
             layout.progress(factor=(s.frame / s.total) if s.total else 0.0, text=text)
         else:
             layout.label(text=text, icon="TIME")
-        layout.label(text=f"{int(s.elapsed)} s elapsed" + (", cancelling..." if s.cancel_requested else ""))
+        layout.label(text=f"{int(s.elapsed)} s elapsed" + (". Cancelling..." if s.cancel_requested else ""))
         layout.operator(ASRP_OT_cancel_run.bl_idname, icon="CANCEL")
 
     def draw_outcome(self, context, layout):
@@ -633,10 +648,12 @@ def unregister():
         bpy.app.timers.unregister(tick)
     if on_load_post in bpy.app.handlers.load_post:
         bpy.app.handlers.load_post.remove(on_load_post)
+    # Blender's exit calls unregister() for an installed add-on before Python shuts down, so the run is stopped here:
+    # cancel file, wait at most EXIT_WAIT_S for the core to stop FEBio, then kill the tree. atexit is only the fallback.
+    SESSION.close(wait=EXIT_WAIT_S)
     if _exit_handler is not None:
         atexit.unregister(_exit_handler)
         _exit_handler = None
-    SESSION.close()
     S = bpy.types.Scene
     for name in ("asrp_show_messages", "asrp_shown", "asrp_results", "asrp_run_name", "asrp_runs_dir",
                  "asrp_trajectory_path", "asrp_scene_path"):

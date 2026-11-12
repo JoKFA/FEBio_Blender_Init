@@ -76,10 +76,20 @@ def fake_asrp(argv: list[str]) -> int:
     mode, source, rest = argv[0], Path(argv[1]), argv[2:]
     runs, name = Path(rest[rest.index("--runs-dir") + 1]), rest[rest.index("--name") + 1]
     folder = runs / f"{name}_fake"
+    if mode == "silent":  # never says where its folder is, and ignores everything
+        time.sleep(120)
+    if mode == "nothing":  # `run NOT STARTED` without an ERROR line
+        print("run NOT STARTED", flush=True)
+        return 1
+    if mode == "exit1":  # dies without a word
+        return 1
     folder.mkdir(parents=True, exist_ok=True)
     print(f"env PYTHONIOENCODING={os.environ.get('PYTHONIOENCODING')}", flush=True)
     print(f"run folder {folder}", flush=True)
     print("progress   frame 1 / 3", flush=True)
+    if mode == "stubborn":  # ignores the cancel file, and has a child process of its own
+        subprocess.Popen([sys.executable, "-c", "import time; time.sleep(120)"])
+        time.sleep(120)
     if mode == "late":
         time.sleep(4)  # a cancel file written meanwhile is ignored: the run completes
     if mode != "crash":
@@ -106,6 +116,7 @@ sys.path.insert(0, str(REPO / "blender_addon"))
 
 import asrp_blender  # noqa: E402
 import bpy  # noqa: E402
+from bpy.app.handlers import persistent  # noqa: E402
 
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 SESSION = asrp_blender.SESSION
@@ -214,8 +225,9 @@ def case_complete(box, runs, tmp):
     return SESSION.run_dir
 
 
-def case_old_button(source, tmp):
-    """The old Load Result button goes through the same list: shown alone, and hidden when a new run starts (item 4)."""
+def case_old_button(source, tmp, box, runs):
+    """The old Load result button goes through the same list: Load run folder on the same folder adds the version that is
+    missing, and a new run hides that object (not made visible by make_visible(): the button's own result is on screen)."""
     sc = bpy.context.scene
     count = len(sc.asrp_results)
     copy = tmp / "legacy"
@@ -224,9 +236,23 @@ def case_old_button(source, tmp):
     assert len(sc.asrp_results) == count + 1 and sc.asrp_results[count].obj is not None
     assert visible() == [sc.asrp_results[count].obj.name] and sc.asrp_shown == count, visible()
     assert bpy.context.view_layer.objects.active == sc.asrp_results[count].obj
-    print(f"case 1b old Load Result button: entry {sc.asrp_results[count].label!r} added to the list ({len(sc.asrp_results)} entries), "
-          f"visible {visible()}")
-    return sc.asrp_results[count].obj.name
+    assert bpy.ops.asrp.load_run_folder(directory=str(copy)) == {"FINISHED"}  # adds the final version only
+    assert [e.version for e in sc.asrp_results][count:] == ["physics", "final"], [e.version for e in sc.asrp_results]
+    assert visible() == [sc.asrp_results[count + 1].obj.name], visible()
+    try:
+        bpy.ops.asrp.load_run_folder(directory=str(copy))
+        raise AssertionError("loading a folder that is completely in the list again was not refused")
+    except RuntimeError as exc:
+        assert "already in the list" in str(exc), exc
+    assert len(sc.asrp_results) == count + 2
+    on_screen = visible()
+    assert len(on_screen) == 1
+    start(box / "scene.json", box / "no_such_motion.json", runs, "after_button")  # no make_visible() first
+    assert visible() == [], f"{on_screen} (loaded by the old button) is still visible after a new run started"
+    drive()
+    assert SESSION.state == "not_started" and len(sc.asrp_results) == count + 2
+    print(f"case 1b old Load result button: {[e.label for e in sc.asrp_results][count:]} in the list, Load run folder added only the "
+          f"missing version, then a new run hid {on_screen} (visible now {visible()})")
 
 
 def case_start_fails(box, runs, old_state):
@@ -236,7 +262,7 @@ def case_start_fails(box, runs, old_state):
     assert SESSION.state == old_state == "complete"
 
     def no_uv(*args):
-        raise RuntimeError("uv not found on PATH")
+        raise RuntimeError("Cannot find uv on PATH")
 
     SESSION.launcher = no_uv
     try:
@@ -244,10 +270,10 @@ def case_start_fails(box, runs, old_state):
             start(box / "scene.json", box / "motion.json", runs, "never")
             raise AssertionError("the operator did not refuse")
         except RuntimeError as exc:  # an operator that reports an ERROR raises in a script
-            assert "uv not found" in str(exc), exc
+            assert "Cannot find uv" in str(exc), exc
     finally:
         SESSION.launcher = asrp_blender.core_command
-    assert SESSION.state == "not_started" and "uv not found" in SESSION.error, (SESSION.state, SESSION.error)
+    assert SESSION.state == "not_started" and "Cannot find uv" in SESSION.error, (SESSION.state, SESSION.error)
     assert SESSION.passed is None and not SESSION.load_error and SESSION.handled
     assert len(sc.asrp_results) == count and visible() == [], visible()
     print(f"case 2b start fails: state {old_state} -> {SESSION.state}, error {SESSION.error!r}, visible before {[before]} -> after {visible()}")
@@ -348,6 +374,7 @@ def case_stand_in(box, runs, source):
 
         SESSION.launcher = stand_in("ok", source)
         count, objects, before = len(sc.asrp_results), len(bpy.data.objects), make_visible()
+        sc.render.fps, sc.frame_start, sc.frame_end = 24, 3, 99  # the physics load would change these (30 fps, 0..5)
         asrp_blender.build_playback_object = boom
         try:
             start(box / "scene.json", box / "motion.json", runs, "badload")
@@ -403,46 +430,171 @@ def case_deleted_object():
     print("case 8 deleted shown object: unlinked (what X does) and removed from the data: shown_entry is None, the panel says nothing is shown")
 
 
-def case_close_before_folder(box, runs):
-    """Closing the session before the run folder is known must not leave uv / python running (item 3)."""
-    start(box / "scene.json", box / "long.json", runs, "closed")
+def wait_for_folder(limit=60):
+    """Poll (without the load step of tick()) until the run folder is known."""
+    t0 = time.monotonic()
+    while SESSION.run_dir is None:
+        assert SESSION.running and time.monotonic() - t0 < limit, (SESSION.state, SESSION.error)
+        SESSION.poll()
+        time.sleep(0.1)
+
+
+def process_tree():
+    """uv's process and every descendant of it: what must be gone. Asserts there is something to watch."""
     t0 = time.monotonic()
     tree = set()
     while not tree and time.monotonic() - t0 < 20:
         tree = descendants(SESSION.proc.pid)
     assert tree, "no child process of the run was seen: this case would prove nothing"
-    assert SESSION.run_dir is None and alive(tree | {SESSION.proc.pid}), "the run is not running"
+    everyone = tree | {SESSION.proc.pid}
+    assert alive(everyone), "the run is not running"
+    return everyone
+
+
+def case_close_before_folder(box, runs):
+    """Closing the session before the run folder is known must not leave uv / python running."""
+    start(box / "scene.json", box / "long.json", runs, "closed")
+    everyone = process_tree()
+    assert SESSION.run_dir is None
     SESSION.close()
     time.sleep(2)
-    left = alive(tree | {SESSION.proc.pid})
+    left = alive(everyone)
     assert not left, f"processes left running after close(): {left}"
     assert SESSION.proc.poll() is not None
-    print(f"case 6 close before the folder is known: {len(tree) + 1} processes (uv + {len(tree)} children) were running, 2 s after close() "
-          f"left: {sorted(left)}")
+    print(f"case 6a close before the folder is known: {len(everyone)} processes were running, 2 s after close() left: {sorted(left)}")
 
 
-def case_file_load_mid_run(box, runs):
-    """File > Open while a run goes: the timer survives, the run is polled to its end, the result goes to the new file's scene (item 1)."""
-    start(box / "scene.json", box / "motion.json", runs, "reload")
-    handlers = bpy.app.handlers.load_post
-    handlers.remove(asrp_blender.on_load_post)  # first: the timer's own persistence, without the handler's help
+def case_process_cleanup(box, runs, source):
+    """No process tree is ever left untracked: close with a known folder (cancel file, bounded wait, kill), a dropped
+    session, a failing timer callback, and a cancel that never gets a folder. The stand-ins ignore every cancel."""
+    sc = bpy.context.scene
     try:
-        assert bpy.ops.wm.read_homefile() == {"FINISHED"}
+        SESSION.launcher = stand_in("stubborn", source)
+        start(box / "scene.json", box / "motion.json", runs, "stubborn_close")
+        wait_for_folder()
+        everyone = process_tree()
+        t0 = time.monotonic()
+        SESSION.close(wait=2.0)
+        took = time.monotonic() - t0
+        assert (SESSION.run_dir / "cancel").exists(), "close() did not write the cancel file first"
+        assert 1.5 < took < 10, f"close(wait=2) took {took:.1f} s: the wait is not bounded as asked"
+        time.sleep(1)
+        assert not alive(everyone), f"left after close() with a known folder: {alive(everyone)}"
+        print(f"case 6b close with a known folder, process ignores the cancel file: cancel file written, waited {took:.1f} s, "
+              f"then the tree of {len(everyone)} processes was killed; left: {sorted(alive(everyone))}")
+
+        start(box / "scene.json", box / "motion.json", runs, "stubborn_reset")
+        wait_for_folder()
+        everyone = process_tree()
+        SESSION.reset()
+        time.sleep(1)
+        assert not alive(everyone) and SESSION.state == "idle", alive(everyone)
+        print(f"case 6c a dropped session (reset) kills its tree: {len(everyone)} processes, left {sorted(alive(everyone))}")
+
+        start(box / "scene.json", box / "motion.json", runs, "stubborn_tick")
+        wait_for_folder()
+        everyone = process_tree()
+
+        def broken():
+            raise RuntimeError("stand-in: the poll step failed")
+
+        SESSION.poll = broken
+        try:
+            assert asrp_blender.tick() is None  # must not raise
+        finally:
+            del SESSION.poll
+        time.sleep(1)
+        assert not alive(everyone), alive(everyone)
+        assert SESSION.state == "failed" and "poll step failed" in SESSION.load_error, (SESSION.state, SESSION.load_error)
+        print(f"case 6d the timer callback fails while the process runs: state {SESSION.state}, tree of {len(everyone)} killed, "
+              f"left {sorted(alive(everyone))}, error shown {SESSION.load_error!r}")
+
+        SESSION.launcher = stand_in("silent", source)
+        SESSION.cancel_wait_s = 2.0
+        count = len(sc.asrp_results)
+        start(box / "scene.json", box / "motion.json", runs, "silent")
+        everyone = process_tree()
+        assert bpy.ops.asrp.cancel_run() == {"FINISHED"}
+        t0 = time.monotonic()
+        drive()
+        took = time.monotonic() - t0
+        time.sleep(1)
+        assert SESSION.state == "cancelled" and SESSION.run_dir is None and len(sc.asrp_results) == count, (SESSION.state, took)
+        assert 1.5 < took < 15 and not alive(everyone), (took, alive(everyone))
+        print(f"case 6e cancel before any run folder, bound 2 s: state {SESSION.state} after {took:.1f} s, tree of {len(everyone)} killed, "
+              f"left {sorted(alive(everyone))}")
+
+        for mode, state in (("nothing", "not_started"), ("exit1", "failed")):
+            SESSION.launcher = stand_in(mode, source)
+            start(box / "scene.json", box / "motion.json", runs, mode)
+            drive()
+            assert SESSION.state == state and "exit code 1" in SESSION.error, (SESSION.state, SESSION.error)
+            print(f"case 6f stand-in '{mode}' (no ERROR line): state {SESSION.state}, error shown {SESSION.error!r}")
+    finally:
+        SESSION.launcher = asrp_blender.core_command
+        SESSION.cancel_wait_s = 10.0
+
+
+@persistent
+def spy(*_args):
+    SPIED.append(1)
+
+
+SPIED: list = []
+
+
+def case_file_load_mid_run(box, runs, tmp):
+    """File > Open while a run goes: the timer survives, the opened file's shown result is hidden, a finished run's outcome
+    is not the new file's banner, and the result of a run that ends after the load goes to the new file's scene."""
+    sc = bpy.context.scene
+    make_visible()
+    saved = tmp / "shown.blend"
+    assert bpy.ops.wm.save_as_mainfile(filepath=str(saved), copy=True) == {"FINISHED"}
+    saved_entries = len(sc.asrp_results)
+    handlers = bpy.app.handlers.load_post
+
+    # (a) the timer's own persistence, without the handler: the saved shown result is still on screen (what the handler is for)
+    start(box / "scene.json", box / "long.json", runs, "reload_a")
+    handlers.remove(asrp_blender.on_load_post)
+    try:
+        assert bpy.ops.wm.open_mainfile(filepath=str(saved)) == {"FINISHED"}
     finally:
         handlers.append(asrp_blender.on_load_post)
     sc = bpy.context.scene
-    assert len(sc.asrp_results) == 0 and SESSION.state == "running"
+    assert len(sc.asrp_results) == saved_entries and SESSION.state == "running"
     assert bpy.app.timers.is_registered(asrp_blender.tick), "the timer did not survive the file load"
-    bpy.app.timers.unregister(asrp_blender.tick)  # then: the handler alone re-arms a missing timer
-    asrp_blender.on_load_post()
+    assert len(visible()) == 1, "without the handler the saved result should still be shown: this check would prove nothing"
+
+    # (b) a real load fires the handler: it re-arms a missing timer and hides the saved result while the run goes
+    bpy.app.timers.unregister(asrp_blender.tick)
+    handlers.append(spy)
+    try:
+        assert bpy.ops.wm.open_mainfile(filepath=str(saved)) == {"FINISHED"}
+    finally:
+        handlers.remove(spy)
+    sc = bpy.context.scene
+    assert SPIED, "a real file load did not call the load_post handlers"
     assert bpy.app.timers.is_registered(asrp_blender.tick), "the load_post handler did not re-arm the timer"
-    assert asrp_blender.on_load_post in handlers
+    assert visible() == [] and sc.asrp_shown == -1, (visible(), sc.asrp_shown)
+    assert SESSION.state == "running"
+    assert bpy.ops.asrp.cancel_run() == {"FINISHED"}
+    drive()
+    assert SESSION.state == "cancelled"
+
+    # (c) the finished run's outcome is not the banner of a file opened afterwards
+    assert bpy.ops.wm.open_mainfile(filepath=str(saved)) == {"FINISHED"}
+    assert SESSION.state == "idle", SESSION.state
+
+    # (d) a run that ends after the load: its result goes to the scene that is current then
+    start(box / "scene.json", box / "motion.json", runs, "reload")
+    assert bpy.ops.wm.open_mainfile(filepath=str(saved)) == {"FINISHED"}
     drive()
     sc = bpy.context.scene
     assert SESSION.state == "complete" and not SESSION.load_error, (SESSION.state, SESSION.load_error)
-    assert len(sc.asrp_results) == 2 and len(visible()) == 1, (len(sc.asrp_results), visible())
-    print(f"case 5 file load mid-run: timer still registered, state {SESSION.state}, the result went to the new file's scene "
-          f"({len(sc.asrp_results)} entries, visible {visible()})")
+    assert len(sc.asrp_results) == saved_entries + 2 and len(visible()) == 1 and "reload" in visible()[0], (len(sc.asrp_results), visible())
+    print(f"case 5 file load mid-run: (a) timer survived without the handler, saved result still shown; (b) a real load called the handlers "
+          f"({len(SPIED)} call), re-armed the timer and hid the saved result; (c) a finished run's banner is cleared (state idle); "
+          f"(d) the run that ended after the load went to the new scene ({len(sc.asrp_results)} entries, visible {visible()})")
 
 
 def case_english_only():
@@ -469,16 +621,17 @@ try:
     runs = tmp / "runs"
     case_english_only()
     run1 = case_complete(box, runs, tmp)
-    case_old_button(run1, tmp)
     case_start_fails(box, runs, "complete")
+    case_old_button(run1, tmp, box, runs)
     case_not_started(box, runs)
     case_cancelled(box, runs)
     case_cancelled(box, runs, early=True)
     case_stand_in(box, runs, run1)
+    case_process_cleanup(box, runs, run1)
     case_malformed_reports()
     case_close_before_folder(box, runs)
     case_deleted_object()
-    case_file_load_mid_run(box, runs)
+    case_file_load_mid_run(box, runs, tmp)
     print("PANEL CHECK PASSED")
 finally:
     SESSION.close()

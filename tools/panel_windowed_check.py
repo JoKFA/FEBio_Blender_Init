@@ -18,11 +18,18 @@ own `bpy.app.timers` callback follow each run, and prints:
   - every panel drawn as a popup, with Python errors on stderr captured and asserted absent (a panel whose draw
     raises on purpose proves the capture can fail).
 
-Second mode, `--quit-midrun` (same arguments): starts a run, waits until FEBio is running, writes the run's process
-tree to `quit_tree.txt`, then quits Blender mid-run. The add-on's atexit handler must have cancelled the run. A detached
-helper started from Blender does not survive its exit here, so the check is by hand, once Blender has quit (about 10 s):
+Second mode, `--quit-midrun` (same arguments), run against the add-on INSTALLED the way a user has it (`--installed`,
+without --factory-startup, in an isolated Blender profile so the user's own is untouched):
+    set BLENDER_USER_RESOURCES=<profile> ; set ASRP_PROJECT=<repo>
+    blender --factory-startup --command extension build --source-dir blender_addon/asrp_blender --output-dir <out>
+    blender --factory-startup --command extension install-file -r user_default --enable <out>/asrp_blender-0.0.1.zip
+    blender --python tools/panel_windowed_check.py -- --installed --quit-midrun --scene ... --motion-a ... --motion-b ... --work <work>
+It starts a run, waits until FEBio is running, writes the run's process tree to `quit_tree.txt`, then quits Blender mid-run.
+Blender's exit calls the add-on's unregister(), which must stop the run (cancel file, a bounded wait, then the tree is
+killed). A detached helper started from Blender does not survive its exit here, so the check is by hand, once Blender
+has quit (a few seconds): the list printed by
     powershell -NoProfile -Command "Get-Content <work>/quit_tree.txt | ForEach-Object { $id = ($_ -split ' ')[0]; Get-Process -Id $id -ErrorAction SilentlyContinue }"
-which must print nothing (every process of the run's tree is gone, FEBio included).
+must be empty (every process of the run's tree is gone, FEBio included).
 """
 
 import json
@@ -33,14 +40,21 @@ import time
 import traceback
 from pathlib import Path
 
+import bpy
+import mathutils
+
 REPO = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(REPO / "blender_addon"))
-
-import asrp_blender  # noqa: E402
-import bpy  # noqa: E402
-import mathutils  # noqa: E402
-
 argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
+INSTALLED = "--installed" in argv
+if INSTALLED:
+    # The add-on as a user has it: installed as an extension and enabled by Blender at startup (see the docstring).
+    import importlib
+
+    asrp_blender = importlib.import_module("bl_ext.user_default.asrp_blender")
+    assert hasattr(bpy.types.Scene, "asrp_results"), "the installed add-on is not enabled"
+else:
+    sys.path.insert(0, str(REPO / "blender_addon"))
+    import asrp_blender
 
 
 def opt(name):
@@ -343,6 +357,7 @@ def drive():
     return None
 
 
-asrp_blender.register()
+if not INSTALLED:
+    asrp_blender.register()
 generator = quit_midrun() if QUIT_MIDRUN else script()
 bpy.app.timers.register(drive, first_interval=1.0, persistent=True)  # File > Open must not end the script
