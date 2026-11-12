@@ -4,7 +4,7 @@ import struct
 import numpy as np
 import pytest
 
-from asrp_core.playback import boundary_faces, write_bundle, write_pc2
+from asrp_core.playback import boundary_faces, write_bundle, write_pc2, write_surface_bundle
 
 # Unit tet, positively oriented, and a second tet sharing face (1, 2, 3) on the other side.
 NODES = {1: (0, 0, 0), 2: (1, 0, 0), 3: (0, 1, 0), 4: (0, 0, 1), 5: (1, 1, 1)}
@@ -90,3 +90,24 @@ def test_bundle_keeps_vertex_order_consistent(tmp_path):
     second_frame_vertex_1 = struct.unpack("<3f", data[32 + 4 * 12 + 12 : 32 + 4 * 12 + 24])
     assert second_frame_vertex_1 == (11.0, 0.0, 0.0)
     assert len(manifest["faces"]) == len(manifest["face_materials"]) == 4
+
+
+def test_a_surface_bundle_gains_a_second_cache_and_versions_only_when_given_final_frames(tmp_path):
+    feb = tmp_path / "m.feb"
+    feb.write_text("<febio_spec/>")
+    verts, faces = [(0, 0, 0), (1, 0, 0), (0, 1, 0)], [(0, 1, 2)]
+    frames = np.array([verts, verts], dtype=float)
+    final = frames + np.array([0.0, 0.0, 2.0])
+    plain, layered = tmp_path / "plain", tmp_path / "layered"
+    plain.mkdir()
+    layered.mkdir()
+    write_surface_bundle(plain, verts, faces, frames, 30, feb, "tissue", "t.obj")
+    write_surface_bundle(layered, verts, faces, frames, 30, feb, "tissue", "t.obj", final)
+
+    assert not (plain / "playback_final.pc2").exists() and "versions" not in json.loads((plain / "playback.json").read_text())
+    assert (plain / "playback.pc2").read_bytes() == (layered / "playback.pc2").read_bytes()  # the physics cache is unchanged
+    manifest = json.loads((layered / "playback.json").read_text())
+    assert manifest.pop("versions") == {"physics": "playback.pc2", "final": "playback_final.pc2"}
+    assert manifest == json.loads((plain / "playback.json").read_text())
+    write_pc2(tmp_path / "expected.pc2", final)
+    assert (layered / "playback_final.pc2").read_bytes() == (tmp_path / "expected.pc2").read_bytes()

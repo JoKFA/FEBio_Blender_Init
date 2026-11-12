@@ -22,7 +22,18 @@
                                   the tet nodes are from the settled shape once the drivers are back
                                   at rest; reported only), motion (the largest
                                   distance of any display vertex from its rest position over all frames,
-                                  and the frame it occurs at), timing
+                                  and the frame it occurs at), landmark_layer (below), timing
+
+When the trajectory has a `landmarks` section (T-09) the landmark layer is applied on top of the physics,
+`final = physics + weights @ translations` (`skinning.deform`; the physics results above are not touched):
+
+    final/display.json            the display mesh at every frame with the landmarks moved, same format as
+    final/display.npy             physics/display.*
+    playback_final.pc2            its point cache; playback.json then names both caches under "versions"
+
+Without a `landmarks` section none of these exist and every other file is byte for byte what it was.
+The checks stay physics checks. run_report.json says whether the layer was applied, how many landmarks
+moved, the largest translation, and the largest difference between final and physics (with its frame).
 
 A failed or cancelled run gets run_report.json (with check (a) failed) but no physics results.
 """
@@ -36,7 +47,17 @@ from pathlib import Path
 
 import numpy as np
 
-from asrp_core import embed, febio, generate, plausibility, playback, provenance, run
+from asrp_core import (
+    embed,
+    febio,
+    generate,
+    plausibility,
+    playback,
+    provenance,
+    run,
+    skinning,
+    trajectory,
+)
 from asrp_core import scene as scene_module
 
 REPORT = "run_report.json"
@@ -47,9 +68,13 @@ SETTLE_FRAMES = 5  # check (c) averages up to this many frames ending at settle_
 # ringing); never frame 0, the rest pose, whose sag is exactly 0
 # What a run that does not complete must not leave behind. A later stage that writes more files or report entries
 # adds them here, so the one cleanup (`_discard_results`) stays complete.
-RESULT_DIRS = ("physics",)
-RESULT_FILES = ("playback.json", "playback.pc2")
-RESULT_REPORT_KEYS = ("settled_shape", "return_to_settled", "spring_slip", "motion")
+FINAL_DISPLAY = "final/display.json"  # physics + landmark layer; same format as DISPLAY
+FINAL_ARRAY = "final/display.npy"
+FINAL_PLAYBACK = "playback_final.pc2"
+PLAYBACK_FILES = ("playback.json", "playback.pc2")
+RESULT_DIRS = ("physics", "final")
+RESULT_FILES = (*PLAYBACK_FILES, FINAL_PLAYBACK)
+RESULT_REPORT_KEYS = ("settled_shape", "return_to_settled", "spring_slip", "motion", "landmark_layer")
 SLIP_LIMIT = 0.1  # docs/05 section 3: max|u| / δ above this, the spring result is off by more than ~2 %
 
 def generator_settings() -> list[tuple]:
@@ -223,11 +248,46 @@ def _physics_checks(model: generate.Model, node_frames: np.ndarray, display: np.
     return checks, (settle if settled else None)
 
 
-def _outputs(settle: int | None) -> list[str]:
+def _landmark_layer(model: generate.Model, run_dir: Path, display: np.ndarray, report: dict) -> np.ndarray | None:
+    """The landmark layer on top of the physics (T-09): final = display + weights @ translations, (frames,
+    vertices, 3) mm, or None when the trajectory has no landmarks section. Fills report["landmark_layer"]."""
+    found = trajectory.landmark_translations(model.trajectory)
+    if found is None:
+        report["landmark_layer"] = {"applied": False, "reason": "the trajectory has no landmarks section"}
+        return None
+    names, moves = found
+    landmarks = model.scene.landmarks  # scene.check refused a trajectory with landmarks for a scene without
+    skin = skinning.load(run_dir / landmarks.weights.path)  # the run folder's own copy of the scene's input
+    if skin.weights.shape[0] != display.shape[1]:
+        raise skinning.SkinError(f"the landmark weights have {skin.weights.shape[0]} rows but the display mesh has "
+                                 f"{display.shape[1]} vertices; import the asset again so they come from the same mesh")
+    if skin.weights.shape[1] != len(landmarks.names):
+        raise skinning.SkinError(f"the landmark weights have {skin.weights.shape[1]} columns but scene.json lists "
+                                 f"{len(landmarks.names)} landmarks; import the asset again")
+    column = {n: i for i, n in enumerate(landmarks.names)}
+    translations = np.zeros((display.shape[0], len(landmarks.names), 3))  # scene order; unnamed landmarks stay put
+    for i, n in enumerate(names):
+        translations[:, column[n]] = moves[:, i]
+    final = skinning.deform(display, skin.weights, translations)
+    shift = np.linalg.norm(final - display, axis=2)  # (frames, vertices)
+    at = int(np.argmax(shift.max(axis=1)))
+    report["landmark_layer"] = {
+        "applied": True,
+        "landmarks_moved": int(np.count_nonzero(np.any(translations != 0.0, axis=(0, 2)))),
+        "max_translation_mm": float(np.linalg.norm(translations, axis=2).max()),
+        "max_final_minus_physics_mm": float(shift[at].max()),
+        "frame": at,
+    }
+    return final
+
+
+def _outputs(settle: int | None, final: bool = False) -> list[str]:
     """The result files whose hashes go into the provenance record."""
-    files = [run.POSITIONS, run.POSITIONS_ARRAY, DISPLAY, DISPLAY_ARRAY, *RESULT_FILES]
+    files = [run.POSITIONS, run.POSITIONS_ARRAY, DISPLAY, DISPLAY_ARRAY, *PLAYBACK_FILES]
     if settle is not None:
         files[4:4] = [f"{settled_path(settle)}.json", f"{settled_path(settle)}.obj"]
+    if final:
+        files += [FINAL_DISPLAY, FINAL_ARRAY, FINAL_PLAYBACK]
     return files
 
 
@@ -291,9 +351,9 @@ def run_scene(scene_path, trajectory_path, runs_dir: Path, exe: Path, name: str 
             display = np.stack([embed.apply(model.embedding, p) for p in node_frames])
             found, settle = _physics_checks(model, node_frames, display, positions, logged, report)
             checks.update(found)
-            # landmark layer (T-09) goes here: the physics results are computed, nothing is written yet
-            _write_results(run_dir, model, node_frames, display, settle)
-            record["outputs"] = provenance.hash_files(run_dir, _outputs(settle))
+            final = _landmark_layer(model, run_dir, display, report)  # nothing is written yet
+            _write_results(run_dir, model, node_frames, display, settle, final)
+            record["outputs"] = provenance.hash_files(run_dir, _outputs(settle, final is not None))
         # An invalid number (NaN, inf) in the report is a failed run, never a silently written one.
         json.dumps({**report, "checks": {key: c.to_json() for key, c in checks.items()}}, allow_nan=False)
     except Exception as e:  # FEBio finished but our own post-processing broke: the run must not look complete
@@ -362,13 +422,19 @@ def _still_until(model: generate.Model, last: int) -> bool:
 
 
 def _write_results(run_dir: Path, model: generate.Model, node_frames: np.ndarray, display: np.ndarray,
-                   settle: int | None = None) -> None:
+                   settle: int | None = None, final: np.ndarray | None = None) -> None:
     (run_dir / "physics").mkdir(exist_ok=True)
     run.save_array(run_dir / DISPLAY, {
         "format": DISPLAY_FORMAT, "units": "mm", "fps": model.fps, "frames": model.frames,
         "vertex_count": int(len(model.display)), "mesh": model.scene.soft_tissues[0].mesh.path,
         "note": "frame 0 is the rest pose (FEBio logs no frame 0); positions are geometric mm (FEBio's / k)",
     }, display, Path(DISPLAY_ARRAY).name)
+    if final is not None:
+        run.save_array(run_dir / FINAL_DISPLAY, {
+            "format": DISPLAY_FORMAT, "units": "mm", "fps": model.fps, "frames": model.frames,
+            "vertex_count": int(len(model.display)), "mesh": model.scene.soft_tissues[0].mesh.path,
+            "note": "physics + landmark layer (T-09); positions are geometric mm",
+        }, final, Path(FINAL_ARRAY).name)
     if settle is not None:
         f = settle
         (run_dir / f"{settled_path(f)}.json").write_text(json.dumps({
@@ -380,4 +446,4 @@ def _write_results(run_dir: Path, model: generate.Model, node_frames: np.ndarray
                    f"{model.scene.soft_tissues[0].name}, frame {f} (settled under gravity), mm, Z up, asrp run (T-06a)")
     playback.write_surface_bundle(run_dir, model.display, model.faces, display, model.fps,
                                   run_dir / run.FEB_NAME, model.scene.soft_tissues[0].name,
-                                  model.scene.soft_tissues[0].mesh.path)
+                                  model.scene.soft_tissues[0].mesh.path, final)
