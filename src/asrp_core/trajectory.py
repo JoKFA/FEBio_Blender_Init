@@ -172,7 +172,8 @@ def blend_transforms(parent_transforms, factor) -> list[list[float]]:
         fw = factor * w
         r2 = _exp_rotation(fw)
         t2 = _left_jacobian(fw) @ (factor * u)
-        out.append([*r2[0], float(t2[0]), *r2[1], float(t2[1]), *r2[2], float(t2[2]), 0.0, 0.0, 0.0, 1.0])
+        rows = [[*r2[i], t2[i]] for i in range(3)]
+        out.append([float(v) for row in rows for v in row] + [0.0, 0.0, 0.0, 1.0])  # plain floats, never numpy's
     return out
 
 
