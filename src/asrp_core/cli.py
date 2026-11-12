@@ -137,6 +137,11 @@ def cmd_run(args: argparse.Namespace) -> int:
     return 1
 
 
+def surface_text(h: dict) -> str:
+    return (f"{h['flipped_faces']} flipped faces of {h['faces']}, {h['edges_shorter_than_half']} edges < 0.5x, "
+            f"{h['edges_longer_than_double']} edges > 2x, edge ratio {h['edge_ratio_min']:.3f}..{h['edge_ratio_max']:.3f}")
+
+
 def run_scene(args: argparse.Namespace, show) -> int:
     from pathlib import Path
 
@@ -179,6 +184,18 @@ def run_scene(args: argparse.Namespace, show) -> int:
     if back and back["frames"]:
         print(f"returns    drivers back at rest on frame(s) {', '.join(map(str, back['frames']))}: nodes are at most "
               f"{back['max_mm']:.2e} mm (mean {back['mean_mm']:.2e} mm) from the settled shape (reported only)")
+    health = r.get("surface_health")
+    for version in ("physics", "final"):
+        h = (health or {}).get(version)
+        if h:
+            worst = h["worst"]
+            more = f"; worst frame {worst['frame']}: {surface_text(worst)}" if worst["frame"] != r["frames"] - 1 else ""
+            print(f"surface    {version}, last frame: {surface_text(h['last'])}{more} (reported only)")
+    settled = r.get("settled_shape") or {}
+    if "tissue_step_max_mm" in settled:
+        before, now = settled["tissue_step_frames"]
+        print(f"settle     frame {now}: the tissue moved at most {settled['tissue_step_max_mm']:.2e} mm since frame {before} "
+              "(reported only)")
     t = r["timing"]
     if t.get("febio_s_per_frame") is not None:
         print(f"timing     FEBio {t['febio_s']} s, {t['febio_s_per_frame']} s per frame; "

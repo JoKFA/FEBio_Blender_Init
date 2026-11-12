@@ -113,7 +113,8 @@ runs/2026-11-03_neutral-to-AA_001/
 | `generator` | 生成器报告 |
 | `checks` | a、b、b2、c、d 五项，每项是 `name`、`passed`（`true`、`false` 或 `null`）、`message`、`numbers`；d 的数字是 `min_volume_ratio`、`min_volume_ratio_frame`、`max_volume_ratio`、`inverted_tets`、`frames_with_inverted_tets` |
 | `not_run` | 没运行的检查的汇总（属于 `checks`） |
-| `settled_shape` | `available`、`frame`（n，没有沉降形状时为 `null`）；不可用时多一个 `reason` |
+| `settled_shape` | `available`、`frame`（n，没有沉降形状时为 `null`）；不可用时多一个 `reason`。可用时另有三个只报告、不是检查的键：`tissue_step_max_mm`、`tissue_step_mean_mm`（四面体节点在第 n-1 帧到第 n 帧之间移动的最大和平均距离，几何 mm）和 `tissue_step_frames`（`[n-1, n]`）。它们说明沉降那一帧组织还动不动；没有阈值，`available` 不看它们 |
+| `surface_health` | 只报告，不是检查（五项检查只看物理的四面体网格，这一项看研究员看到的表面）：显示表面的面和边相对静止形状（显示网格的第 0 帧）。`physics`（物理结果）和 `final`（叠上 landmark 层之后；没有 landmark 层时是 `null`）各有 `last`（最后一帧）和 `worst`（翻面最多的那一帧，并列时取边长超出一半到两倍范围最多的；多一个 `frame`）。每个里面：`flipped_faces`（法线与静止法线点积小于 0 的面数）、`edges_shorter_than_half`、`edges_longer_than_double`、`edge_ratio_min`、`edge_ratio_max`、`min_face_area_ratio`、`faces`、`edges`；另有 `note`。翻面不等于自交，穿插没有测 |
 | `return_to_settled` | 只报告，`{frames, max_mm, mean_mm}`；没有这样的帧时 `frames` 是空列表 |
 | `relative_to_head` | 只报告（T-28）：每帧自由显示顶点（没有粘连的）相对头的最大位移，减去参考帧的值。"头"是 `hard` 粘连所粘的那个刚体（实验室场景里是颅骨，头的驱动源动时它跟着动）；`hard` 粘连没有、或粘到两个以上刚体时相对世界。参考帧是沉降形状那一帧，没有沉降形状时是第 0 帧。键：`body`、`reference_frame`、`per_frame_max_mm`（每帧一个数）、`max_mm` 和 `frame`（只在参考帧之后找：参考帧之前的曲线是沉降本身）、`free_vertices` |
 | `motion` | 任一显示顶点离静止位置最远的距离 `max_display_distance_mm` 和出现的帧 `frame` |
@@ -128,7 +129,7 @@ runs/2026-11-03_neutral-to-AA_001/
 
 **失败的运行不留结果**（ADR-37 第 4 条，T-25）：
 1. FEBio 失败或取消，或整段没有全部算完，只写 `run_report.json`（检查 (a) 不通过），不写任何结果；
-2. FEBio 跑完了但**我们自己的事后处理出错**（读位置、嵌入、写回放包、报告里有 NaN 等）：运行同样记为 `failed`，删掉 `physics/`、`final/`、`playback.json`、`playback.pc2`、`playback_final.pc2`，报告里去掉 `settled_shape`、`return_to_settled`、`spring_slip`、`motion`、`landmark_layer`，检查 (a) 不通过，原因写 `post-processing failed after FEBio finished: …`（路径已抹掉）。不会出现"看起来算完了"的运行；
+2. FEBio 跑完了但**我们自己的事后处理出错**（读位置、嵌入、写回放包、报告里有 NaN 等）：运行同样记为 `failed`，删掉 `physics/`、`final/`、`playback.json`、`playback.pc2`、`playback_final.pc2`，报告里去掉 `settled_shape`、`return_to_settled`、`spring_slip`、`motion`、`landmark_layer`、`relative_to_head`、`surface_health`，检查 (a) 不通过，原因写 `post-processing failed after FEBio finished: …`（路径已抹掉）。不会出现"看起来算完了"的运行；
 3. 无论成功、失败还是取消，只删除 FEBio 写的 `positions.txt` 和 `model.xplt`（见下面）；别的名字的文件不碰。
 
 生成器拒绝的场景（检查有错、显示顶点离四面体太远、一个点被两个刚体要走……）不建运行文件夹，`asrp run` 打印原因和 `run NOT STARTED`。

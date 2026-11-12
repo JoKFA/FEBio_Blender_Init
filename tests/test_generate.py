@@ -636,7 +636,7 @@ def test_asrp_run_with_a_scene_prints_the_checks(hard_plate, capsys):
     code = cli.main(["run", str(c["scene"]), str(c["scene"].parent / "motion.json"), "--runs-dir", str(folder / "cli")])
     out = capsys.readouterr().out
     assert code == 0 and "plausibility PASSED" in out and "check b    [PASS]" in out and "s per frame" in out
-    assert "budget" not in out and "reported only" not in out
+    assert "budget" not in out and "returns    " not in out  # the return-to-settled line; the surface line is reported only too
 
 
 # --- PR #8 review: a dropped frame leaves no results; names stay safe for XML --------------------
@@ -702,14 +702,14 @@ def test_a_spring_only_scene_and_a_short_trajectory_pass_with_the_unrun_checks_l
 def test_the_settled_shape_is_written_at_the_frame_the_trajectory_names_and_not_without_one(tmp_path):
     cs.write(tmp_path / "still", attachments=[("top", "skull", "hard", None, at_z(10.0))])
     ok = run(tmp_path / "still", cs.still(20), "still", settle=14)
-    assert ok.report["settled_shape"] == {"available": True, "frame": 14}
+    assert {k: ok.report["settled_shape"][k] for k in ("available", "frame")} == {"available": True, "frame": 14}
     settled = json.loads((ok.run_dir / "physics" / "settled_frame14.json").read_text())
     assert settled["frame"] == 14 and np.allclose(settled["display"], display(ok.run_dir)[14])
     assert (ok.run_dir / "physics" / "settled_frame14.obj").exists()
     assert ok.report["checks"]["c"]["numbers"]["frames"] == [10, 14]
 
     other = run(tmp_path / "still", cs.still(20), "still_at_7", settle=7)  # any frame the file names, not a constant
-    assert other.report["settled_shape"] == {"available": True, "frame": 7}
+    assert {k: other.report["settled_shape"][k] for k in ("available", "frame")} == {"available": True, "frame": 7}
     assert json.loads((other.run_dir / "physics" / "settled_frame7.json").read_text())["frame"] == 7
     assert (other.run_dir / "physics" / "settled_frame7.obj").exists()
     assert not (other.run_dir / "physics" / "settled_frame14.json").exists()
@@ -741,7 +741,7 @@ def test_check_c_never_averages_the_rest_pose_frame(tmp_path):
     for n, want in ((1, [1, 1]), (2, [1, 2]), (14, [10, 14])):
         r = run(tmp_path / "cube", cs.still(20), f"settle_{n}", settle=n)
         assert r.report["checks"]["c"]["numbers"]["frames"] == want, n
-        assert r.report["settled_shape"] == {"available": True, "frame": n}
+        assert {k: r.report["settled_shape"][k] for k in ("available", "frame")} == {"available": True, "frame": n}
 
 
 @needs_febio
