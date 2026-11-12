@@ -27,6 +27,9 @@ Five checks, each a function of plain arrays so that a test can make it fail on 
     and the display mesh it carries is wrong even though the run "converged". The same function reports the
     smallest and largest volume ratio.
 
+`relative_motion` is not a check either: how far the free display vertices move against a rigid body (the head)
+beyond a reference frame (the settled shape), per frame. Reported, not judged (T-28).
+
 `return_to_settled` is not a check but a measurement: once the drivers are back at rest after the motion, how
 far the tet nodes are from the shape they had after the gravity-only settle. Reported, not judged.
 
@@ -232,6 +235,32 @@ def tet_mesh_valid(rest_nodes: np.ndarray, tets: np.ndarray, node_frames: np.nda
     return Check("the tet mesh stays valid", True,
                  f"on all {len(node_frames)} frames every one of the {len(tets)} tets keeps its orientation; volume / rest "
                  f"volume is between {lowest:.3f} (frame {lowest_frame}) and {highest:.3f}", numbers)
+
+
+def relative_motion(rest_display: np.ndarray, display_frames: np.ndarray, free: np.ndarray, transforms,
+                    reference_frame: int) -> dict:
+    """Not a check (T-28): per frame, the largest distance of a free display vertex from where it was at
+    `reference_frame`, both seen from a rigid body (each frame's position taken back through that frame's inverse
+    transform of the body, so the body's own motion cancels). transforms: the body's per-frame transforms (None: at
+    rest, so this is the motion in the world). Geometric mm. max_mm and frame are over the frames after the
+    reference only. With the head as the body and the settled frame as the reference, this is how much the lips move
+    against the head beyond the settle (the head shake's amplitude)."""
+    frames = len(display_frames)
+    motion = transforms or [IDENTITY] * frames
+    if not len(free):
+        return {"per_frame_max_mm": [0.0] * frames, "max_mm": 0.0, "frame": 0, "free_vertices": 0}
+
+    def seen(f):
+        m = np.asarray(motion[f], dtype=float).reshape(4, 4)
+        return (display_frames[f][free] - m[:3, 3]) @ m[:3, :3]  # R^T (x - t), row by row
+
+    ref = seen(reference_frame)
+    per_frame = [float(np.linalg.norm(seen(f) - ref, axis=1).max()) for f in range(frames)]
+    # The maximum is taken after the reference frame: before it, the curve is the settle itself (frame 0 is the rest
+    # pose, its distance from the settled shape is the gravity sag), not motion against the head.
+    after = per_frame[reference_frame + 1:]
+    at = reference_frame + 1 + int(np.argmax(after)) if after else reference_frame
+    return {"per_frame_max_mm": per_frame, "max_mm": per_frame[at], "frame": at, "free_vertices": int(len(free))}
 
 
 def return_to_settled(node_frames: np.ndarray, settle: int, transforms: list, tolerance: float = 1e-9) -> dict:

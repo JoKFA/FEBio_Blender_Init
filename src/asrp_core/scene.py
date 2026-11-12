@@ -34,8 +34,12 @@ scene.json only names them and records their hash.
         "name": str,                                  # the key in trajectory.json (e.g. jaw01)
         "hinge": null | {"pivot_mm": [x, y, z], "axis": [x, y, z],   # optional note (ADR-21):
                          "source": SOURCE_TAG, "note": str},         #   stand-in motion, checks
-        "blend": {"of": str, "factor": PARAM}         # optional (T-06a): a derived driver with no
-      }],                                             #   motion of its own; docs/04 section 5.1
+        "blend": {"of": str, "factor": PARAM,         # optional (T-06a): a derived driver with no
+                  "relative_to": str},                #   motion of its own; docs/04 section 5.1. relative_to
+                                                      #   (optional, T-28): factor x the motion of `of` seen
+                                                      #   from that driver, T_rel exp(a log(T_rel^-1 T_of))
+        "absent_means_rest": true                     # optional (T-28), not with blend: a trajectory may leave
+      }],                                             #   this driver out; it is then at rest
       "anchors": [{"name": str, "driver": str, "note": str}],   # optional (T-06a): invisible rigid
                                                       #   bodies with no mesh; attachments may go to one
       "simplifications": [str, ...],                  # optional: what this scene leaves out of the lab's
@@ -54,8 +58,11 @@ scene.json only names them and records their hash.
       "landmarks": null | {"names": [str], "rest_positions_mm": [[x, y, z]], "weights": FILE,
                            "note": str},
       "solver": {"analysis": "dynamic", "fps": PARAM, "substeps_per_frame": PARAM,
-                 "damping": PARAM, "gravity_mm_per_s2": PARAM}   # gravity: physical direction
-    }
+                 "damping": PARAM,                    # physical damping, mass-proportional: FEBio's "mass
+                                                      #   damping" body load, f = -C rho v, C in 1/s; 0 = none
+                 "gravity_mm_per_s2": PARAM,          # physical direction
+                 "numerical_damping_rhoi": PARAM}     # optional (T-28): FEBio's rhoi, 0..1 or -2 (Newmark);
+    }                                                 #   absent = the generator's default 0 (generate.RHOI)
 
     PARAM      = {"value": number | [x, y, z] | null, "source": SOURCE_TAG, "note": str (optional)}
     SOURCE_TAG = "lab_setting" | "ziva_default" | "ours"   (实验室设置 / Ziva 默认值 / 我们定的)
@@ -86,6 +93,7 @@ MATERIAL_PARAMS = {"neo-Hookean": ("E_mpa", "nu", "density_t_per_mm3")}
 # mm_per_scene_unit in a tet mesh and in the scene are both written by our own code from the same
 # float; anything beyond rounding means the mesh was built for another unit.
 UNIT_MATCH = 1e-12
+NEWMARK_RHOI = -2.0  # FEBio's rhoi value for its Newmark rule (beta 1/4, gamma 1/2), no numerical damping
 
 
 # --- the format ---------------------------------------------------------------------------------
@@ -210,9 +218,13 @@ class Blend:
 
     of: str
     factor: Param
+    relative_to: str | None = None  # set: `factor` of the motion of `of` relative to this driver (T-28)
 
     def to_json(self) -> dict:
-        return {"of": self.of, "factor": self.factor.to_json()}
+        d = {"of": self.of, "factor": self.factor.to_json()}
+        if self.relative_to is not None:  # absent when not set, so older scenes are written as before
+            d["relative_to"] = self.relative_to
+        return d
 
 
 @dataclass
@@ -220,11 +232,14 @@ class Driver:
     name: str
     hinge: Hinge | None = None
     blend: Blend | None = None  # set: no motion of its own, computed from driver `blend.of`
+    absent_means_rest: bool = False  # True: a trajectory that leaves this driver out keeps it at rest (T-28)
 
     def to_json(self) -> dict:
         d = {"name": self.name, "hinge": None if self.hinge is None else self.hinge.to_json()}
         if self.blend is not None:
             d["blend"] = self.blend.to_json()
+        if self.absent_means_rest:
+            d["absent_means_rest"] = True
         return d
 
 
@@ -276,13 +291,17 @@ class Solver:
     analysis: str
     fps: Param
     substeps_per_frame: Param
-    damping: Param
+    damping: Param  # physical, mass-proportional: FEBio's "mass damping" C, 1/s (0: none)
     gravity_mm_per_s2: Param
+    numerical_damping_rhoi: Param | None = None  # None: not in the file, the generator's default (generate.RHOI)
 
     def to_json(self) -> dict:
-        return {"analysis": self.analysis, "fps": self.fps.to_json(),
-                "substeps_per_frame": self.substeps_per_frame.to_json(), "damping": self.damping.to_json(),
-                "gravity_mm_per_s2": self.gravity_mm_per_s2.to_json()}
+        d = {"analysis": self.analysis, "fps": self.fps.to_json(),
+             "substeps_per_frame": self.substeps_per_frame.to_json(), "damping": self.damping.to_json(),
+             "gravity_mm_per_s2": self.gravity_mm_per_s2.to_json()}
+        if self.numerical_damping_rhoi is not None:  # absent when not set, so older scenes are written as before
+            d["numerical_damping_rhoi"] = self.numerical_damping_rhoi.to_json()
+        return d
 
 
 @dataclass
@@ -507,14 +526,23 @@ def _blend(d: dict, where: str) -> Blend | None:
     if not 0 <= factor.value <= 1:
         raise _Bad(f"{where}.blend.factor must be between 0 and 1 (0 stays with the skull, 1 follows "
                    f"{raw.get('of')!r}), got {factor.value}")
-    return Blend(_str(_get(raw, "of", f"{where}.blend"), f"{where}.blend.of"), factor)
+    relative_to = raw.get("relative_to")
+    if relative_to is not None:
+        relative_to = _str(relative_to, f"{where}.blend.relative_to")
+    return Blend(_str(_get(raw, "of", f"{where}.blend"), f"{where}.blend.of"), factor, relative_to)
 
 
 def _driver(d: dict, where: str) -> Driver:
     blend = _blend(d, where)
+    rest = d.get("absent_means_rest", False)
+    if not isinstance(rest, bool):
+        raise _Bad(f"{where}.absent_means_rest must be true or false, got {rest!r}")
+    if rest and blend is not None:
+        raise _Bad(f"{where}: a derived driver ('blend') has no motion of its own, so 'absent_means_rest' means "
+                   "nothing for it; remove one of them")
     raw = d.get("hinge")
     if raw is None:
-        return Driver(d["name"], None, blend)
+        return Driver(d["name"], None, blend, rest)
     if blend is not None:
         raise _Bad(f"{where}: a driver is either derived ('blend') or has its own hinge, not both; "
                    "remove one of them")
@@ -525,7 +553,7 @@ def _driver(d: dict, where: str) -> Driver:
     if raw.get("source") not in SOURCES:
         raise _Bad(f"{where}.hinge.source must be one of {', '.join(SOURCES)}, got {raw.get('source')!r}")
     pivot = _vec3(_get(raw, "pivot_mm", f"{where}.hinge"), f"{where}.hinge.pivot_mm")
-    return Driver(d["name"], Hinge(pivot, axis, raw["source"], raw.get("note", "")))
+    return Driver(d["name"], Hinge(pivot, axis, raw["source"], raw.get("note", "")), None, rest)
 
 
 def _attachment(d: dict, where: str) -> Attachment:
@@ -587,7 +615,13 @@ def _solver(data: dict) -> Solver:
         raise _Bad(f"solver.damping cannot be negative, got {damping.value}")
     gravity = _param(s, "gravity_mm_per_s2", "solver")
     _vec3(gravity.value, "solver.gravity_mm_per_s2.value")
-    return Solver("dynamic", _number_param(s, "fps", "solver", positive=True), substeps, damping, gravity)
+    rhoi = None
+    if "numerical_damping_rhoi" in s:
+        rhoi = _number_param(s, "numerical_damping_rhoi", "solver")
+        if not (rhoi.value == NEWMARK_RHOI or 0 <= rhoi.value <= 1):
+            raise _Bad(f"solver.numerical_damping_rhoi must be between 0 (FEBio's strongest numerical damping) and 1, "
+                       f"or {NEWMARK_RHOI:g} (FEBio's Newmark rule, none); got {rhoi.value}")
+    return Solver("dynamic", _number_param(s, "fps", "solver", positive=True), substeps, damping, gravity, rhoi)
 
 
 @dataclass
@@ -793,8 +827,28 @@ def _check_references(scene: Scene, base: Path, report: Report) -> None:
                 f"driver {d.name!r} is derived from {parent.name!r}, which is itself derived; derive it from "
                 f"{parent.blend.of!r} directly (derived drivers do not chain)"
             )
+        rel = d.blend.relative_to
+        if rel is not None:
+            base_driver = by_name.get(rel)
+            if base_driver is None:
+                report.errors.append(
+                    f"driver {d.name!r} is relative to driver {rel!r} (blend.relative_to), which the scene does not "
+                    f"list; add it to 'drivers' or fix the name ({listed_drivers})"
+                )
+            elif base_driver.blend is not None:
+                report.errors.append(
+                    f"driver {d.name!r} is relative to {rel!r}, which is itself derived; make it relative to a driver "
+                    "with a motion of its own"
+                )
+            elif rel == d.blend.of:
+                report.errors.append(
+                    f"driver {d.name!r} is {d.blend.of!r}'s motion relative to {rel!r} itself, which is always the "
+                    f"plain {rel!r}; remove 'relative_to' or name another driver"
+                )
         if d.name in followed:
             followed.add(d.blend.of)  # the source is in use through the driver derived from it
+            if rel is not None:
+                followed.add(rel)
     for d in sorted(drivers - followed):
         report.warnings.append(f"driver {d!r} moves no bone; it is unused")
 
@@ -871,6 +925,7 @@ def _check_trajectory(scene: Scene, path: Path, report: Report) -> None:
                     "use the names listed in scene.json under landmarks.names"
                 )
     derived = {d.name: d for d in scene.drivers if d.blend is not None}
+    resting = {d.name for d in scene.drivers if d.absent_means_rest}
     have =', '.join(sorted(traj.drivers)) or 'none'
 
     def need(who: str, driver: str) -> None:
@@ -881,7 +936,13 @@ def _check_trajectory(scene: Scene, path: Path, report: Report) -> None:
                     f"trajectory: {who} follows driver {driver!r}, derived from {d.blend.of!r}, but the "
                     f"trajectory has no motion for {d.blend.of!r} (it has: {have})"
                 )
-        elif driver not in traj.drivers:
+            rel = d.blend.relative_to
+            if rel is not None and rel not in traj.drivers and rel not in resting:
+                report.errors.append(
+                    f"trajectory: {who} follows driver {driver!r}, relative to {rel!r}, but the trajectory has no "
+                    f"motion for {rel!r} (it has: {have}); give it one, or mark {rel!r} absent_means_rest in the scene"
+                )
+        elif driver not in traj.drivers and driver not in resting:
             report.errors.append(
                 f"trajectory: {who} follows driver {driver!r}, but the trajectory has no motion for "
                 f"it (it has: {have})"
@@ -893,7 +954,7 @@ def _check_trajectory(scene: Scene, path: Path, report: Report) -> None:
     for a in scene.anchors:
         need(f"anchor {a.name!r}", a.driver)
     used = {b.driver for b in scene.bones if b.motion == "prescribed"} | {a.driver for a in scene.anchors}
-    used |= {derived[d].blend.of for d in used if d in derived}
+    used |= {x for d in used if d in derived for x in (derived[d].blend.of, derived[d].blend.relative_to) if x}
     for d in sorted(set(traj.drivers) & set(derived)):
         report.warnings.append(
             f"trajectory: driver {d!r} is derived from {derived[d].blend.of!r} in the scene, so its own motion "
@@ -922,8 +983,9 @@ def check(scene_path, trajectory_path=None) -> Report:
 
 def driver_motion(scene: Scene, traj: trajectory_module.Trajectory) -> dict[str, list[list[float]]]:
     """Every driver's 4x4 transform per frame: the trajectory's own, plus each derived driver
-    computed from its source's motion (docs/04 section 5.1). Raises ValueError if the
-    scene and trajectory do not fit; run `check` first for a readable list of what is wrong."""
+    computed from its source's motion (docs/04 section 5.1). A driver marked absent_means_rest that the trajectory
+    leaves out is not in the result (it is at rest; the generator writes what follows it as fixed). Raises ValueError
+    if the scene and trajectory do not fit; run `check` first for a readable list of what is wrong."""
     out = {}
     by_name = {d.name: d for d in scene.drivers}
     # A derived driver is computed only when something uses it: a prescribed bone, or an anchor that an
@@ -943,5 +1005,13 @@ def driver_motion(scene: Scene, traj: trajectory_module.Trajectory) -> dict[str,
             raise ValueError(f"driver {d.name!r}: its source {d.blend.of!r} is missing or is itself derived")
         if d.blend.of not in traj.drivers:
             raise ValueError(f"driver {d.name!r}: the trajectory has no motion for its source {d.blend.of!r}")
+        rel = d.blend.relative_to
+        if rel is not None and rel in traj.drivers:
+            out[d.name] = trajectory_module.relative_blend_transforms(
+                traj.drivers[rel], traj.drivers[d.blend.of], d.blend.factor.value)
+            continue
+        if rel is not None and not (rel in by_name and by_name[rel].absent_means_rest):
+            raise ValueError(f"driver {d.name!r}: the trajectory has no motion for {rel!r}, the driver it is relative to")
+        # no relative_to, or relative to a driver at rest: exactly the plain blend (the same numbers as before T-28)
         out[d.name] = trajectory_module.blend_transforms(traj.drivers[d.blend.of], d.blend.factor.value)
     return out

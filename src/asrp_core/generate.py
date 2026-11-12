@@ -43,8 +43,13 @@ What it writes, all in mm, N, MPa, s (mass in tonnes):
 - **Dynamic analysis** at the scene's fps and substeps, one must point per frame (FEBio then writes
   frames 1..N and no frame 0, pit 15), adaptive stepping as in spikes/s2_lips_febio.py (up to
   MAX_RETRIES retries, the step may shrink to dt × DTMIN_FRACTION), generalized-α with spectral radius
-  RHOI = 0 (the strongest damping of fast modes FEBio offers; T-07's runs used it; a value we chose).
-  The scene's physical damping must be 0: physical damping is not built yet (T-12).
+  rhoi = the scene's `solver.numerical_damping_rhoi`, or RHOI = 0 when the scene does not set it (the strongest
+  damping of fast modes FEBio offers; T-07's runs used it; a value we chose).
+- **Physical damping** (T-28): the scene's `solver.damping` is the rate C (1/s) of FEBio's "mass damping" body load
+  (f = -C ρ v, every mode's amplitude decays as exp(-C t / 2); checked on a cube, spikes/t28_damped_cube.py). 0
+  writes nothing, so such a scene gives the .feb it gave before. It acts on the absolute velocity.
+- **Drivers at rest** (T-28): a body following a driver marked `absent_means_rest` that the trajectory leaves out
+  is written as a fixed body.
 
 Load controller ids run 1, 2, 3 ... with no gaps (pit 15). Every number is written through `_num`,
 so a numpy scalar never reaches the file (FEBio reads the text "np.float64(0.1)" as 0 and says
@@ -147,6 +152,9 @@ class Model:
     feb_text: str = ""
     report: dict = field(default_factory=dict)
     warnings: list = field(default_factory=list)  # from `asrp check`, carried into the run report
+    rhoi: float = 0.0  # FEBio's rhoi as written: the scene's numerical_damping_rhoi, else RHOI
+    rhoi_from_scene: bool = False
+    mass_damping: float = 0.0  # 1/s, the scene's solver.damping; 0 writes no damping body load
 
 
 def _x(name: str) -> str:
@@ -243,9 +251,11 @@ def build(scene_path, trajectory_path, *, delta: float | None = None,
     k = float(s.units.physics_length_scale.value)
     fps = float(s.solver.fps.value)
     substeps = int(s.solver.substeps_per_frame.value)
-    if s.solver.damping.value != 0:
-        raise GenerateError(f"solver.damping is {s.solver.damping.value}; physical damping is not built yet "
-                            "(T-12). Set it to 0 (FEBio's numerical damping rhoi is the generator's setting)")
+    # Physical damping (T-28): solver.damping is the mass damping rate C (1/s) of FEBio's "mass damping" body load,
+    # f = -C rho v; checked on a cube against theory (spikes/t28_damped_cube.py). It is a rate, so k does not touch it.
+    mass_damping = float(s.solver.damping.value)
+    rhoi_param = s.solver.numerical_damping_rhoi
+    rhoi = RHOI if rhoi_param is None else float(rhoi_param.value)  # RHOI read now, not at import (spikes set it)
     if traj.frames < 2:
         raise GenerateError("the trajectory needs at least 2 frames (frame 0 is the rest pose)")
     motions = scene_module.driver_motion(s, traj)
@@ -253,6 +263,7 @@ def build(scene_path, trajectory_path, *, delta: float | None = None,
     # Bodies: every attachment target. A soft tissue as target is not built in phase 1.
     bones = {b.name: b for b in s.bones}
     anchors = {a.name: a for a in s.anchors}
+    resting = {d.name for d in s.drivers if d.absent_means_rest}
     bodies: dict[str, Body] = {}
     for a in s.attachments:
         if a.target in bodies:
@@ -265,6 +276,10 @@ def build(scene_path, trajectory_path, *, delta: float | None = None,
         else:
             raise GenerateError(f"attachment {a.name!r} goes to {a.target!r}, a soft tissue; attachments between soft "
                                 "tissues are not built in phase 1 (ADR-32)")
+        if driver in resting and driver not in motions:
+            # The trajectory leaves this driver out and the scene says that means at rest: the body is written as a
+            # fixed one, so such a run gives the same .feb as before the driver existed (T-28).
+            driver = None
         transforms = None
         if driver is not None:
             transforms = motions[driver]
@@ -321,6 +336,7 @@ def build(scene_path, trajectory_path, *, delta: float | None = None,
                   SPRING_OFFSET_EDGES * h * k if delta is None else float(delta), bodies, groups,
                   {n: t for n, (t, _) in hard.items()}, [], list(s.solver.gravity_mm_per_s2.value))
     model.warnings = list(checked.warnings)
+    model.rhoi, model.rhoi_from_scene, model.mass_damping = rhoi, rhoi_param is not None, mass_damping
     model.feb_text = _feb(model)
     # docs/05 pit 16: FEBio reads "np.float64(0.1)" as 0 and says nothing
     found = re.search(r"\bnp\.|float64", model.feb_text)
@@ -444,6 +460,9 @@ def _feb(m: Model) -> str:
                           + "\n".join(f"        <pt>{_num(t)},{_num(v)}</pt>" for t, v in pts)
                           + "\n      </points>\n    </load_controller>")
     gravity = "\n".join(f'      <{axis} lc="1">{_num(FEBIO_GRAVITY_SIGN * g)}</{axis}>' for axis, g in zip("xyz", m.gravity))
+    if m.mass_damping:  # nothing is written for 0, so a scene without damping gives the .feb it always gave
+        gravity += ('\n    </body_load>\n    <body_load name="damping" type="mass damping">\n'
+                    f"      <C>{_num(m.mass_damping)}</C>")
     return f"""<?xml version="1.0" encoding="ISO-8859-1"?>
 <!-- written by asrp_core.generate (T-06a): coordinates are geometric mm x k = {_num(k)} (ADR-36) -->
 <febio_spec version="4.0">
@@ -462,7 +481,7 @@ def _feb(m: Model) -> str:
     </time_stepper>
     <solver type="solid">
       <qn_method type="BFGS"/>
-      <rhoi>{_num(RHOI)}</rhoi>
+      <rhoi>{_num(m.rhoi)}</rhoi>
     </solver>
   </Control>
   <Material>
@@ -553,4 +572,7 @@ def _report(m: Model) -> dict:
         "tets": int(len(m.mesh.tets)),
         "springs": len(m.springs),
         "hard_nodes": len(m.hard),
+        "solver": {"rhoi": m.rhoi, "rhoi_from": "scene.solver.numerical_damping_rhoi" if m.rhoi_from_scene
+                   else "generator default (generate.RHOI)", "mass_damping_per_s": m.mass_damping,
+                   "substeps_per_frame": m.substeps},
     }
