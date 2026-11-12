@@ -1,0 +1,5734 @@
+{
+  "format": "asrp-spike/1",
+  "spike": "spikes/audit_rhoi_springs.py",
+  "command": "uv run python spikes/audit_rhoi_springs.py --work <folder outside the repo>",
+  "model": {
+    "cube": "spikes/t28_damped_cube.py feb_text: edge 10 mm, 48 tets, E 1000 MPa (soft cube without springs 0.005 MPa, base tied), 4 vertical linear springs K each to a fixed rigid frame, gravity from t = 0, 1 s, single thread; undamped (no mass damping) everywhere here",
+    "omega_rad_per_s": 62.83185307179586,
+    "spring_stiffness_n_per_mm_each": 0.001046178066515472,
+    "mass_t": 1.06e-06
+  },
+  "model_formulas": "alpha_f = 1/(1+rho), alpha_m = (2-rho)/(1+rho), beta = (1+alpha_m-alpha_f)^2/4, gamma = 1/2+alpha_m-alpha_f (FEBio Theory Manual 3.6.5); rhoi -2: alpha 1, beta 1/4, gamma 1/2",
+  "q5_lips": {
+    "scene": "given with --scene (an imported lip scene)",
+    "motion": "given with --motion (head_still.json: 87 frames, nothing moves)",
+    "cases": {
+      "rhoi_0": {
+        "status": "complete",
+        "substeps_per_frame": 1,
+        "rhoi_written": 0.0,
+        "febio_s": 75.608,
+        "iterations": {
+          "steps": 86,
+          "iterations_mean": 1.1162790697674418,
+          "iterations_max": 3,
+          "iterations_min": 1,
+          "iterations_total": 96,
+          "reformations_total": 86,
+          "first_steps": [
+            3,
+            3,
+            3,
+            2,
+            2
+          ]
+        },
+        "mean_z_rest_end_mm": -101.01462035710594,
+        "mean_z_sag_frame_1_mm": -0.09052398665660633,
+        "mean_z_sag_total_mm": -0.09186030722129601,
+        "mean_z_minus_rest_frames_1_30_mm": [
+          0.001336,
+          -0.047233,
+          -0.001108,
+          0.001344,
+          -0.000245,
+          -6.8e-05,
+          1.6e-05,
+          2e-06,
+          -1e-06,
+          -0.0,
+          0.0,
+          -0.0,
+          -0.0,
+          0.0,
+          0.0,
+          -0.0,
+          -0.0,
+          0.0,
+          0.0,
+          -0.0,
+          -0.0,
+          0.0,
+          0.0,
+          -0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "mean_z_turning_points_frames_1_30": [
+          2,
+          4,
+          5,
+          7,
+          9,
+          11,
+          12,
+          14,
+          16,
+          18,
+          20,
+          22,
+          24
+        ],
+        "mean_z_peak_to_trough_mm": [
+          0.048578,
+          0.001589,
+          0.000262,
+          1.8e-05,
+          1e-06,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "decay_per_frame": 0.2685383563770021,
+        "mean_z_crosses_rest_frames_1_30": 14,
+        "nodes_median_crossings_of_rest_frames_1_30": 9.0,
+        "nodes_max_crossings_of_rest_frames_1_30": 13,
+        "fraction_of_sag_done_by_frame_1": 0.9854526878353409
+      },
+      "rhoi_0.5": {
+        "status": "complete",
+        "substeps_per_frame": 1,
+        "rhoi_written": 0.5,
+        "febio_s": 86.377,
+        "iterations": {
+          "steps": 86,
+          "iterations_mean": 1.372093023255814,
+          "iterations_max": 3,
+          "iterations_min": 1,
+          "iterations_total": 118,
+          "reformations_total": 86,
+          "first_steps": [
+            3,
+            3,
+            3,
+            3,
+            3
+          ]
+        },
+        "mean_z_rest_end_mm": -101.01462035710597,
+        "mean_z_sag_frame_1_mm": -0.14880869213375547,
+        "mean_z_sag_total_mm": -0.09186030722132443,
+        "mean_z_minus_rest_frames_1_30_mm": [
+          -0.056948,
+          0.00242,
+          0.028043,
+          -0.034316,
+          0.026947,
+          -0.015666,
+          0.006173,
+          -0.000417,
+          -0.001958,
+          0.002203,
+          -0.001535,
+          0.000751,
+          -0.000199,
+          -6.9e-05,
+          0.000138,
+          -0.000112,
+          6.4e-05,
+          -2.6e-05,
+          5e-06,
+          3e-06,
+          -5e-06,
+          5e-06,
+          -4e-06,
+          3e-06,
+          -1e-06,
+          0.0,
+          1e-06,
+          -1e-06,
+          1e-06,
+          -0.0
+        ],
+        "mean_z_turning_points_frames_1_30": [
+          3,
+          4,
+          5,
+          6,
+          7,
+          9,
+          10,
+          11,
+          12,
+          13,
+          15,
+          16,
+          17,
+          18,
+          19,
+          21,
+          22,
+          23,
+          24,
+          25,
+          27,
+          28,
+          29
+        ],
+        "mean_z_peak_to_trough_mm": [
+          0.062359,
+          0.061263,
+          0.042612,
+          0.021838,
+          0.008131,
+          0.004161,
+          0.003738,
+          0.002286,
+          0.00095,
+          0.000337,
+          0.00025,
+          0.000176,
+          9e-05,
+          3.1e-05,
+          1e-05,
+          1e-05,
+          9e-06,
+          6e-06,
+          4e-06,
+          2e-06,
+          1e-06,
+          1e-06
+        ],
+        "decay_per_frame": 0.6522903236442312,
+        "mean_z_crosses_rest_frames_1_30": 24,
+        "nodes_median_crossings_of_rest_frames_1_30": 24.0,
+        "nodes_max_crossings_of_rest_frames_1_30": 25,
+        "fraction_of_sag_done_by_frame_1": 1.6199455089478632
+      },
+      "rhoi_1": {
+        "status": "complete",
+        "substeps_per_frame": 1,
+        "rhoi_written": 1.0,
+        "febio_s": 136.021,
+        "iterations": {
+          "steps": 86,
+          "iterations_mean": 3.9186046511627906,
+          "iterations_max": 4,
+          "iterations_min": 3,
+          "iterations_total": 337,
+          "reformations_total": 86,
+          "first_steps": [
+            3,
+            3,
+            3,
+            3,
+            4
+          ]
+        },
+        "mean_z_rest_end_mm": -101.01735612075097,
+        "mean_z_sag_frame_1_mm": -0.1740211125134863,
+        "mean_z_sag_total_mm": -0.0945960708663307,
+        "mean_z_minus_rest_frames_1_30_mm": [
+          -0.079425,
+          0.070256,
+          -0.043502,
+          0.023623,
+          0.008046,
+          -0.026444,
+          0.050796,
+          -0.057549,
+          0.06774,
+          -0.059932,
+          0.05708,
+          -0.038978,
+          0.029501,
+          -0.008564,
+          -0.000303,
+          0.017892,
+          -0.021473,
+          0.032624,
+          -0.029336,
+          0.033833,
+          -0.024463,
+          0.023832,
+          -0.010686,
+          0.007829,
+          0.005724,
+          -0.007123,
+          0.01748,
+          -0.014254,
+          0.019282,
+          -0.010698
+        ],
+        "mean_z_turning_points_frames_1_30": [
+          2,
+          3,
+          4,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12,
+          13,
+          14,
+          16,
+          17,
+          18,
+          19,
+          20,
+          21,
+          22,
+          23,
+          24,
+          26,
+          27,
+          28,
+          29
+        ],
+        "mean_z_peak_to_trough_mm": [
+          0.113759,
+          0.067125,
+          0.050067,
+          0.07724,
+          0.108345,
+          0.125289,
+          0.127672,
+          0.117012,
+          0.096058,
+          0.068479,
+          0.038065,
+          0.026456,
+          0.039364,
+          0.054097,
+          0.06196,
+          0.063168,
+          0.058296,
+          0.048295,
+          0.034518,
+          0.018515,
+          0.014952,
+          0.024603,
+          0.031734,
+          0.033536
+        ],
+        "decay_per_frame": 0.9541070400089959,
+        "mean_z_crosses_rest_frames_1_30": 26,
+        "nodes_median_crossings_of_rest_frames_1_30": 26.0,
+        "nodes_max_crossings_of_rest_frames_1_30": 28,
+        "fraction_of_sag_done_by_frame_1": 1.8396230511454055
+      },
+      "rhoi_-2": {
+        "status": "complete",
+        "substeps_per_frame": 1,
+        "rhoi_written": -2.0,
+        "febio_s": 125.058,
+        "iterations": {
+          "steps": 86,
+          "iterations_mean": 4.162790697674419,
+          "iterations_max": 5,
+          "iterations_min": 3,
+          "iterations_total": 358,
+          "reformations_total": 86,
+          "first_steps": [
+            4,
+            4,
+            3,
+            4,
+            4
+          ]
+        },
+        "mean_z_rest_end_mm": -101.0173179472095,
+        "mean_z_sag_frame_1_mm": -0.17854218865477378,
+        "mean_z_sag_total_mm": -0.09455789732486153,
+        "mean_z_minus_rest_frames_1_30_mm": [
+          -0.083984,
+          0.074276,
+          -0.046203,
+          0.024253,
+          0.009573,
+          -0.029989,
+          0.055884,
+          -0.063485,
+          0.073587,
+          -0.064957,
+          0.060461,
+          -0.040272,
+          0.028553,
+          -0.005483,
+          -0.005072,
+          0.023652,
+          -0.027413,
+          0.038048,
+          -0.033459,
+          0.036334,
+          -0.025043,
+          0.022707,
+          -0.008187,
+          0.004407,
+          0.009229,
+          -0.01031,
+          0.019765,
+          -0.015221,
+          0.019172,
+          -0.00933
+        ],
+        "mean_z_turning_points_frames_1_30": [
+          2,
+          3,
+          4,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12,
+          13,
+          14,
+          16,
+          17,
+          18,
+          19,
+          20,
+          21,
+          22,
+          23,
+          25,
+          26,
+          27,
+          28,
+          29
+        ],
+        "mean_z_peak_to_trough_mm": [
+          0.120479,
+          0.070455,
+          0.054242,
+          0.085873,
+          0.11937,
+          0.137072,
+          0.138544,
+          0.125418,
+          0.100733,
+          0.068825,
+          0.034036,
+          0.029135,
+          0.051065,
+          0.06546,
+          0.071507,
+          0.069793,
+          0.061376,
+          0.047749,
+          0.030894,
+          0.017416,
+          0.01954,
+          0.030076,
+          0.034986,
+          0.034393
+        ],
+        "decay_per_frame": 0.9529273225775482,
+        "mean_z_crosses_rest_frames_1_30": 26,
+        "nodes_median_crossings_of_rest_frames_1_30": 26.0,
+        "nodes_max_crossings_of_rest_frames_1_30": 27,
+        "fraction_of_sag_done_by_frame_1": 1.8881784991620238
+      }
+    },
+    "region": {
+      "node_count": 1684,
+      "free_tet_nodes": 6197,
+      "tet_nodes": 6747,
+      "rule": "tet nodes held by no attachment whose nearest held node is one of lower_lip_on_jaw's spring nodes"
+    },
+    "model_one_frame_step": {
+      "note": "the 1-dof model at the lips' ~14 ms period and one step per frame (1/30 s): amplitude kept per step (spectral radius) and the period it would show; the lips mix tissue (consistent) and springs, so model only",
+      "omega_dt": 14.959965017094252,
+      "rhoi_0": {
+        "consistent": {
+          "decay_rate_per_s": 51.22466472018264,
+          "period_s": 0.11102596636650061,
+          "spectral_radius": 0.18132054920159635
+        },
+        "spring_at_n_plus_1": {
+          "decay_rate_per_s": 51.22466472018264,
+          "period_s": 0.11102596636650061,
+          "spectral_radius": 0.18132054920159635
+        }
+      },
+      "rhoi_0.5": {
+        "consistent": {
+          "decay_rate_per_s": 13.469666440053052,
+          "period_s": 0.07800586975226255,
+          "spectral_radius": 0.638273195400089
+        },
+        "spring_at_n_plus_1": {
+          "decay_rate_per_s": 20.35306394962543,
+          "period_s": 0.07364908718455752,
+          "spectral_radius": 0.5074102327524392
+        }
+      },
+      "rhoi_1": {
+        "consistent": {
+          "decay_rate_per_s": 2.0650148258027982e-13,
+          "period_s": 0.07282855256127593,
+          "spectral_radius": 0.9999999999999931
+        },
+        "spring_at_n_plus_1": {
+          "decay_rate_per_s": null,
+          "period_s": null,
+          "spectral_radius": 1.0
+        }
+      },
+      "rhoi_-2": {
+        "consistent": {
+          "decay_rate_per_s": -6.6613381477509385e-15,
+          "period_s": 0.07282855256127593,
+          "spectral_radius": 1.0000000000000002
+        },
+        "spring_at_n_plus_1": {
+          "decay_rate_per_s": -6.6613381477509385e-15,
+          "period_s": 0.07282855256127593,
+          "spectral_radius": 1.0000000000000002
+        }
+      }
+    }
+  },
+  "q1_map": {
+    "rows": [
+      {
+        "springs": true,
+        "dt_s": 0.0033333333333333335,
+        "steps_per_s": 300,
+        "rhoi": -2.0,
+        "normal_termination": true,
+        "febio_version": "4.13.0",
+        "turning_points": 19,
+        "period_s": 0.1003646038510058,
+        "decay_rate_per_s": -1.0625165278204885e-05,
+        "first_height_mm": 4.969797908259625,
+        "last_height_mm": 4.969805725332882,
+        "iterations": {
+          "steps": 300,
+          "iterations_mean": 1.0,
+          "iterations_max": 1,
+          "iterations_min": 1,
+          "iterations_total": 300,
+          "reformations_total": 300,
+          "first_steps": [
+            1,
+            1,
+            1,
+            1,
+            1
+          ]
+        },
+        "period_error": 0.003646038510057986,
+        "omega_dt": 0.20943951023931956,
+        "model_consistent": {
+          "decay_rate_per_s": -0.0,
+          "period_error": 0.003644780395438002
+        },
+        "model_spring_at_n_plus_1": {
+          "decay_rate_per_s": -0.0,
+          "period_error": 0.003644780395438002
+        }
+      },
+      {
+        "springs": true,
+        "dt_s": 0.0033333333333333335,
+        "steps_per_s": 300,
+        "rhoi": 0.0,
+        "normal_termination": true,
+        "febio_version": "4.13.0",
+        "turning_points": 19,
+        "period_s": 0.10186868551779812,
+        "decay_rate_per_s": 0.24601472713115008,
+        "first_height_mm": 4.888214830206791,
+        "last_height_mm": 3.9504108936713545,
+        "iterations": {
+          "steps": 300,
+          "iterations_mean": 1.0,
+          "iterations_max": 1,
+          "iterations_min": 1,
+          "iterations_total": 300,
+          "reformations_total": 300,
+          "first_steps": [
+            1,
+            1,
+            1,
+            1,
+            1
+          ]
+        },
+        "period_error": 0.018686855177981188,
+        "omega_dt": 0.20943951023931956,
+        "model_consistent": {
+          "decay_rate_per_s": 0.24602285316769268,
+          "period_error": 0.01868667265673779
+        },
+        "model_spring_at_n_plus_1": {
+          "decay_rate_per_s": 0.24602285316769268,
+          "period_error": 0.01868667265673779
+        }
+      },
+      {
+        "springs": true,
+        "dt_s": 0.0033333333333333335,
+        "steps_per_s": 300,
+        "rhoi": 0.25,
+        "normal_termination": true,
+        "febio_version": "4.13.0",
+        "turning_points": 19,
+        "period_s": 0.10083563908149813,
+        "decay_rate_per_s": 1.32946788181756,
+        "first_height_mm": 4.4979984592428535,
+        "last_height_mm": 1.4392570364751482,
+        "iterations": {
+          "steps": 300,
+          "iterations_mean": 1.0,
+          "iterations_max": 1,
+          "iterations_min": 1,
+          "iterations_total": 300,
+          "reformations_total": 300,
+          "first_steps": [
+            1,
+            1,
+            1,
+            1,
+            1
+          ]
+        },
+        "period_error": 0.008356390814981268,
+        "omega_dt": 0.20943951023931956,
+        "model_consistent": {
+          "decay_rate_per_s": 0.058254302224920625,
+          "period_error": 0.009353040192028733
+        },
+        "model_spring_at_n_plus_1": {
+          "decay_rate_per_s": 1.32947747811744,
+          "period_error": 0.00835758938495662
+        }
+      },
+      {
+        "springs": true,
+        "dt_s": 0.0033333333333333335,
+        "steps_per_s": 300,
+        "rhoi": 0.5,
+        "normal_termination": true,
+        "febio_version": "4.13.0",
+        "turning_points": 19,
+        "period_s": 0.10048419186634765,
+        "decay_rate_per_s": 2.16686009651193,
+        "first_height_mm": 4.2273129126689035,
+        "last_height_mm": 0.6641768395092917,
+        "iterations": {
+          "steps": 300,
+          "iterations_mean": 1.0,
+          "iterations_max": 1,
+          "iterations_min": 1,
+          "iterations_total": 300,
+          "reformations_total": 300,
+          "first_steps": [
+            1,
+            1,
+            1,
+            1,
+            1
+          ]
+        },
+        "period_error": 0.004841918663476413,
+        "omega_dt": 0.20943951023931956,
+        "model_consistent": {
+          "decay_rate_per_s": 0.010384813834662226,
+          "period_error": 0.005446817027154743
+        },
+        "model_spring_at_n_plus_1": {
+          "decay_rate_per_s": 2.1668807781913566,
+          "period_error": 0.004845686487761763
+        }
+      },
+      {
+        "springs": true,
+        "dt_s": 0.0033333333333333335,
+        "steps_per_s": 300,
+        "rhoi": 0.7,
+        "normal_termination": true,
+        "febio_version": "4.13.0",
+        "turning_points": 19,
+        "period_s": 0.10042649383877891,
+        "decay_rate_per_s": 2.6793981586279134,
+        "first_height_mm": 4.070784673158176,
+        "last_height_mm": 0.41338883537069604,
+        "iterations": {
+          "steps": 300,
+          "iterations_mean": 1.0,
+          "iterations_max": 1,
+          "iterations_min": 1,
+          "iterations_total": 300,
+          "reformations_total": 300,
+          "first_steps": [
+            1,
+            1,
+            1,
+            1,
+            1
+          ]
+        },
+        "period_error": 0.0042649383877890745,
+        "omega_dt": 0.20943951023931956,
+        "model_consistent": {
+          "decay_rate_per_s": 0.001560966659566911,
+          "period_error": 0.004153671104920181
+        },
+        "model_spring_at_n_plus_1": {
+          "decay_rate_per_s": 2.6794031487410614,
+          "period_error": 0.004266448732113126
+        }
+      },
+      {
+        "springs": true,
+        "dt_s": 0.0033333333333333335,
+        "steps_per_s": 300,
+        "rhoi": 0.9,
+        "normal_termination": true,
+        "febio_version": "4.13.0",
+        "turning_points": 19,
+        "period_s": 0.10046150123125444,
+        "decay_rate_per_s": 3.08406514934378,
+        "first_height_mm": 3.951188119241894,
+        "last_height_mm": 0.2837827756922362,
+        "iterations": {
+          "steps": 300,
+          "iterations_mean": 1.0,
+          "iterations_max": 1,
+          "iterations_min": 1,
+          "iterations_total": 300,
+          "reformations_total": 300,
+          "first_steps": [
+            1,
+            1,
+            1,
+            1,
+            1
+          ]
+        },
+        "period_error": 0.004615012312544353,
+        "omega_dt": 0.20943951023931956,
+        "model_consistent": {
+          "decay_rate_per_s": 4.160359528922509e-05,
+          "period_error": 0.0036901692664359498
+        },
+        "model_spring_at_n_plus_1": {
+          "decay_rate_per_s": 3.0840770546131093,
+          "period_error": 0.004618778565257664
+        }
+      },
+      {
+        "springs": true,
+        "dt_s": 0.0033333333333333335,
+        "steps_per_s": 300,
+        "rhoi": 1.0,
+        "normal_termination": true,
+        "febio_version": "4.13.0",
+        "turning_points": 19,
+        "period_s": 0.10049776176290488,
+        "decay_rate_per_s": 3.2542823314555,
+        "first_height_mm": 3.901825990391352,
+        "last_height_mm": 0.2420784912629066,
+        "iterations": {
+          "steps": 300,
+          "iterations_mean": 2.0,
+          "iterations_max": 2,
+          "iterations_min": 2,
+          "iterations_total": 600,
+          "reformations_total": 300,
+          "first_steps": [
+            2,
+            2,
+            2,
+            2,
+            2
+          ]
+        },
+        "period_error": 0.004977617629048775,
+        "omega_dt": 0.20943951023931956,
+        "model_consistent": {
+          "decay_rate_per_s": -0.0,
+          "period_error": 0.0036447803954395286
+        },
+        "model_spring_at_n_plus_1": {
+          "decay_rate_per_s": 3.254309676097071,
+          "period_error": 0.004983740589577235
+        }
+      },
+      {
+        "springs": true,
+        "dt_s": 0.0016666666666666668,
+        "steps_per_s": 600,
+        "rhoi": -2.0,
+        "normal_termination": true,
+        "febio_version": "4.13.0",
+        "turning_points": 19,
+        "period_s": 0.10009135767686937,
+        "decay_rate_per_s": 3.3941546094664924e-06,
+        "first_height_mm": 4.969806451387789,
+        "last_height_mm": 4.969793323353141,
+        "iterations": {
+          "steps": 600,
+          "iterations_mean": 1.0,
+          "iterations_max": 1,
+          "iterations_min": 1,
+          "iterations_total": 600,
+          "reformations_total": 600,
+          "first_steps": [
+            1,
+            1,
+            1,
+            1,
+            1
+          ]
+        },
+        "period_error": 0.0009135767686936636,
+        "omega_dt": 0.10471975511965978,
+        "model_consistent": {
+          "decay_rate_per_s": -6.661338147750935e-13,
+          "period_error": 0.0009131851163238225
+        },
+        "model_spring_at_n_plus_1": {
+          "decay_rate_per_s": -6.661338147750935e-13,
+          "period_error": 0.0009131851163238225
+        }
+      },
+      {
+        "springs": true,
+        "dt_s": 0.0016666666666666668,
+        "steps_per_s": 600,
+        "rhoi": 0.0,
+        "normal_termination": true,
+        "febio_version": "4.13.0",
+        "turning_points": 19,
+        "period_s": 0.10049281050096293,
+        "decay_rate_per_s": 0.03456720875847389,
+        "first_height_mm": 4.957710174693879,
+        "last_height_mm": 4.813462963622835,
+        "iterations": {
+          "steps": 600,
+          "iterations_mean": 1.0,
+          "iterations_max": 1,
+          "iterations_min": 1,
+          "iterations_total": 600,
+          "reformations_total": 600,
+          "first_steps": [
+            1,
+            1,
+            1,
+            1,
+            1
+          ]
+        },
+        "period_error": 0.004928105009629202,
+        "omega_dt": 0.10471975511965978,
+        "model_consistent": {
+          "decay_rate_per_s": 0.034567048148775044,
+          "period_error": 0.004927222416578059
+        },
+        "model_spring_at_n_plus_1": {
+          "decay_rate_per_s": 0.034567048148775044,
+          "period_error": 0.004927222416578059
+        }
+      },
+      {
+        "springs": true,
+        "dt_s": 0.0016666666666666668,
+        "steps_per_s": 600,
+        "rhoi": 0.25,
+        "normal_termination": true,
+        "febio_version": "4.13.0",
+        "turning_points": 19,
+        "period_s": 0.10021123725611142,
+        "decay_rate_per_s": 0.6598000550842481,
+        "first_height_mm": 4.730086386507157,
+        "last_height_mm": 2.69642877687983,
+        "iterations": {
+          "steps": 600,
+          "iterations_mean": 1.0,
+          "iterations_max": 1,
+          "iterations_min": 1,
+          "iterations_total": 600,
+          "reformations_total": 600,
+          "first_steps": [
+            1,
+            1,
+            1,
+            1,
+            1
+          ]
+        },
+        "period_error": 0.0021123725611141286,
+        "omega_dt": 0.10471975511965978,
+        "model_consistent": {
+          "decay_rate_per_s": 0.007658370600504704,
+          "period_error": 0.0023796967084803444
+        },
+        "model_spring_at_n_plus_1": {
+          "decay_rate_per_s": 0.6598013297122699,
+          "period_error": 0.002112228123194587
+        }
+      },
+      {
+        "springs": true,
+        "dt_s": 0.0016666666666666668,
+        "steps_per_s": 600,
+        "rhoi": 0.5,
+        "normal_termination": true,
+        "febio_version": "4.13.0",
+        "turning_points": 19,
+        "period_s": 0.10012170557705301,
+        "decay_rate_per_s": 1.093299082382001,
+        "first_height_mm": 4.579816434733073,
+        "last_height_mm": 1.8062013080474688,
+        "iterations": {
+          "steps": 600,
+          "iterations_mean": 1.0,
+          "iterations_max": 1,
+          "iterations_min": 1,
+          "iterations_total": 600,
+          "reformations_total": 600,
+          "first_steps": [
+            1,
+            1,
+            1,
+            1,
+            1
+          ]
+        },
+        "period_error": 0.0012170557705300233,
+        "omega_dt": 0.10471975511965978,
+        "model_consistent": {
+          "decay_rate_per_s": 0.0013264948932902832,
+          "period_error": 0.0013684837237439018
+        },
+        "model_spring_at_n_plus_1": {
+          "decay_rate_per_s": 1.0932935622795807,
+          "period_error": 0.0012166930225940287
+        }
+      },
+      {
+        "springs": true,
+        "dt_s": 0.0016666666666666668,
+        "steps_per_s": 600,
+        "rhoi": 0.7,
+        "normal_termination": true,
+        "febio_version": "4.13.0",
+        "turning_points": 19,
+        "period_s": 0.10010728988305855,
+        "decay_rate_per_s": 1.350883905671646,
+        "first_height_mm": 4.493032865131794,
+        "last_height_mm": 1.4233955133046026,
+        "iterations": {
+          "steps": 600,
+          "iterations_mean": 1.0,
+          "iterations_max": 1,
+          "iterations_min": 1,
+          "iterations_total": 600,
+          "reformations_total": 600,
+          "first_steps": [
+            1,
+            1,
+            1,
+            1,
+            1
+          ]
+        },
+        "period_error": 0.0010728988305853948,
+        "omega_dt": 0.10471975511965978,
+        "model_consistent": {
+          "decay_rate_per_s": 0.0001974732633970956,
+          "period_error": 0.001041038697165847
+        },
+        "model_spring_at_n_plus_1": {
+          "decay_rate_per_s": 1.350878254343716,
+          "period_error": 0.0010729758703637016
+        }
+      },
+      {
+        "springs": true,
+        "dt_s": 0.0016666666666666668,
+        "steps_per_s": 600,
+        "rhoi": 0.9,
+        "normal_termination": true,
+        "febio_version": "4.13.0",
+        "turning_points": 19,
+        "period_s": 0.10011620818511521,
+        "decay_rate_per_s": 1.5542428112466549,
+        "first_height_mm": 4.425727881210366,
+        "last_height_mm": 1.1791514944576968,
+        "iterations": {
+          "steps": 600,
+          "iterations_mean": 1.0,
+          "iterations_max": 1,
+          "iterations_min": 1,
+          "iterations_total": 600,
+          "reformations_total": 600,
+          "first_steps": [
+            1,
+            1,
+            1,
+            1,
+            1
+          ]
+        },
+        "period_error": 0.0011620818511520747,
+        "omega_dt": 0.10471975511965978,
+        "model_consistent": {
+          "decay_rate_per_s": 5.244891077724928e-06,
+          "period_error": 0.000924565483029216
+        },
+        "model_spring_at_n_plus_1": {
+          "decay_rate_per_s": 1.5542360875857704,
+          "period_error": 0.001162002325795497
+        }
+      },
+      {
+        "springs": true,
+        "dt_s": 0.0016666666666666668,
+        "steps_per_s": 600,
+        "rhoi": 1.0,
+        "normal_termination": true,
+        "febio_version": "4.13.0",
+        "turning_points": 19,
+        "period_s": 0.10012541305915296,
+        "decay_rate_per_s": 1.6404475555599933,
+        "first_height_mm": 4.3975037861566575,
+        "last_height_mm": 1.0886201425153452,
+        "iterations": {
+          "steps": 600,
+          "iterations_mean": 2.0,
+          "iterations_max": 2,
+          "iterations_min": 2,
+          "iterations_total": 1200,
+          "reformations_total": 600,
+          "first_steps": [
+            2,
+            2,
+            2,
+            2,
+            2
+          ]
+        },
+        "period_error": 0.001254130591529512,
+        "omega_dt": 0.10471975511965978,
+        "model_consistent": {
+          "decay_rate_per_s": -0.0,
+          "period_error": 0.0009131851163246552
+        },
+        "model_spring_at_n_plus_1": {
+          "decay_rate_per_s": 1.640440803938649,
+          "period_error": 0.0012538705989691146
+        }
+      },
+      {
+        "springs": true,
+        "dt_s": 0.0008333333333333334,
+        "steps_per_s": 1200,
+        "rhoi": -2.0,
+        "normal_termination": true,
+        "febio_version": "4.13.0",
+        "turning_points": 19,
+        "period_s": 0.10002286791821176,
+        "decay_rate_per_s": 5.0297864647064126e-08,
+        "first_height_mm": 4.969806580502551,
+        "last_height_mm": 4.969806370749605,
+        "iterations": {
+          "steps": 1200,
+          "iterations_mean": 1.0,
+          "iterations_max": 1,
+          "iterations_min": 1,
+          "iterations_total": 1200,
+          "reformations_total": 1200,
+          "first_steps": [
+            1,
+            1,
+            1,
+            1,
+            1
+          ]
+        },
+        "period_error": 0.00022867918211752492,
+        "omega_dt": 0.05235987755982989,
+        "model_consistent": {
+          "decay_rate_per_s": -2.664535259100375e-13,
+          "period_error": 0.00022842132352360323
+        },
+        "model_spring_at_n_plus_1": {
+          "decay_rate_per_s": -2.664535259100375e-13,
+          "period_error": 0.00022842132352360323
+        }
+      },
+      {
+        "springs": true,
+        "dt_s": 0.0008333333333333334,
+        "steps_per_s": 1200,
+        "rhoi": 0.0,
+        "normal_termination": true,
+        "febio_version": "4.13.0",
+        "turning_points": 19,
+        "period_s": 0.10012504552867843,
+        "decay_rate_per_s": 0.004460748340757364,
+        "first_height_mm": 4.968197111433909,
+        "last_height_mm": 4.949371062365556,
+        "iterations": {
+          "steps": 1200,
+          "iterations_mean": 1.0,
+          "iterations_max": 1,
+          "iterations_min": 1,
+          "iterations_total": 1200,
+          "reformations_total": 1200,
+          "first_steps": [
+            1,
+            1,
+            1,
+            1,
+            1
+          ]
+        },
+        "period_error": 0.0012504552867842467,
+        "omega_dt": 0.05235987755982989,
+        "model_consistent": {
+          "decay_rate_per_s": 0.004460811434974539,
+          "period_error": 0.0012501711988963105
+        },
+        "model_spring_at_n_plus_1": {
+          "decay_rate_per_s": 0.004460811434974539,
+          "period_error": 0.0012501711988963105
+        }
+      },
+      {
+        "springs": true,
+        "dt_s": 0.0008333333333333334,
+        "steps_per_s": 1200,
+        "rhoi": 0.25,
+        "normal_termination": true,
+        "febio_version": "4.13.0",
+        "turning_points": 19,
+        "period_s": 0.10005298256814799,
+        "decay_rate_per_s": 0.32921969062673234,
+        "first_height_mm": 4.848703114859432,
+        "last_height_mm": 3.6646260772880677,
+        "iterations": {
+          "steps": 1200,
+          "iterations_mean": 1.0,
+          "iterations_max": 1,
+          "iterations_min": 1,
+          "iterations_total": 1200,
+          "reformations_total": 1200,
+          "first_steps": [
+            1,
+            1,
+            1,
+            1,
+            1
+          ]
+        },
+        "period_error": 0.0005298256814798008,
+        "omega_dt": 0.05235987755982989,
+        "model_consistent": {
+          "decay_rate_per_s": 0.0009698368818266048,
+          "period_error": 0.000597651178410874
+        },
+        "model_spring_at_n_plus_1": {
+          "decay_rate_per_s": 0.3292197889687727,
+          "period_error": 0.0005295363140360443
+        }
+      },
+      {
+        "springs": true,
+        "dt_s": 0.0008333333333333334,
+        "steps_per_s": 1200,
+        "rhoi": 0.5,
+        "normal_termination": true,
+        "febio_version": "4.13.0",
+        "turning_points": 19,
+        "period_s": 0.10003047156461403,
+        "decay_rate_per_s": 0.5478935092246916,
+        "first_height_mm": 4.7701142598778565,
+        "last_height_mm": 2.993726308239294,
+        "iterations": {
+          "steps": 1200,
+          "iterations_mean": 1.0,
+          "iterations_max": 1,
+          "iterations_min": 1,
+          "iterations_total": 1200,
+          "reformations_total": 1200,
+          "first_steps": [
+            1,
+            1,
+            1,
+            1,
+            1
+          ]
+        },
+        "period_error": 0.00030471564614026336,
+        "omega_dt": 0.05235987755982989,
+        "model_consistent": {
+          "decay_rate_per_s": 0.000166720405338741,
+          "period_error": 0.00034255076447234356
+        },
+        "model_spring_at_n_plus_1": {
+          "decay_rate_per_s": 0.5478941484629558,
+          "period_error": 0.00030450614713059543
+        }
+      },
+      {
+        "springs": true,
+        "dt_s": 0.0008333333333333334,
+        "steps_per_s": 1200,
+        "rhoi": 0.7,
+        "normal_termination": true,
+        "febio_version": "4.13.0",
+        "turning_points": 19,
+        "period_s": 0.10002688544530582,
+        "decay_rate_per_s": 0.6768521813732582,
+        "first_height_mm": 4.724428435835338,
+        "last_height_mm": 2.657185702145564,
+        "iterations": {
+          "steps": 1200,
+          "iterations_mean": 1.0,
+          "iterations_max": 1,
+          "iterations_min": 1,
+          "iterations_total": 1200,
+          "reformations_total": 1200,
+          "first_steps": [
+            1,
+            1,
+            1,
+            1,
+            1
+          ]
+        },
+        "period_error": 0.00026885445305810385,
+        "omega_dt": 0.05235987755982989,
+        "model_consistent": {
+          "decay_rate_per_s": 2.4758605554680658e-05,
+          "period_error": 0.0002604244873269379
+        },
+        "model_spring_at_n_plus_1": {
+          "decay_rate_per_s": 0.6768529906923801,
+          "period_error": 0.00026864577385807276
+        }
+      },
+      {
+        "springs": true,
+        "dt_s": 0.0008333333333333334,
+        "steps_per_s": 1200,
+        "rhoi": 0.9,
+        "normal_termination": true,
+        "febio_version": "4.13.0",
+        "turning_points": 19,
+        "period_s": 0.10002911549245003,
+        "decay_rate_per_s": 0.7786617160483271,
+        "first_height_mm": 4.688693015181936,
+        "last_height_mm": 2.4183819651620313,
+        "iterations": {
+          "steps": 1200,
+          "iterations_mean": 1.0,
+          "iterations_max": 1,
+          "iterations_min": 1,
+          "iterations_total": 1200,
+          "reformations_total": 1200,
+          "first_steps": [
+            1,
+            1,
+            1,
+            1,
+            1
+          ]
+        },
+        "period_error": 0.0002911549245002143,
+        "omega_dt": 0.05235987755982989,
+        "model_consistent": {
+          "decay_rate_per_s": 6.570152423912628e-07,
+          "period_error": 0.00023126850349247663
+        },
+        "model_spring_at_n_plus_1": {
+          "decay_rate_per_s": 0.7786626348094854,
+          "period_error": 0.0002909620997632034
+        }
+      },
+      {
+        "springs": true,
+        "dt_s": 0.0008333333333333334,
+        "steps_per_s": 1200,
+        "rhoi": 1.0,
+        "normal_termination": true,
+        "febio_version": "4.13.0",
+        "turning_points": 19,
+        "period_s": 0.10003141446095931,
+        "decay_rate_per_s": 0.8219028197594275,
+        "first_height_mm": 4.673602775214,
+        "last_height_mm": 2.3235435117478973,
+        "iterations": {
+          "steps": 1200,
+          "iterations_mean": 2.0,
+          "iterations_max": 2,
+          "iterations_min": 2,
+          "iterations_total": 2400,
+          "reformations_total": 1200,
+          "first_steps": [
+            2,
+            2,
+            2,
+            2,
+            2
+          ]
+        },
+        "period_error": 0.0003141446095930589,
+        "omega_dt": 0.05235987755982989,
+        "model_consistent": {
+          "decay_rate_per_s": -0.0,
+          "period_error": 0.0002284213235269339
+        },
+        "model_spring_at_n_plus_1": {
+          "decay_rate_per_s": 0.8219038380253122,
+          "period_error": 0.0003139690785729232
+        }
+      },
+      {
+        "springs": false,
+        "dt_s": 0.0033333333333333335,
+        "steps_per_s": 300,
+        "rhoi": -2.0,
+        "normal_termination": true,
+        "febio_version": "4.13.0",
+        "turning_points": 107,
+        "period_s": 0.01859049065256441,
+        "decay_rate_per_s": 0.0048474045649431205,
+        "first_height_mm": 0.18603810445947033,
+        "last_height_mm": 0.18190067090017337,
+        "iterations": {
+          "steps": 300,
+          "iterations_mean": 2.816666666666667,
+          "iterations_max": 3,
+          "iterations_min": 2,
+          "iterations_total": 845,
+          "reformations_total": 300,
+          "first_steps": [
+            3,
+            3,
+            2,
+            3,
+            3
+          ]
+        },
+        "period_error": 0.12040176590382992,
+        "omega_dt": 1.2622388591438167,
+        "model_consistent": {
+          "decay_rate_per_s": -2.664535259100374e-13,
+          "period_error": 0.12101813670440127
+        },
+        "model_spring_at_n_plus_1": {
+          "decay_rate_per_s": -2.664535259100374e-13,
+          "period_error": 0.12101813670440127
+        }
+      },
+      {
+        "springs": false,
+        "dt_s": 0.0033333333333333335,
+        "steps_per_s": 300,
+        "rhoi": 0.0,
+        "normal_termination": true,
+        "febio_version": "4.13.0",
+        "turning_points": 59,
+        "period_s": 0.03381516791004773,
+        "decay_rate_per_s": 14.252908273424651,
+        "first_height_mm": 0.10831732382431802,
+        "last_height_mm": 1.1374129194052784e-07,
+        "iterations": {
+          "steps": 300,
+          "iterations_mean": 1.1766666666666667,
+          "iterations_max": 3,
+          "iterations_min": 1,
+          "iterations_total": 353,
+          "reformations_total": 300,
+          "first_steps": [
+            3,
+            3,
+            3,
+            2,
+            3
+          ]
+        },
+        "period_error": 1.0379544869906836,
+        "omega_dt": 1.2622388591438167,
+        "model_consistent": {
+          "decay_rate_per_s": 47.80412142202771,
+          "period_error": 0.3458452302986471
+        },
+        "model_spring_at_n_plus_1": {
+          "decay_rate_per_s": 47.80412142202771,
+          "period_error": 0.3458452302986471
+        }
+      },
+      {
+        "springs": false,
+        "dt_s": 0.0033333333333333335,
+        "steps_per_s": 300,
+        "rhoi": 0.25,
+        "normal_termination": true,
+        "febio_version": "4.13.0",
+        "turning_points": 73,
+        "period_s": 0.027010404052846097,
+        "decay_rate_per_s": 9.743928107567925,
+        "first_height_mm": 0.14871196558976862,
+        "last_height_mm": 9.020662675496283e-06,
+        "iterations": {
+          "steps": 300,
+          "iterations_mean": 1.4133333333333333,
+          "iterations_max": 3,
+          "iterations_min": 1,
+          "iterations_total": 424,
+          "reformations_total": 300,
+          "first_steps": [
+            3,
+            3,
+            3,
+            3,
+            3
+          ]
+        },
+        "period_error": 0.6278486116454522,
+        "omega_dt": 1.2622388591438167,
+        "model_consistent": {
+          "decay_rate_per_s": 21.388200758012314,
+          "period_error": 0.23128407451820757
+        },
+        "model_spring_at_n_plus_1": {
+          "decay_rate_per_s": 45.90643372649496,
+          "period_error": 0.22851004199484914
+        }
+      },
+      {
+        "springs": false,
+        "dt_s": 0.0033333333333333335,
+        "steps_per_s": 300,
+        "rhoi": 0.5,
+        "normal_termination": true,
+        "febio_version": "4.13.0",
+        "turning_points": 103,
+        "period_s": 0.019344164789054107,
+        "decay_rate_per_s": 6.402289711179352,
+        "first_height_mm": 0.17447383872805666,
+        "last_height_mm": 0.0003716826483639579,
+        "iterations": {
+          "steps": 300,
+          "iterations_mean": 2.0,
+          "iterations_max": 3,
+          "iterations_min": 1,
+          "iterations_total": 600,
+          "reformations_total": 300,
+          "first_steps": [
+            3,
+            3,
+            2,
+            3,
+            3
+          ]
+        },
+        "period_error": 0.16582379640427938,
+        "omega_dt": 1.2622388591438167,
+        "model_consistent": {
+          "decay_rate_per_s": 6.3909183831290015,
+          "period_error": 0.16664012737096737
+        },
+        "model_spring_at_n_plus_1": {
+          "decay_rate_per_s": 55.859281553461564,
+          "period_error": 0.14979313030083313
+        }
+      },
+      {
+        "springs": false,
+        "dt_s": 0.0033333333333333335,
+        "steps_per_s": 300,
+        "rhoi": 0.7,
+        "normal_termination": true,
+        "febio_version": "4.13.0",
+        "turning_points": 105,
+        "period_s": 0.018844444258064592,
+        "decay_rate_per_s": 1.281393039981539,
+        "first_height_mm": 0.18381704630885487,
+        "last_height_mm": 0.05303301788424264,
+        "iterations": {
+          "steps": 300,
+          "iterations_mean": 2.16,
+          "iterations_max": 3,
+          "iterations_min": 1,
+          "iterations_total": 648,
+          "reformations_total": 300,
+          "first_steps": [
+            3,
+            3,
+            2,
+            3,
+            3
+          ]
+        },
+        "period_error": 0.13570690622409362,
+        "omega_dt": 1.2622388591438167,
+        "model_consistent": {
+          "decay_rate_per_s": 1.2787004049524053,
+          "period_error": 0.13622776037923798
+        },
+        "model_spring_at_n_plus_1": {
+          "decay_rate_per_s": 70.64398976702809,
+          "period_error": 0.1232555601397079
+        }
+      },
+      {
+        "springs": false,
+        "dt_s": 0.0033333333333333335,
+        "steps_per_s": 300,
+        "rhoi": 0.9,
+        "normal_termination": true,
+        "febio_version": "4.13.0",
+        "turning_points": 107,
+        "period_s": 0.01861597544634937,
+        "decay_rate_per_s": 0.04025725858631818,
+        "first_height_mm": 0.1862835037894417,
+        "last_height_mm": 0.1793312797879132,
+        "iterations": {
+          "steps": 300,
+          "iterations_mean": 2.51,
+          "iterations_max": 3,
+          "iterations_min": 2,
+          "iterations_total": 753,
+          "reformations_total": 300,
+          "first_steps": [
+            3,
+            3,
+            2,
+            3,
+            3
+          ]
+        },
+        "period_error": 0.12193766985031486,
+        "omega_dt": 1.2622388591438167,
+        "model_consistent": {
+          "decay_rate_per_s": 0.039091915132987896,
+          "period_error": 0.12249162358738068
+        },
+        "model_spring_at_n_plus_1": {
+          "decay_rate_per_s": 83.76794156169875,
+          "period_error": 0.13134105156045128
+        }
+      },
+      {
+        "springs": false,
+        "dt_s": 0.0033333333333333335,
+        "steps_per_s": 300,
+        "rhoi": 1.0,
+        "normal_termination": true,
+        "febio_version": "4.13.0",
+        "turning_points": 107,
+        "period_s": 0.018590542892931206,
+        "decay_rate_per_s": 0.004691434049643471,
+        "first_height_mm": 0.18627235097153338,
+        "last_height_mm": 0.18222427630108662,
+        "iterations": {
+          "steps": 300,
+          "iterations_mean": 2.6133333333333333,
+          "iterations_max": 3,
+          "iterations_min": 2,
+          "iterations_total": 784,
+          "reformations_total": 300,
+          "first_steps": [
+            3,
+            3,
+            2,
+            3,
+            3
+          ]
+        },
+        "period_error": 0.12040491429836689,
+        "omega_dt": 1.2622388591438167,
+        "model_consistent": {
+          "decay_rate_per_s": -6.661338147750938e-14,
+          "period_error": 0.12101813670440127
+        },
+        "model_spring_at_n_plus_1": {
+          "decay_rate_per_s": 87.88635789082483,
+          "period_error": 0.1420185633950709
+        }
+      },
+      {
+        "springs": false,
+        "dt_s": 0.0016666666666666668,
+        "steps_per_s": 600,
+        "rhoi": -2.0,
+        "normal_termination": true,
+        "febio_version": "4.13.0",
+        "turning_points": 116,
+        "period_s": 0.01711864305500741,
+        "decay_rate_per_s": 0.0020218589755473496,
+        "first_height_mm": 0.18538590448411973,
+        "last_height_mm": 0.18494455871869597,
+        "iterations": {
+          "steps": 600,
+          "iterations_mean": 2.0,
+          "iterations_max": 2,
+          "iterations_min": 2,
+          "iterations_total": 1200,
+          "reformations_total": 600,
+          "first_steps": [
+            2,
+            2,
+            2,
+            2,
+            2
+          ]
+        },
+        "period_error": 0.03169724065684855,
+        "omega_dt": 0.6311194295719084,
+        "model_consistent": {
+          "decay_rate_per_s": -0.0,
+          "period_error": 0.03235444649371288
+        },
+        "model_spring_at_n_plus_1": {
+          "decay_rate_per_s": -0.0,
+          "period_error": 0.03235444649371288
+        }
+      },
+      {
+        "springs": false,
+        "dt_s": 0.0016666666666666668,
+        "steps_per_s": 600,
+        "rhoi": 0.0,
+        "normal_termination": true,
+        "febio_version": "4.13.0",
+        "turning_points": 81,
+        "period_s": 0.024444982019573007,
+        "decay_rate_per_s": 9.310491526954305,
+        "first_height_mm": 0.15377029895675243,
+        "last_height_mm": 2.1712907324555886e-05,
+        "iterations": {
+          "steps": 600,
+          "iterations_mean": 1.3916666666666666,
+          "iterations_max": 2,
+          "iterations_min": 1,
+          "iterations_total": 835,
+          "reformations_total": 600,
+          "first_steps": [
+            2,
+            2,
+            2,
+            2,
+            2
+          ]
+        },
+        "period_error": 0.4732371261238866,
+        "omega_dt": 0.6311194295719084,
+        "model_consistent": {
+          "decay_rate_per_s": 18.684340617232188,
+          "period_error": 0.12405929431326028
+        },
+        "model_spring_at_n_plus_1": {
+          "decay_rate_per_s": 18.684340617232188,
+          "period_error": 0.12405929431326028
+        }
+      },
+      {
+        "springs": false,
+        "dt_s": 0.0016666666666666668,
+        "steps_per_s": 600,
+        "rhoi": 0.25,
+        "normal_termination": true,
+        "febio_version": "4.13.0",
+        "turning_points": 112,
+        "period_s": 0.01780527321805158,
+        "decay_rate_per_s": 6.265853243287081,
+        "first_height_mm": 0.17495684243150045,
+        "last_height_mm": 0.00033594329747188567,
+        "iterations": {
+          "steps": 600,
+          "iterations_mean": 1.9133333333333333,
+          "iterations_max": 2,
+          "iterations_min": 1,
+          "iterations_total": 1148,
+          "reformations_total": 600,
+          "first_steps": [
+            2,
+            2,
+            2,
+            2,
+            2
+          ]
+        },
+        "period_error": 0.07307870075787082,
+        "omega_dt": 0.6311194295719084,
+        "model_consistent": {
+          "decay_rate_per_s": 6.246620803976081,
+          "period_error": 0.07376275466426768
+        },
+        "model_spring_at_n_plus_1": {
+          "decay_rate_per_s": 24.883764371334436,
+          "period_error": 0.06907508616507543
+        }
+      },
+      {
+        "springs": false,
+        "dt_s": 0.0016666666666666668,
+        "steps_per_s": 600,
+        "rhoi": 0.5,
+        "normal_termination": true,
+        "febio_version": "4.13.0",
+        "turning_points": 115,
+        "period_s": 0.017366061122949524,
+        "decay_rate_per_s": 1.3851448107846405,
+        "first_height_mm": 0.18324721181718395,
+        "last_height_mm": 0.04738233477120346,
+        "iterations": {
+          "steps": 600,
+          "iterations_mean": 1.9983333333333333,
+          "iterations_max": 2,
+          "iterations_min": 1,
+          "iterations_total": 1199,
+          "reformations_total": 600,
+          "first_steps": [
+            2,
+            2,
+            2,
+            2,
+            2
+          ]
+        },
+        "period_error": 0.04660850068863359,
+        "omega_dt": 0.6311194295719084,
+        "model_consistent": {
+          "decay_rate_per_s": 1.3831541887700698,
+          "period_error": 0.04711172507644455
+        },
+        "model_spring_at_n_plus_1": {
+          "decay_rate_per_s": 35.90599389310601,
+          "period_error": 0.042118858260582565
+        }
+      },
+      {
+        "springs": false,
+        "dt_s": 0.0016666666666666668,
+        "steps_per_s": 600,
+        "rhoi": 0.7,
+        "normal_termination": true,
+        "febio_version": "4.13.0",
+        "turning_points": 116,
+        "period_s": 0.017192823651655316,
+        "decay_rate_per_s": 0.22398325236915362,
+        "first_height_mm": 0.18469601368826005,
+        "last_height_mm": 0.14944330107584136,
+        "iterations": {
+          "steps": 600,
+          "iterations_mean": 2.0,
+          "iterations_max": 2,
+          "iterations_min": 2,
+          "iterations_total": 1200,
+          "reformations_total": 600,
+          "first_steps": [
+            2,
+            2,
+            2,
+            2,
+            2
+          ]
+        },
+        "period_error": 0.036167917253469066,
+        "omega_dt": 0.6311194295719084,
+        "model_consistent": {
+          "decay_rate_per_s": 0.22756421913612548,
+          "period_error": 0.03674672128257688
+        },
+        "model_spring_at_n_plus_1": {
+          "decay_rate_per_s": 44.72295248046188,
+          "period_error": 0.03646632782328341
+        }
+      },
+      {
+        "springs": false,
+        "dt_s": 0.0016666666666666668,
+        "steps_per_s": 600,
+        "rhoi": 0.9,
+        "normal_termination": true,
+        "febio_version": "4.13.0",
+        "turning_points": 116,
+        "period_s": 0.017126527054327198,
+        "decay_rate_per_s": 0.006560015236639406,
+        "first_height_mm": 0.18531851587673387,
+        "last_height_mm": 0.18670648539920087,
+        "iterations": {
+          "steps": 600,
+          "iterations_mean": 2.0,
+          "iterations_max": 2,
+          "iterations_min": 2,
+          "iterations_total": 1200,
+          "reformations_total": 600,
+          "first_steps": [
+            2,
+            2,
+            2,
+            2,
+            2
+          ]
+        },
+        "period_error": 0.032172389318890736,
+        "omega_dt": 0.6311194295719084,
+        "model_consistent": {
+          "decay_rate_per_s": 0.0062852280886156004,
+          "period_error": 0.03275451932179138
+        },
+        "model_spring_at_n_plus_1": {
+          "decay_rate_per_s": 51.75063358108498,
+          "period_error": 0.03933204827799845
+        }
+      },
+      {
+        "springs": false,
+        "dt_s": 0.0016666666666666668,
+        "steps_per_s": 600,
+        "rhoi": 1.0,
+        "normal_termination": true,
+        "febio_version": "4.13.0",
+        "turning_points": 116,
+        "period_s": 0.017118671917693343,
+        "decay_rate_per_s": 0.0016838810429962625,
+        "first_height_mm": 0.1854283906816736,
+        "last_height_mm": 0.1850601105851215,
+        "iterations": {
+          "steps": 600,
+          "iterations_mean": 2.0,
+          "iterations_max": 2,
+          "iterations_min": 2,
+          "iterations_total": 1200,
+          "reformations_total": 600,
+          "first_steps": [
+            2,
+            2,
+            2,
+            2,
+            2
+          ]
+        },
+        "period_error": 0.03169898013779564,
+        "omega_dt": 0.6311194295719084,
+        "model_consistent": {
+          "decay_rate_per_s": 6.661338147750939e-14,
+          "period_error": 0.0323544464937135
+        },
+        "model_spring_at_n_plus_1": {
+          "decay_rate_per_s": 54.48535957623498,
+          "period_error": 0.04243452790518956
+        }
+      },
+      {
+        "springs": false,
+        "dt_s": 0.0008333333333333334,
+        "steps_per_s": 1200,
+        "rhoi": -2.0,
+        "normal_termination": true,
+        "febio_version": "4.13.0",
+        "turning_points": 119,
+        "period_s": 0.016724185945462516,
+        "decay_rate_per_s": 0.0014685249971279058,
+        "first_height_mm": 0.19072706024638109,
+        "last_height_mm": 0.1866131624435159,
+        "iterations": {
+          "steps": 1200,
+          "iterations_mean": 2.0,
+          "iterations_max": 2,
+          "iterations_min": 2,
+          "iterations_total": 2400,
+          "reformations_total": 1200,
+          "first_steps": [
+            2,
+            2,
+            2,
+            2,
+            2
+          ]
+        },
+        "period_error": 0.007924310164212137,
+        "omega_dt": 0.3155597147859542,
+        "model_consistent": {
+          "decay_rate_per_s": 1.4654943925052074e-12,
+          "period_error": 0.008243780498537832
+        },
+        "model_spring_at_n_plus_1": {
+          "decay_rate_per_s": 1.4654943925052074e-12,
+          "period_error": 0.008243780498537832
+        }
+      },
+      {
+        "springs": false,
+        "dt_s": 0.0008333333333333334,
+        "steps_per_s": 1200,
+        "rhoi": 0.0,
+        "normal_termination": true,
+        "febio_version": "4.13.0",
+        "turning_points": 115,
+        "period_s": 0.01723791553239811,
+        "decay_rate_per_s": 4.290571171345905,
+        "first_height_mm": 0.17961719757287398,
+        "last_height_mm": 0.002813108294601463,
+        "iterations": {
+          "steps": 1200,
+          "iterations_mean": 1.9575,
+          "iterations_max": 2,
+          "iterations_min": 1,
+          "iterations_total": 2349,
+          "reformations_total": 1200,
+          "first_steps": [
+            2,
+            2,
+            2,
+            2,
+            2
+          ]
+        },
+        "period_error": 0.03888549064926235,
+        "omega_dt": 0.3155597147859542,
+        "model_consistent": {
+          "decay_rate_per_s": 4.2833101242204465,
+          "period_error": 0.03939226609898093
+        },
+        "model_spring_at_n_plus_1": {
+          "decay_rate_per_s": 4.2833101242204465,
+          "period_error": 0.03939226609898093
+        }
+      },
+      {
+        "springs": false,
+        "dt_s": 0.0008333333333333334,
+        "steps_per_s": 1200,
+        "rhoi": 0.25,
+        "normal_termination": true,
+        "febio_version": "4.13.0",
+        "turning_points": 118,
+        "period_s": 0.016927059502094086,
+        "decay_rate_per_s": 1.1117505826692966,
+        "first_height_mm": 0.1874773296841994,
+        "last_height_mm": 0.06218318540952161,
+        "iterations": {
+          "steps": 1200,
+          "iterations_mean": 1.9941666666666666,
+          "iterations_max": 2,
+          "iterations_min": 1,
+          "iterations_total": 2393,
+          "reformations_total": 1200,
+          "first_steps": [
+            2,
+            2,
+            2,
+            2,
+            2
+          ]
+        },
+        "period_error": 0.02015098536892748,
+        "omega_dt": 0.3155597147859542,
+        "model_consistent": {
+          "decay_rate_per_s": 1.1084281534821125,
+          "period_error": 0.02065834136698756
+        },
+        "model_spring_at_n_plus_1": {
+          "decay_rate_per_s": 12.19439577762021,
+          "period_error": 0.01864640756076689
+        }
+      },
+      {
+        "springs": false,
+        "dt_s": 0.0008333333333333334,
+        "steps_per_s": 1200,
+        "rhoi": 0.5,
+        "normal_termination": true,
+        "febio_version": "4.13.0",
+        "turning_points": 119,
+        "period_s": 0.01678864708244521,
+        "decay_rate_per_s": 0.20815413758603227,
+        "first_height_mm": 0.1906671216922522,
+        "last_height_mm": 0.15220282255662276,
+        "iterations": {
+          "steps": 1200,
+          "iterations_mean": 2.0,
+          "iterations_max": 2,
+          "iterations_min": 2,
+          "iterations_total": 2400,
+          "reformations_total": 1200,
+          "first_steps": [
+            2,
+            2,
+            2,
+            2,
+            2
+          ]
+        },
+        "period_error": 0.011809219554573865,
+        "omega_dt": 0.3155597147859542,
+        "model_consistent": {
+          "decay_rate_per_s": 0.2065257734125468,
+          "period_error": 0.012263696614605826
+        },
+        "model_spring_at_n_plus_1": {
+          "decay_rate_per_s": 19.38122333797651,
+          "period_error": 0.010920921227175863
+        }
+      },
+      {
+        "springs": false,
+        "dt_s": 0.0008333333333333334,
+        "steps_per_s": 1200,
+        "rhoi": 0.7,
+        "normal_termination": true,
+        "febio_version": "4.13.0",
+        "turning_points": 119,
+        "period_s": 0.016742037472982235,
+        "decay_rate_per_s": 0.03263481785780086,
+        "first_height_mm": 0.19100599660270667,
+        "last_height_mm": 0.180735581119988,
+        "iterations": {
+          "steps": 1200,
+          "iterations_mean": 2.0,
+          "iterations_max": 2,
+          "iterations_min": 2,
+          "iterations_total": 2400,
+          "reformations_total": 1200,
+          "first_steps": [
+            2,
+            2,
+            2,
+            2,
+            2
+          ]
+        },
+        "period_error": 0.009000176494529465,
+        "omega_dt": 0.3155597147859542,
+        "model_consistent": {
+          "decay_rate_per_s": 0.031537523630362156,
+          "period_error": 0.009389488811562671
+        },
+        "model_spring_at_n_plus_1": {
+          "decay_rate_per_s": 23.994977091896786,
+          "period_error": 0.009589528763306873
+        }
+      },
+      {
+        "springs": false,
+        "dt_s": 0.0008333333333333334,
+        "steps_per_s": 1200,
+        "rhoi": 0.9,
+        "normal_termination": true,
+        "febio_version": "4.13.0",
+        "turning_points": 119,
+        "period_s": 0.016726187131515653,
+        "decay_rate_per_s": 0.0025518403343896792,
+        "first_height_mm": 0.19080567618455646,
+        "last_height_mm": 0.1867903542310554,
+        "iterations": {
+          "steps": 1200,
+          "iterations_mean": 2.0,
+          "iterations_max": 2,
+          "iterations_min": 2,
+          "iterations_total": 2400,
+          "reformations_total": 1200,
+          "first_steps": [
+            2,
+            2,
+            2,
+            2,
+            2
+          ]
+        },
+        "period_error": 0.008044916576906608,
+        "omega_dt": 0.3155597147859542,
+        "model_consistent": {
+          "decay_rate_per_s": 0.0008454555231268633,
+          "period_error": 0.008346316796335549
+        },
+        "model_spring_at_n_plus_1": {
+          "decay_rate_per_s": 27.63977163959222,
+          "period_error": 0.010375200492699937
+        }
+      },
+      {
+        "springs": false,
+        "dt_s": 0.0008333333333333334,
+        "steps_per_s": 1200,
+        "rhoi": 1.0,
+        "normal_termination": true,
+        "febio_version": "4.13.0",
+        "turning_points": 119,
+        "period_s": 0.01672419165691499,
+        "decay_rate_per_s": 0.001442695958942921,
+        "first_height_mm": 0.1907516103642024,
+        "last_height_mm": 0.18663917798777518,
+        "iterations": {
+          "steps": 1200,
+          "iterations_mean": 2.0,
+          "iterations_max": 2,
+          "iterations_min": 2,
+          "iterations_total": 2400,
+          "reformations_total": 1200,
+          "first_steps": [
+            2,
+            2,
+            2,
+            2,
+            2
+          ]
+        },
+        "period_error": 0.007924654378980727,
+        "omega_dt": 0.3155597147859542,
+        "model_consistent": {
+          "decay_rate_per_s": 2.664535259100376e-13,
+          "period_error": 0.008243780498538878
+        },
+        "model_spring_at_n_plus_1": {
+          "decay_rate_per_s": 29.153495980462484,
+          "period_error": 0.011194392847245086
+        }
+      }
+    ],
+    "nosprings_reference_period_s": 0.016592700242280885,
+    "nosprings_reference": "Richardson extrapolation of the Newmark periods at dt 1/600 and 1/1200: (4 T_1200 - T_600) / 3",
+    "springs_reference_period_s": 0.1
+  },
+  "q2_one_change_at_a_time": {
+    "baseline": {
+      "what": "spikes/t28_damped_cube.py as it is: 4 'linear spring' discrete elements, far end on a fixed rigid body",
+      "rhoi_1": {
+        "normal_termination": true,
+        "febio_version": "4.13.0",
+        "turning_points": 19,
+        "period_s": 0.10012541305915296,
+        "decay_rate_per_s": 1.6404475555599933,
+        "first_height_mm": 4.3975037861566575,
+        "last_height_mm": 1.0886201425153452,
+        "iterations": {
+          "steps": 600,
+          "iterations_mean": 2.0,
+          "iterations_max": 2,
+          "iterations_min": 2,
+          "iterations_total": 1200,
+          "reformations_total": 600,
+          "first_steps": [
+            2,
+            2,
+            2,
+            2,
+            2
+          ]
+        },
+        "period_error": 0.001254130591529512
+      },
+      "rhoi_0.5": {
+        "normal_termination": true,
+        "febio_version": "4.13.0",
+        "turning_points": 19,
+        "period_s": 0.10012170557705301,
+        "decay_rate_per_s": 1.093299082382001,
+        "first_height_mm": 4.579816434733073,
+        "last_height_mm": 1.8062013080474688,
+        "iterations": {
+          "steps": 600,
+          "iterations_mean": 1.0,
+          "iterations_max": 1,
+          "iterations_min": 1,
+          "iterations_total": 600,
+          "reformations_total": 600,
+          "first_steps": [
+            1,
+            1,
+            1,
+            1,
+            1
+          ]
+        },
+        "period_error": 0.0012170557705300233
+      },
+      "rhoi_-2": {
+        "normal_termination": true,
+        "febio_version": "4.13.0",
+        "turning_points": 19,
+        "period_s": 0.10009135767686937,
+        "decay_rate_per_s": 3.3941546094664924e-06,
+        "first_height_mm": 4.969806451387789,
+        "last_height_mm": 4.969793323353141,
+        "iterations": {
+          "steps": 600,
+          "iterations_mean": 1.0,
+          "iterations_max": 1,
+          "iterations_min": 1,
+          "iterations_total": 600,
+          "reformations_total": 600,
+          "first_steps": [
+            1,
+            1,
+            1,
+            1,
+            1
+          ]
+        },
+        "period_error": 0.0009135767686936636
+      }
+    },
+    "anchors_fixed_nodes": {
+      "what": "the springs' far ends fixed by a zero displacement boundary condition, not joined to the rigid frame",
+      "rhoi_1": {
+        "normal_termination": true,
+        "febio_version": "4.13.0",
+        "turning_points": 19,
+        "period_s": 0.10012541305915296,
+        "decay_rate_per_s": 1.6404475555599933,
+        "first_height_mm": 4.3975037861566575,
+        "last_height_mm": 1.0886201425153452,
+        "iterations": {
+          "steps": 600,
+          "iterations_mean": 2.0,
+          "iterations_max": 2,
+          "iterations_min": 2,
+          "iterations_total": 1200,
+          "reformations_total": 600,
+          "first_steps": [
+            2,
+            2,
+            2,
+            2,
+            2
+          ]
+        },
+        "period_error": 0.001254130591529512
+      },
+      "rhoi_0.5": {
+        "normal_termination": true,
+        "febio_version": "4.13.0",
+        "turning_points": 19,
+        "period_s": 0.10012170557705301,
+        "decay_rate_per_s": 1.093299082382001,
+        "first_height_mm": 4.579816434733073,
+        "last_height_mm": 1.8062013080474688,
+        "iterations": {
+          "steps": 600,
+          "iterations_mean": 1.0,
+          "iterations_max": 1,
+          "iterations_min": 1,
+          "iterations_total": 600,
+          "reformations_total": 600,
+          "first_steps": [
+            1,
+            1,
+            1,
+            1,
+            1
+          ]
+        },
+        "period_error": 0.0012170557705300233
+      },
+      "rhoi_-2": {
+        "normal_termination": true,
+        "febio_version": "4.13.0",
+        "turning_points": 19,
+        "period_s": 0.10009135767686937,
+        "decay_rate_per_s": 3.3941546094664924e-06,
+        "first_height_mm": 4.969806451387789,
+        "last_height_mm": 4.969793323353141,
+        "iterations": {
+          "steps": 600,
+          "iterations_mean": 1.0,
+          "iterations_max": 1,
+          "iterations_min": 1,
+          "iterations_total": 600,
+          "reformations_total": 600,
+          "first_steps": [
+            1,
+            1,
+            1,
+            1,
+            1
+          ]
+        },
+        "period_error": 0.0009135767686936636
+      }
+    },
+    "tension_only": {
+      "what": "discrete material 'tension-only linear spring' instead of 'linear spring'",
+      "rhoi_1": {
+        "normal_termination": true,
+        "febio_version": "4.13.0",
+        "turning_points": 19,
+        "period_s": 0.10012541305915296,
+        "decay_rate_per_s": 1.6404475555599933,
+        "first_height_mm": 4.3975037861566575,
+        "last_height_mm": 1.0886201425153452,
+        "iterations": {
+          "steps": 600,
+          "iterations_mean": 2.0,
+          "iterations_max": 2,
+          "iterations_min": 2,
+          "iterations_total": 1200,
+          "reformations_total": 600,
+          "first_steps": [
+            2,
+            2,
+            2,
+            2,
+            2
+          ]
+        },
+        "period_error": 0.001254130591529512
+      },
+      "rhoi_0.5": {
+        "normal_termination": true,
+        "febio_version": "4.13.0",
+        "turning_points": 19,
+        "period_s": 0.10012170557705301,
+        "decay_rate_per_s": 1.093299082382001,
+        "first_height_mm": 4.579816434733073,
+        "last_height_mm": 1.8062013080474688,
+        "iterations": {
+          "steps": 600,
+          "iterations_mean": 1.0,
+          "iterations_max": 1,
+          "iterations_min": 1,
+          "iterations_total": 600,
+          "reformations_total": 600,
+          "first_steps": [
+            1,
+            1,
+            1,
+            1,
+            1
+          ]
+        },
+        "period_error": 0.0012170557705300233
+      },
+      "rhoi_-2": {
+        "normal_termination": true,
+        "febio_version": "4.13.0",
+        "turning_points": 19,
+        "period_s": 0.10009135767686937,
+        "decay_rate_per_s": 3.3941546094664924e-06,
+        "first_height_mm": 4.969806451387789,
+        "last_height_mm": 4.969793323353141,
+        "iterations": {
+          "steps": 600,
+          "iterations_mean": 1.0,
+          "iterations_max": 1,
+          "iterations_min": 1,
+          "iterations_total": 600,
+          "reformations_total": 600,
+          "first_steps": [
+            1,
+            1,
+            1,
+            1,
+            1
+          ]
+        },
+        "period_error": 0.0009135767686936636
+      }
+    },
+    "nonlinear_spring": {
+      "what": "discrete material 'nonlinear spring' instead of 'linear spring'",
+      "rhoi_1": {
+        "normal_termination": true,
+        "febio_version": "4.13.0",
+        "turning_points": 19,
+        "period_s": 0.10012541305915296,
+        "decay_rate_per_s": 1.6404475555599933,
+        "first_height_mm": 4.3975037861566575,
+        "last_height_mm": 1.0886201425153452,
+        "iterations": {
+          "steps": 600,
+          "iterations_mean": 2.0,
+          "iterations_max": 2,
+          "iterations_min": 2,
+          "iterations_total": 1200,
+          "reformations_total": 600,
+          "first_steps": [
+            2,
+            2,
+            2,
+            2,
+            2
+          ]
+        },
+        "period_error": 0.001254130591529512
+      },
+      "rhoi_0.5": {
+        "normal_termination": true,
+        "febio_version": "4.13.0",
+        "turning_points": 19,
+        "period_s": 0.10012170557705301,
+        "decay_rate_per_s": 1.093299082382001,
+        "first_height_mm": 4.579816434733073,
+        "last_height_mm": 1.8062013080474688,
+        "iterations": {
+          "steps": 600,
+          "iterations_mean": 1.0,
+          "iterations_max": 1,
+          "iterations_min": 1,
+          "iterations_total": 600,
+          "reformations_total": 600,
+          "first_steps": [
+            1,
+            1,
+            1,
+            1,
+            1
+          ]
+        },
+        "period_error": 0.0012170557705300233
+      },
+      "rhoi_-2": {
+        "normal_termination": true,
+        "febio_version": "4.13.0",
+        "turning_points": 19,
+        "period_s": 0.10009135767686937,
+        "decay_rate_per_s": 3.3941546094664924e-06,
+        "first_height_mm": 4.969806451387789,
+        "last_height_mm": 4.969793323353141,
+        "iterations": {
+          "steps": 600,
+          "iterations_mean": 1.0,
+          "iterations_max": 1,
+          "iterations_min": 1,
+          "iterations_total": 600,
+          "reformations_total": 600,
+          "first_steps": [
+            1,
+            1,
+            1,
+            1,
+            1
+          ]
+        },
+        "period_error": 0.0009135767686936636
+      }
+    },
+    "truss": {
+      "what": "4 line2 'linear-truss' elements (E A / L = K, A = 1.0, density 1e-6 of the cube's) instead of the discrete springs",
+      "rhoi_1": {
+        "normal_termination": true,
+        "febio_version": "4.13.0",
+        "turning_points": 10,
+        "period_s": 0.18855171504648294,
+        "decay_rate_per_s": 4.993267374853143e-06,
+        "first_height_mm": 10.815902010489477,
+        "last_height_mm": 10.815845333154446,
+        "iterations": {
+          "steps": 600,
+          "iterations_mean": 2.0,
+          "iterations_max": 2,
+          "iterations_min": 2,
+          "iterations_total": 1200,
+          "reformations_total": 600,
+          "first_steps": [
+            2,
+            2,
+            2,
+            2,
+            2
+          ]
+        },
+        "period_error": 0.8855171504648293
+      },
+      "rhoi_0.5": {
+        "normal_termination": true,
+        "febio_version": "4.13.0",
+        "turning_points": 10,
+        "period_s": 0.1885880914042839,
+        "decay_rate_per_s": 0.00021086030462441537,
+        "first_height_mm": 10.818623014982833,
+        "last_height_mm": 10.816904181730479,
+        "iterations": {
+          "steps": 600,
+          "iterations_mean": 1.9966666666666666,
+          "iterations_max": 2,
+          "iterations_min": 1,
+          "iterations_total": 1198,
+          "reformations_total": 600,
+          "first_steps": [
+            2,
+            2,
+            2,
+            2,
+            2
+          ]
+        },
+        "period_error": 0.8858809140428389
+      },
+      "rhoi_-2": {
+        "normal_termination": true,
+        "febio_version": "4.13.0",
+        "turning_points": 10,
+        "period_s": 0.18857514833704073,
+        "decay_rate_per_s": 1.9925422883316317e-06,
+        "first_height_mm": 10.822629557481116,
+        "last_height_mm": 10.822615348148668,
+        "iterations": {
+          "steps": 600,
+          "iterations_mean": 1.9983333333333333,
+          "iterations_max": 2,
+          "iterations_min": 1,
+          "iterations_total": 1199,
+          "reformations_total": 600,
+          "first_steps": [
+            2,
+            2,
+            2,
+            2,
+            2
+          ]
+        },
+        "period_error": 0.8857514833704072
+      }
+    },
+    "rigid_spring": {
+      "what": "the cube made a rigid body (same density) and the 4 springs written as 'rigid spring' connectors to the fixed frame (the springs' far-end nodes are then in no element; FEBio removes them)",
+      "rhoi_1": {
+        "normal_termination": true,
+        "febio_version": "4.13.0",
+        "turning_points": 19,
+        "period_s": 0.10009132808770572,
+        "decay_rate_per_s": 3.43076793274552e-06,
+        "first_height_mm": 4.969803918476811,
+        "last_height_mm": 4.969790630968786,
+        "iterations": {
+          "steps": 600,
+          "iterations_mean": 1.0,
+          "iterations_max": 1,
+          "iterations_min": 1,
+          "iterations_total": 600,
+          "reformations_total": 0,
+          "first_steps": [
+            1,
+            1,
+            1,
+            1,
+            1
+          ]
+        },
+        "period_error": 0.0009132808770571932
+      },
+      "rhoi_0.5": {
+        "normal_termination": true,
+        "febio_version": "4.13.0",
+        "turning_points": 19,
+        "period_s": 0.10013689197278541,
+        "decay_rate_per_s": 0.0013282791874937737,
+        "first_height_mm": 4.969319653944682,
+        "last_height_mm": 4.963708364132829,
+        "iterations": {
+          "steps": 600,
+          "iterations_mean": 1.0,
+          "iterations_max": 1,
+          "iterations_min": 1,
+          "iterations_total": 600,
+          "reformations_total": 0,
+          "first_steps": [
+            1,
+            1,
+            1,
+            1,
+            1
+          ]
+        },
+        "period_error": 0.0013689197278540788
+      },
+      "rhoi_-2": {
+        "normal_termination": true,
+        "febio_version": "4.13.0",
+        "turning_points": 19,
+        "period_s": 0.10009132808768235,
+        "decay_rate_per_s": 3.4307676967813082e-06,
+        "first_height_mm": 4.96980391847688,
+        "last_height_mm": 4.96979063097328,
+        "iterations": {
+          "steps": 600,
+          "iterations_mean": 1.0,
+          "iterations_max": 1,
+          "iterations_min": 1,
+          "iterations_total": 600,
+          "reformations_total": 0,
+          "first_steps": [
+            1,
+            1,
+            1,
+            1,
+            1
+          ]
+        },
+        "period_error": 0.0009132808768234912
+      }
+    },
+    "generator_control": {
+      "what": "the Control lines generate.py adds: plot/output at must points, the default time stepper with max_retries 8, opt_iter 10, dtmin dt/256, dtmax dt on a must-point curve (here a must point every step)",
+      "rhoi_1": {
+        "normal_termination": true,
+        "febio_version": "4.13.0",
+        "turning_points": 19,
+        "period_s": 0.10012541320436331,
+        "decay_rate_per_s": 1.6404475195288768,
+        "first_height_mm": 4.3975037797284635,
+        "last_height_mm": 1.0886201492383545,
+        "iterations": {
+          "steps": 600,
+          "iterations_mean": 2.0,
+          "iterations_max": 2,
+          "iterations_min": 2,
+          "iterations_total": 1200,
+          "reformations_total": 600,
+          "first_steps": [
+            2,
+            2,
+            2,
+            2,
+            2
+          ]
+        },
+        "period_error": 0.0012541320436330883
+      },
+      "rhoi_0.5": {
+        "normal_termination": true,
+        "febio_version": "4.13.0",
+        "turning_points": 19,
+        "period_s": 0.10012170557716002,
+        "decay_rate_per_s": 1.0932990824229554,
+        "first_height_mm": 4.579816434612146,
+        "last_height_mm": 1.8062013080442378,
+        "iterations": {
+          "steps": 600,
+          "iterations_mean": 1.0,
+          "iterations_max": 1,
+          "iterations_min": 1,
+          "iterations_total": 600,
+          "reformations_total": 600,
+          "first_steps": [
+            1,
+            1,
+            1,
+            1,
+            1
+          ]
+        },
+        "period_error": 0.0012170557716001396
+      },
+      "rhoi_-2": {
+        "normal_termination": true,
+        "febio_version": "4.13.0",
+        "turning_points": 19,
+        "period_s": 0.10009135767744744,
+        "decay_rate_per_s": 3.3936897076637637e-06,
+        "first_height_mm": 4.969806450740691,
+        "last_height_mm": 4.969793323858135,
+        "iterations": {
+          "steps": 600,
+          "iterations_mean": 1.0,
+          "iterations_max": 1,
+          "iterations_min": 1,
+          "iterations_total": 600,
+          "reformations_total": 600,
+          "first_steps": [
+            1,
+            1,
+            1,
+            1,
+            1
+          ]
+        },
+        "period_error": 0.0009135767744743173
+      }
+    },
+    "broyden": {
+      "what": "solver lines: <qn_method type=\"Broyden\"/>",
+      "rhoi_1": {
+        "normal_termination": true,
+        "febio_version": "4.13.0",
+        "turning_points": 19,
+        "period_s": 0.10012541312003792,
+        "decay_rate_per_s": 1.6404478002193357,
+        "first_height_mm": 4.3975036790179765,
+        "last_height_mm": 1.0886198587039253,
+        "iterations": {
+          "steps": 600,
+          "iterations_mean": 2.0,
+          "iterations_max": 2,
+          "iterations_min": 2,
+          "iterations_total": 1200,
+          "reformations_total": 600,
+          "first_steps": [
+            2,
+            2,
+            2,
+            2,
+            2
+          ]
+        },
+        "period_error": 0.0012541312003791494
+      },
+      "rhoi_0.5": {
+        "normal_termination": true,
+        "febio_version": "4.13.0",
+        "turning_points": 19,
+        "period_s": 0.10012170557705301,
+        "decay_rate_per_s": 1.093299082382001,
+        "first_height_mm": 4.579816434733073,
+        "last_height_mm": 1.8062013080474688,
+        "iterations": {
+          "steps": 600,
+          "iterations_mean": 1.0,
+          "iterations_max": 1,
+          "iterations_min": 1,
+          "iterations_total": 600,
+          "reformations_total": 600,
+          "first_steps": [
+            1,
+            1,
+            1,
+            1,
+            1
+          ]
+        },
+        "period_error": 0.0012170557705300233
+      },
+      "rhoi_-2": {
+        "normal_termination": true,
+        "febio_version": "4.13.0",
+        "turning_points": 19,
+        "period_s": 0.10009135767686937,
+        "decay_rate_per_s": 3.3941546094664924e-06,
+        "first_height_mm": 4.969806451387789,
+        "last_height_mm": 4.969793323353141,
+        "iterations": {
+          "steps": 600,
+          "iterations_mean": 1.0,
+          "iterations_max": 1,
+          "iterations_min": 1,
+          "iterations_total": 600,
+          "reformations_total": 600,
+          "first_steps": [
+            1,
+            1,
+            1,
+            1,
+            1
+          ]
+        },
+        "period_error": 0.0009135767686936636
+      }
+    },
+    "full_newton": {
+      "what": "solver lines: <qn_method type=\"BFGS\">         <max_ups>0</max_ups>       </qn_method> <max_refs>50</max_refs>",
+      "rhoi_1": {
+        "normal_termination": true,
+        "febio_version": "4.13.0",
+        "turning_points": 19,
+        "period_s": 0.10012541333886248,
+        "decay_rate_per_s": 1.6404477974644511,
+        "first_height_mm": 4.397503699033751,
+        "last_height_mm": 1.088619870450638,
+        "iterations": {
+          "steps": 600,
+          "iterations_mean": 2.0,
+          "iterations_max": 2,
+          "iterations_min": 2,
+          "iterations_total": 1200,
+          "reformations_total": 1200,
+          "first_steps": [
+            2,
+            2,
+            2,
+            2,
+            2
+          ]
+        },
+        "period_error": 0.0012541333886247064
+      },
+      "rhoi_0.5": {
+        "normal_termination": true,
+        "febio_version": "4.13.0",
+        "turning_points": 19,
+        "period_s": 0.10012170557705301,
+        "decay_rate_per_s": 1.093299082382001,
+        "first_height_mm": 4.579816434733073,
+        "last_height_mm": 1.8062013080474688,
+        "iterations": {
+          "steps": 600,
+          "iterations_mean": 1.0,
+          "iterations_max": 1,
+          "iterations_min": 1,
+          "iterations_total": 600,
+          "reformations_total": 600,
+          "first_steps": [
+            1,
+            1,
+            1,
+            1,
+            1
+          ]
+        },
+        "period_error": 0.0012170557705300233
+      },
+      "rhoi_-2": {
+        "normal_termination": true,
+        "febio_version": "4.13.0",
+        "turning_points": 19,
+        "period_s": 0.10009135767686937,
+        "decay_rate_per_s": 3.3941546094664924e-06,
+        "first_height_mm": 4.969806451387789,
+        "last_height_mm": 4.969793323353141,
+        "iterations": {
+          "steps": 600,
+          "iterations_mean": 1.0,
+          "iterations_max": 1,
+          "iterations_min": 1,
+          "iterations_total": 600,
+          "reformations_total": 600,
+          "first_steps": [
+            1,
+            1,
+            1,
+            1,
+            1
+          ]
+        },
+        "period_error": 0.0009135767686936636
+      }
+    },
+    "unsymmetric": {
+      "what": "solver lines: <symmetric_stiffness>0</symmetric_stiffness>",
+      "rhoi_1": {
+        "normal_termination": true,
+        "febio_version": "4.13.0",
+        "turning_points": 19,
+        "period_s": 0.10012541255835439,
+        "decay_rate_per_s": 1.6404475809943182,
+        "first_height_mm": 4.397503851501946,
+        "last_height_mm": 1.0886201503936317,
+        "iterations": {
+          "steps": 600,
+          "iterations_mean": 2.0,
+          "iterations_max": 2,
+          "iterations_min": 2,
+          "iterations_total": 1200,
+          "reformations_total": 600,
+          "first_steps": [
+            2,
+            2,
+            2,
+            2,
+            2
+          ]
+        },
+        "period_error": 0.0012541255835438192
+      },
+      "rhoi_0.5": {
+        "normal_termination": true,
+        "febio_version": "4.13.0",
+        "turning_points": 19,
+        "period_s": 0.10012170557677348,
+        "decay_rate_per_s": 1.0932990822913615,
+        "first_height_mm": 4.579816434739055,
+        "last_height_mm": 1.8062013081609571,
+        "iterations": {
+          "steps": 600,
+          "iterations_mean": 1.0,
+          "iterations_max": 1,
+          "iterations_min": 1,
+          "iterations_total": 600,
+          "reformations_total": 600,
+          "first_steps": [
+            1,
+            1,
+            1,
+            1,
+            1
+          ]
+        },
+        "period_error": 0.0012170557677347593
+      },
+      "rhoi_-2": {
+        "normal_termination": true,
+        "febio_version": "4.13.0",
+        "turning_points": 19,
+        "period_s": 0.10009135767729932,
+        "decay_rate_per_s": 3.3941397042563815e-06,
+        "first_height_mm": 4.969806451529064,
+        "last_height_mm": 4.96979332418937,
+        "iterations": {
+          "steps": 600,
+          "iterations_mean": 1.0,
+          "iterations_max": 1,
+          "iterations_min": 1,
+          "iterations_total": 600,
+          "reformations_total": 600,
+          "first_steps": [
+            1,
+            1,
+            1,
+            1,
+            1
+          ]
+        },
+        "period_error": 0.000913576772993141
+      }
+    },
+    "no_line_search": {
+      "what": "solver lines: <lstol>0</lstol>",
+      "rhoi_1": {
+        "normal_termination": true,
+        "febio_version": "4.13.0",
+        "turning_points": 19,
+        "period_s": 0.10012541335606517,
+        "decay_rate_per_s": 1.6404475665351999,
+        "first_height_mm": 4.3975038044591175,
+        "last_height_mm": 1.0886201638340163,
+        "iterations": {
+          "steps": 600,
+          "iterations_mean": 2.0,
+          "iterations_max": 2,
+          "iterations_min": 2,
+          "iterations_total": 1200,
+          "reformations_total": 600,
+          "first_steps": [
+            2,
+            2,
+            2,
+            2,
+            2
+          ]
+        },
+        "period_error": 0.0012541335606516824
+      },
+      "rhoi_0.5": {
+        "normal_termination": true,
+        "febio_version": "4.13.0",
+        "turning_points": 19,
+        "period_s": 0.10012170557705301,
+        "decay_rate_per_s": 1.093299082382001,
+        "first_height_mm": 4.579816434733073,
+        "last_height_mm": 1.8062013080474688,
+        "iterations": {
+          "steps": 600,
+          "iterations_mean": 1.0,
+          "iterations_max": 1,
+          "iterations_min": 1,
+          "iterations_total": 600,
+          "reformations_total": 600,
+          "first_steps": [
+            1,
+            1,
+            1,
+            1,
+            1
+          ]
+        },
+        "period_error": 0.0012170557705300233
+      },
+      "rhoi_-2": {
+        "normal_termination": true,
+        "febio_version": "4.13.0",
+        "turning_points": 19,
+        "period_s": 0.10009135767686937,
+        "decay_rate_per_s": 3.3941546094664924e-06,
+        "first_height_mm": 4.969806451387789,
+        "last_height_mm": 4.969793323353141,
+        "iterations": {
+          "steps": 600,
+          "iterations_mean": 1.0,
+          "iterations_max": 1,
+          "iterations_min": 1,
+          "iterations_total": 600,
+          "reformations_total": 600,
+          "first_steps": [
+            1,
+            1,
+            1,
+            1,
+            1
+          ]
+        },
+        "period_error": 0.0009135767686936636
+      }
+    }
+  },
+  "q3_convergence": {
+    "note": "FEBio's convergence norms are squared norms; 'residual_last_over_initial' is of those",
+    "q3_springs_rhoi1_default": {
+      "springs": true,
+      "rhoi": 1.0,
+      "tolerances": "default",
+      "normal_termination": true,
+      "febio_version": "4.13.0",
+      "turning_points": 19,
+      "period_s": 0.10012541305915296,
+      "decay_rate_per_s": 1.6404475555599933,
+      "first_height_mm": 4.3975037861566575,
+      "last_height_mm": 1.0886201425153452,
+      "iterations": {
+        "steps": 600,
+        "iterations_mean": 2.0,
+        "iterations_max": 2,
+        "iterations_min": 2,
+        "iterations_total": 1200,
+        "reformations_total": 600,
+        "first_steps": [
+          2,
+          2,
+          2,
+          2,
+          2
+        ]
+      },
+      "step_1": {
+        "iterations": 2,
+        "residual_initial": 5.913408e-06,
+        "residual_last": 4.823244e-07,
+        "residual_last_over_initial": 0.08156453943309848,
+        "residual_per_iteration": [
+          1.17011e-06,
+          4.823244e-07
+        ],
+        "displacement_increment_per_iteration": [
+          0.004957778,
+          2.117037e-13
+        ],
+        "converged": true
+      },
+      "step_100": {
+        "iterations": 2,
+        "residual_initial": 0.0008648918,
+        "residual_last": 8.677669e-09,
+        "residual_last_over_initial": 1.0033242308459857e-05,
+        "residual_per_iteration": [
+          1.158162e-08,
+          8.677669e-09
+        ],
+        "displacement_increment_per_iteration": [
+          0.7320376,
+          4.465316e-15
+        ],
+        "converged": true
+      }
+    },
+    "q3_springs_rhoi1_full_newton_x10": {
+      "springs": true,
+      "rhoi": 1.0,
+      "tolerances": "full_newton_x10",
+      "normal_termination": true,
+      "febio_version": "4.13.0",
+      "turning_points": 19,
+      "period_s": 0.10012541333886248,
+      "decay_rate_per_s": 1.6404477974644511,
+      "first_height_mm": 4.397503699033751,
+      "last_height_mm": 1.088619870450638,
+      "iterations": {
+        "steps": 600,
+        "iterations_mean": 2.0,
+        "iterations_max": 2,
+        "iterations_min": 2,
+        "iterations_total": 1200,
+        "reformations_total": 1200,
+        "first_steps": [
+          2,
+          2,
+          2,
+          2,
+          2
+        ]
+      },
+      "step_1": {
+        "iterations": 2,
+        "residual_initial": 5.913408e-06,
+        "residual_last": 3.916702e-07,
+        "residual_last_over_initial": 0.0662342594997673,
+        "residual_per_iteration": [
+          1.17011e-06,
+          3.916702e-07
+        ],
+        "displacement_increment_per_iteration": [
+          0.004957778,
+          1.774402e-13
+        ],
+        "converged": true
+      },
+      "step_100": {
+        "iterations": 2,
+        "residual_initial": 0.0008591453,
+        "residual_last": 1.99694e-08,
+        "residual_last_over_initial": 2.324333264699231e-05,
+        "residual_per_iteration": [
+          1.009142e-08,
+          1.99694e-08
+        ],
+        "displacement_increment_per_iteration": [
+          0.7320375,
+          3.434735e-15
+        ],
+        "converged": true
+      }
+    },
+    "q3_springs_rhoi1_full_newton_x100": {
+      "springs": true,
+      "rhoi": 1.0,
+      "tolerances": "full_newton_x100",
+      "normal_termination": false,
+      "febio_version": "4.13.0",
+      "failure": "did not converge: Max nr of reformations reached.",
+      "steps_converged_before_failure": 390,
+      "failed_step": {
+        "iterations": 50,
+        "residual_initial": 9.953583e-06,
+        "residual_last": 9.195072e-09,
+        "residual_last_over_initial": 0.0009237951800874118,
+        "residual_per_iteration": [
+          3.731364e-08,
+          3.198957e-08,
+          5.4227e-09,
+          8.689593e-09,
+          4.942042e-09,
+          5.409209e-09,
+          3.204119e-09,
+          5.108394e-09,
+          3.575574e-09,
+          2.763705e-09,
+          1.303698e-08,
+          8.944375e-09
+        ],
+        "displacement_increment_per_iteration": [
+          2.450818e-07,
+          2.006791e-14,
+          1.614702e-14,
+          1.93921e-15,
+          1.132096e-15,
+          1.619126e-15,
+          2.183302e-15,
+          2.96585e-16,
+          1.478197e-15,
+          1.651648e-16,
+          1.203381e-15,
+          4.74384e-15
+        ],
+        "converged": false
+      },
+      "measured_over_the_converged_steps_only": true,
+      "turning_points": 12,
+      "period_s": 0.10012523307341721,
+      "decay_rate_per_s": 1.6404405583632282,
+      "first_height_mm": 4.397503699033751,
+      "last_height_mm": 1.9343853555374946,
+      "iterations": {
+        "steps": 390,
+        "iterations_mean": 2.005128205128205,
+        "iterations_max": 4,
+        "iterations_min": 2,
+        "iterations_total": 782,
+        "reformations_total": 782,
+        "first_steps": [
+          2,
+          2,
+          2,
+          2,
+          2
+        ]
+      },
+      "step_1": {
+        "iterations": 2,
+        "residual_initial": 5.913408e-06,
+        "residual_last": 3.916702e-07,
+        "residual_last_over_initial": 0.0662342594997673,
+        "residual_per_iteration": [
+          1.17011e-06,
+          3.916702e-07
+        ],
+        "displacement_increment_per_iteration": [
+          0.004957778,
+          1.774402e-13
+        ],
+        "converged": true
+      },
+      "step_100": {
+        "iterations": 2,
+        "residual_initial": 0.0008591453,
+        "residual_last": 1.99694e-08,
+        "residual_last_over_initial": 2.324333264699231e-05,
+        "residual_per_iteration": [
+          1.009142e-08,
+          1.99694e-08
+        ],
+        "displacement_increment_per_iteration": [
+          0.7320375,
+          3.434735e-15
+        ],
+        "converged": true
+      }
+    },
+    "q3_springs_rhoi1_full_newton_rtol_1e-6": {
+      "springs": true,
+      "rhoi": 1.0,
+      "tolerances": "full_newton_rtol_1e-6",
+      "normal_termination": false,
+      "febio_version": "4.13.0",
+      "failure": "did not converge: Max nr of reformations reached.",
+      "steps_converged_before_failure": 0,
+      "failed_step": {
+        "iterations": 50,
+        "residual_initial": 5.913408e-06,
+        "residual_last": 2.579153e-07,
+        "residual_last_over_initial": 0.04361533991904499,
+        "residual_per_iteration": [
+          1.17011e-06,
+          3.916702e-07,
+          4.462249e-07,
+          2.334275e-07,
+          1.74895e-07,
+          1.685318e-07,
+          9.215039e-08,
+          7.375956e-08,
+          1.116158e-07,
+          9.818526e-08,
+          5.777663e-08,
+          3.139827e-07
+        ],
+        "displacement_increment_per_iteration": [
+          0.004957778,
+          1.774402e-13,
+          1.738848e-13,
+          8.692851e-14,
+          4.179877e-14,
+          7.807191e-14,
+          7.017012e-14,
+          2.820229e-14,
+          1.865776e-14,
+          1.738103e-14,
+          3.465225e-14,
+          2.021263e-14
+        ],
+        "converged": false
+      },
+      "step_1": {
+        "iterations": 50,
+        "residual_initial": 5.913408e-06,
+        "residual_last": 2.579153e-07,
+        "residual_last_over_initial": 0.04361533991904499,
+        "residual_per_iteration": [
+          1.17011e-06,
+          3.916702e-07,
+          4.462249e-07,
+          2.334275e-07,
+          1.74895e-07,
+          1.685318e-07,
+          9.215039e-08,
+          7.375956e-08,
+          1.116158e-07,
+          9.818526e-08,
+          5.777663e-08,
+          3.139827e-07
+        ],
+        "displacement_increment_per_iteration": [
+          0.004957778,
+          1.774402e-13,
+          1.738848e-13,
+          8.692851e-14,
+          4.179877e-14,
+          7.807191e-14,
+          7.017012e-14,
+          2.820229e-14,
+          1.865776e-14,
+          1.738103e-14,
+          3.465225e-14,
+          2.021263e-14
+        ],
+        "converged": false
+      },
+      "step_100": null
+    },
+    "q3_springs_rhoi0.9_default": {
+      "springs": true,
+      "rhoi": 0.9,
+      "tolerances": "default",
+      "normal_termination": true,
+      "febio_version": "4.13.0",
+      "turning_points": 19,
+      "period_s": 0.10011620818511521,
+      "decay_rate_per_s": 1.5542428112466549,
+      "first_height_mm": 4.425727881210366,
+      "last_height_mm": 1.1791514944576968,
+      "iterations": {
+        "steps": 600,
+        "iterations_mean": 1.0,
+        "iterations_max": 1,
+        "iterations_min": 1,
+        "iterations_total": 600,
+        "reformations_total": 600,
+        "first_steps": [
+          1,
+          1,
+          1,
+          1,
+          1
+        ]
+      },
+      "step_1": {
+        "iterations": 1,
+        "residual_initial": 6.457589e-06,
+        "residual_last": 2.61778e-22,
+        "residual_last_over_initial": 4.0538039816408257e-17,
+        "residual_per_iteration": [
+          2.61778e-22
+        ],
+        "displacement_increment_per_iteration": [
+          0.004960107
+        ],
+        "converged": true
+      },
+      "step_100": {
+        "iterations": 1,
+        "residual_initial": 0.000978664,
+        "residual_last": 4.208313e-22,
+        "residual_last_over_initial": 4.300059060106431e-19,
+        "residual_per_iteration": [
+          4.208313e-22
+        ],
+        "displacement_increment_per_iteration": [
+          0.754265
+        ],
+        "converged": true
+      }
+    },
+    "q3_springs_rhoi0.9_full_newton_x10": {
+      "springs": true,
+      "rhoi": 0.9,
+      "tolerances": "full_newton_x10",
+      "normal_termination": true,
+      "febio_version": "4.13.0",
+      "turning_points": 19,
+      "period_s": 0.10011620818511521,
+      "decay_rate_per_s": 1.5542428112466549,
+      "first_height_mm": 4.425727881210366,
+      "last_height_mm": 1.1791514944576968,
+      "iterations": {
+        "steps": 600,
+        "iterations_mean": 1.0,
+        "iterations_max": 1,
+        "iterations_min": 1,
+        "iterations_total": 600,
+        "reformations_total": 600,
+        "first_steps": [
+          1,
+          1,
+          1,
+          1,
+          1
+        ]
+      },
+      "step_1": {
+        "iterations": 1,
+        "residual_initial": 6.457589e-06,
+        "residual_last": 2.61778e-22,
+        "residual_last_over_initial": 4.0538039816408257e-17,
+        "residual_per_iteration": [
+          2.61778e-22
+        ],
+        "displacement_increment_per_iteration": [
+          0.004960107
+        ],
+        "converged": true
+      },
+      "step_100": {
+        "iterations": 1,
+        "residual_initial": 0.000978664,
+        "residual_last": 4.208313e-22,
+        "residual_last_over_initial": 4.300059060106431e-19,
+        "residual_per_iteration": [
+          4.208313e-22
+        ],
+        "displacement_increment_per_iteration": [
+          0.754265
+        ],
+        "converged": true
+      }
+    },
+    "q3_springs_rhoi0.9_full_newton_x100": {
+      "springs": true,
+      "rhoi": 0.9,
+      "tolerances": "full_newton_x100",
+      "normal_termination": true,
+      "febio_version": "4.13.0",
+      "turning_points": 19,
+      "period_s": 0.10011620818511521,
+      "decay_rate_per_s": 1.5542428112466549,
+      "first_height_mm": 4.425727881210366,
+      "last_height_mm": 1.1791514944576968,
+      "iterations": {
+        "steps": 600,
+        "iterations_mean": 1.0,
+        "iterations_max": 1,
+        "iterations_min": 1,
+        "iterations_total": 600,
+        "reformations_total": 600,
+        "first_steps": [
+          1,
+          1,
+          1,
+          1,
+          1
+        ]
+      },
+      "step_1": {
+        "iterations": 1,
+        "residual_initial": 6.457589e-06,
+        "residual_last": 2.61778e-22,
+        "residual_last_over_initial": 4.0538039816408257e-17,
+        "residual_per_iteration": [
+          2.61778e-22
+        ],
+        "displacement_increment_per_iteration": [
+          0.004960107
+        ],
+        "converged": true
+      },
+      "step_100": {
+        "iterations": 1,
+        "residual_initial": 0.000978664,
+        "residual_last": 4.208313e-22,
+        "residual_last_over_initial": 4.300059060106431e-19,
+        "residual_per_iteration": [
+          4.208313e-22
+        ],
+        "displacement_increment_per_iteration": [
+          0.754265
+        ],
+        "converged": true
+      }
+    },
+    "q3_springs_rhoi0.9_full_newton_rtol_1e-6": {
+      "springs": true,
+      "rhoi": 0.9,
+      "tolerances": "full_newton_rtol_1e-6",
+      "normal_termination": true,
+      "febio_version": "4.13.0",
+      "turning_points": 19,
+      "period_s": 0.10011620818511521,
+      "decay_rate_per_s": 1.5542428112466549,
+      "first_height_mm": 4.425727881210366,
+      "last_height_mm": 1.1791514944576968,
+      "iterations": {
+        "steps": 600,
+        "iterations_mean": 1.0,
+        "iterations_max": 1,
+        "iterations_min": 1,
+        "iterations_total": 600,
+        "reformations_total": 600,
+        "first_steps": [
+          1,
+          1,
+          1,
+          1,
+          1
+        ]
+      },
+      "step_1": {
+        "iterations": 1,
+        "residual_initial": 6.457589e-06,
+        "residual_last": 2.61778e-22,
+        "residual_last_over_initial": 4.0538039816408257e-17,
+        "residual_per_iteration": [
+          2.61778e-22
+        ],
+        "displacement_increment_per_iteration": [
+          0.004960107
+        ],
+        "converged": true
+      },
+      "step_100": {
+        "iterations": 1,
+        "residual_initial": 0.000978664,
+        "residual_last": 4.208313e-22,
+        "residual_last_over_initial": 4.300059060106431e-19,
+        "residual_per_iteration": [
+          4.208313e-22
+        ],
+        "displacement_increment_per_iteration": [
+          0.754265
+        ],
+        "converged": true
+      }
+    },
+    "q3_springs_rhoi0.5_default": {
+      "springs": true,
+      "rhoi": 0.5,
+      "tolerances": "default",
+      "normal_termination": true,
+      "febio_version": "4.13.0",
+      "turning_points": 19,
+      "period_s": 0.10012170557705301,
+      "decay_rate_per_s": 1.093299082382001,
+      "first_height_mm": 4.579816434733073,
+      "last_height_mm": 1.8062013080474688,
+      "iterations": {
+        "steps": 600,
+        "iterations_mean": 1.0,
+        "iterations_max": 1,
+        "iterations_min": 1,
+        "iterations_total": 600,
+        "reformations_total": 600,
+        "first_steps": [
+          1,
+          1,
+          1,
+          1,
+          1
+        ]
+      },
+      "step_1": {
+        "iterations": 1,
+        "residual_initial": 7.484157e-06,
+        "residual_last": 8.550158e-22,
+        "residual_last_over_initial": 1.142434344976996e-16,
+        "residual_per_iteration": [
+          8.550158e-22
+        ],
+        "displacement_increment_per_iteration": [
+          0.004963792
+        ],
+        "converged": true
+      },
+      "step_100": {
+        "iterations": 1,
+        "residual_initial": 0.001320266,
+        "residual_last": 1.029647e-21,
+        "residual_last_over_initial": 7.798784487368454e-19,
+        "residual_per_iteration": [
+          1.029647e-21
+        ],
+        "displacement_increment_per_iteration": [
+          0.8775754
+        ],
+        "converged": true
+      }
+    },
+    "q3_springs_rhoi0.5_full_newton_x10": {
+      "springs": true,
+      "rhoi": 0.5,
+      "tolerances": "full_newton_x10",
+      "normal_termination": true,
+      "febio_version": "4.13.0",
+      "turning_points": 19,
+      "period_s": 0.10012170557705301,
+      "decay_rate_per_s": 1.093299082382001,
+      "first_height_mm": 4.579816434733073,
+      "last_height_mm": 1.8062013080474688,
+      "iterations": {
+        "steps": 600,
+        "iterations_mean": 1.0,
+        "iterations_max": 1,
+        "iterations_min": 1,
+        "iterations_total": 600,
+        "reformations_total": 600,
+        "first_steps": [
+          1,
+          1,
+          1,
+          1,
+          1
+        ]
+      },
+      "step_1": {
+        "iterations": 1,
+        "residual_initial": 7.484157e-06,
+        "residual_last": 8.550158e-22,
+        "residual_last_over_initial": 1.142434344976996e-16,
+        "residual_per_iteration": [
+          8.550158e-22
+        ],
+        "displacement_increment_per_iteration": [
+          0.004963792
+        ],
+        "converged": true
+      },
+      "step_100": {
+        "iterations": 1,
+        "residual_initial": 0.001320266,
+        "residual_last": 1.029647e-21,
+        "residual_last_over_initial": 7.798784487368454e-19,
+        "residual_per_iteration": [
+          1.029647e-21
+        ],
+        "displacement_increment_per_iteration": [
+          0.8775754
+        ],
+        "converged": true
+      }
+    },
+    "q3_springs_rhoi0.5_full_newton_x100": {
+      "springs": true,
+      "rhoi": 0.5,
+      "tolerances": "full_newton_x100",
+      "normal_termination": true,
+      "febio_version": "4.13.0",
+      "turning_points": 19,
+      "period_s": 0.10012170557705301,
+      "decay_rate_per_s": 1.093299082382001,
+      "first_height_mm": 4.579816434733073,
+      "last_height_mm": 1.8062013080474688,
+      "iterations": {
+        "steps": 600,
+        "iterations_mean": 1.0,
+        "iterations_max": 1,
+        "iterations_min": 1,
+        "iterations_total": 600,
+        "reformations_total": 600,
+        "first_steps": [
+          1,
+          1,
+          1,
+          1,
+          1
+        ]
+      },
+      "step_1": {
+        "iterations": 1,
+        "residual_initial": 7.484157e-06,
+        "residual_last": 8.550158e-22,
+        "residual_last_over_initial": 1.142434344976996e-16,
+        "residual_per_iteration": [
+          8.550158e-22
+        ],
+        "displacement_increment_per_iteration": [
+          0.004963792
+        ],
+        "converged": true
+      },
+      "step_100": {
+        "iterations": 1,
+        "residual_initial": 0.001320266,
+        "residual_last": 1.029647e-21,
+        "residual_last_over_initial": 7.798784487368454e-19,
+        "residual_per_iteration": [
+          1.029647e-21
+        ],
+        "displacement_increment_per_iteration": [
+          0.8775754
+        ],
+        "converged": true
+      }
+    },
+    "q3_springs_rhoi0.5_full_newton_rtol_1e-6": {
+      "springs": true,
+      "rhoi": 0.5,
+      "tolerances": "full_newton_rtol_1e-6",
+      "normal_termination": true,
+      "febio_version": "4.13.0",
+      "turning_points": 19,
+      "period_s": 0.10012170557705301,
+      "decay_rate_per_s": 1.093299082382001,
+      "first_height_mm": 4.579816434733073,
+      "last_height_mm": 1.8062013080474688,
+      "iterations": {
+        "steps": 600,
+        "iterations_mean": 1.0,
+        "iterations_max": 1,
+        "iterations_min": 1,
+        "iterations_total": 600,
+        "reformations_total": 600,
+        "first_steps": [
+          1,
+          1,
+          1,
+          1,
+          1
+        ]
+      },
+      "step_1": {
+        "iterations": 1,
+        "residual_initial": 7.484157e-06,
+        "residual_last": 8.550158e-22,
+        "residual_last_over_initial": 1.142434344976996e-16,
+        "residual_per_iteration": [
+          8.550158e-22
+        ],
+        "displacement_increment_per_iteration": [
+          0.004963792
+        ],
+        "converged": true
+      },
+      "step_100": {
+        "iterations": 1,
+        "residual_initial": 0.001320266,
+        "residual_last": 1.029647e-21,
+        "residual_last_over_initial": 7.798784487368454e-19,
+        "residual_per_iteration": [
+          1.029647e-21
+        ],
+        "displacement_increment_per_iteration": [
+          0.8775754
+        ],
+        "converged": true
+      }
+    },
+    "q3_springs_rhoi0.25_default": {
+      "springs": true,
+      "rhoi": 0.25,
+      "tolerances": "default",
+      "normal_termination": true,
+      "febio_version": "4.13.0",
+      "turning_points": 19,
+      "period_s": 0.10021123725611142,
+      "decay_rate_per_s": 0.6598000550842481,
+      "first_height_mm": 4.730086386507157,
+      "last_height_mm": 2.69642877687983,
+      "iterations": {
+        "steps": 600,
+        "iterations_mean": 1.0,
+        "iterations_max": 1,
+        "iterations_min": 1,
+        "iterations_total": 600,
+        "reformations_total": 600,
+        "first_steps": [
+          1,
+          1,
+          1,
+          1,
+          1
+        ]
+      },
+      "step_1": {
+        "iterations": 1,
+        "residual_initial": 7.074145e-06,
+        "residual_last": 1.342636e-21,
+        "residual_last_over_initial": 1.8979480912534305e-16,
+        "residual_per_iteration": [
+          1.342636e-21
+        ],
+        "displacement_increment_per_iteration": [
+          0.004962417
+        ],
+        "converged": true
+      },
+      "step_100": {
+        "iterations": 1,
+        "residual_initial": 0.001421846,
+        "residual_last": 1.804084e-21,
+        "residual_last_over_initial": 1.2688322082700938e-18,
+        "residual_per_iteration": [
+          1.804084e-21
+        ],
+        "displacement_increment_per_iteration": [
+          0.9987409
+        ],
+        "converged": true
+      }
+    },
+    "q3_springs_rhoi0.25_full_newton_x10": {
+      "springs": true,
+      "rhoi": 0.25,
+      "tolerances": "full_newton_x10",
+      "normal_termination": true,
+      "febio_version": "4.13.0",
+      "turning_points": 19,
+      "period_s": 0.10021123725611142,
+      "decay_rate_per_s": 0.6598000550842481,
+      "first_height_mm": 4.730086386507157,
+      "last_height_mm": 2.69642877687983,
+      "iterations": {
+        "steps": 600,
+        "iterations_mean": 1.0,
+        "iterations_max": 1,
+        "iterations_min": 1,
+        "iterations_total": 600,
+        "reformations_total": 600,
+        "first_steps": [
+          1,
+          1,
+          1,
+          1,
+          1
+        ]
+      },
+      "step_1": {
+        "iterations": 1,
+        "residual_initial": 7.074145e-06,
+        "residual_last": 1.342636e-21,
+        "residual_last_over_initial": 1.8979480912534305e-16,
+        "residual_per_iteration": [
+          1.342636e-21
+        ],
+        "displacement_increment_per_iteration": [
+          0.004962417
+        ],
+        "converged": true
+      },
+      "step_100": {
+        "iterations": 1,
+        "residual_initial": 0.001421846,
+        "residual_last": 1.804084e-21,
+        "residual_last_over_initial": 1.2688322082700938e-18,
+        "residual_per_iteration": [
+          1.804084e-21
+        ],
+        "displacement_increment_per_iteration": [
+          0.9987409
+        ],
+        "converged": true
+      }
+    },
+    "q3_springs_rhoi0.25_full_newton_x100": {
+      "springs": true,
+      "rhoi": 0.25,
+      "tolerances": "full_newton_x100",
+      "normal_termination": true,
+      "febio_version": "4.13.0",
+      "turning_points": 19,
+      "period_s": 0.10021123725611142,
+      "decay_rate_per_s": 0.6598000550842481,
+      "first_height_mm": 4.730086386507157,
+      "last_height_mm": 2.69642877687983,
+      "iterations": {
+        "steps": 600,
+        "iterations_mean": 1.0,
+        "iterations_max": 1,
+        "iterations_min": 1,
+        "iterations_total": 600,
+        "reformations_total": 600,
+        "first_steps": [
+          1,
+          1,
+          1,
+          1,
+          1
+        ]
+      },
+      "step_1": {
+        "iterations": 1,
+        "residual_initial": 7.074145e-06,
+        "residual_last": 1.342636e-21,
+        "residual_last_over_initial": 1.8979480912534305e-16,
+        "residual_per_iteration": [
+          1.342636e-21
+        ],
+        "displacement_increment_per_iteration": [
+          0.004962417
+        ],
+        "converged": true
+      },
+      "step_100": {
+        "iterations": 1,
+        "residual_initial": 0.001421846,
+        "residual_last": 1.804084e-21,
+        "residual_last_over_initial": 1.2688322082700938e-18,
+        "residual_per_iteration": [
+          1.804084e-21
+        ],
+        "displacement_increment_per_iteration": [
+          0.9987409
+        ],
+        "converged": true
+      }
+    },
+    "q3_springs_rhoi0.25_full_newton_rtol_1e-6": {
+      "springs": true,
+      "rhoi": 0.25,
+      "tolerances": "full_newton_rtol_1e-6",
+      "normal_termination": true,
+      "febio_version": "4.13.0",
+      "turning_points": 19,
+      "period_s": 0.10021123725611142,
+      "decay_rate_per_s": 0.6598000550842481,
+      "first_height_mm": 4.730086386507157,
+      "last_height_mm": 2.69642877687983,
+      "iterations": {
+        "steps": 600,
+        "iterations_mean": 1.0,
+        "iterations_max": 1,
+        "iterations_min": 1,
+        "iterations_total": 600,
+        "reformations_total": 600,
+        "first_steps": [
+          1,
+          1,
+          1,
+          1,
+          1
+        ]
+      },
+      "step_1": {
+        "iterations": 1,
+        "residual_initial": 7.074145e-06,
+        "residual_last": 1.342636e-21,
+        "residual_last_over_initial": 1.8979480912534305e-16,
+        "residual_per_iteration": [
+          1.342636e-21
+        ],
+        "displacement_increment_per_iteration": [
+          0.004962417
+        ],
+        "converged": true
+      },
+      "step_100": {
+        "iterations": 1,
+        "residual_initial": 0.001421846,
+        "residual_last": 1.804084e-21,
+        "residual_last_over_initial": 1.2688322082700938e-18,
+        "residual_per_iteration": [
+          1.804084e-21
+        ],
+        "displacement_increment_per_iteration": [
+          0.9987409
+        ],
+        "converged": true
+      }
+    },
+    "q3_springs_rhoi0_default": {
+      "springs": true,
+      "rhoi": 0.0,
+      "tolerances": "default",
+      "normal_termination": true,
+      "febio_version": "4.13.0",
+      "turning_points": 19,
+      "period_s": 0.10049281050096293,
+      "decay_rate_per_s": 0.03456720875847389,
+      "first_height_mm": 4.957710174693879,
+      "last_height_mm": 4.813462963622835,
+      "iterations": {
+        "steps": 600,
+        "iterations_mean": 1.0,
+        "iterations_max": 1,
+        "iterations_min": 1,
+        "iterations_total": 600,
+        "reformations_total": 600,
+        "first_steps": [
+          1,
+          1,
+          1,
+          1,
+          1
+        ]
+      },
+      "step_1": {
+        "iterations": 1,
+        "residual_initial": 5.913408e-06,
+        "residual_last": 8.715716e-22,
+        "residual_last_over_initial": 1.4738905213372728e-16,
+        "residual_per_iteration": [
+          8.715716e-22
+        ],
+        "displacement_increment_per_iteration": [
+          0.004957779
+        ],
+        "converged": true
+      },
+      "step_100": {
+        "iterations": 1,
+        "residual_initial": 0.001401165,
+        "residual_last": 2.023925e-21,
+        "residual_last_over_initial": 1.4444587182808592e-18,
+        "residual_per_iteration": [
+          2.023925e-21
+        ],
+        "displacement_increment_per_iteration": [
+          1.174731
+        ],
+        "converged": true
+      }
+    },
+    "q3_springs_rhoi0_full_newton_x10": {
+      "springs": true,
+      "rhoi": 0.0,
+      "tolerances": "full_newton_x10",
+      "normal_termination": true,
+      "febio_version": "4.13.0",
+      "turning_points": 19,
+      "period_s": 0.10049281050096293,
+      "decay_rate_per_s": 0.03456720875847389,
+      "first_height_mm": 4.957710174693879,
+      "last_height_mm": 4.813462963622835,
+      "iterations": {
+        "steps": 600,
+        "iterations_mean": 1.0,
+        "iterations_max": 1,
+        "iterations_min": 1,
+        "iterations_total": 600,
+        "reformations_total": 600,
+        "first_steps": [
+          1,
+          1,
+          1,
+          1,
+          1
+        ]
+      },
+      "step_1": {
+        "iterations": 1,
+        "residual_initial": 5.913408e-06,
+        "residual_last": 8.715716e-22,
+        "residual_last_over_initial": 1.4738905213372728e-16,
+        "residual_per_iteration": [
+          8.715716e-22
+        ],
+        "displacement_increment_per_iteration": [
+          0.004957779
+        ],
+        "converged": true
+      },
+      "step_100": {
+        "iterations": 1,
+        "residual_initial": 0.001401165,
+        "residual_last": 2.023925e-21,
+        "residual_last_over_initial": 1.4444587182808592e-18,
+        "residual_per_iteration": [
+          2.023925e-21
+        ],
+        "displacement_increment_per_iteration": [
+          1.174731
+        ],
+        "converged": true
+      }
+    },
+    "q3_springs_rhoi0_full_newton_x100": {
+      "springs": true,
+      "rhoi": 0.0,
+      "tolerances": "full_newton_x100",
+      "normal_termination": true,
+      "febio_version": "4.13.0",
+      "turning_points": 19,
+      "period_s": 0.10049281050096293,
+      "decay_rate_per_s": 0.03456720875847389,
+      "first_height_mm": 4.957710174693879,
+      "last_height_mm": 4.813462963622835,
+      "iterations": {
+        "steps": 600,
+        "iterations_mean": 1.0,
+        "iterations_max": 1,
+        "iterations_min": 1,
+        "iterations_total": 600,
+        "reformations_total": 600,
+        "first_steps": [
+          1,
+          1,
+          1,
+          1,
+          1
+        ]
+      },
+      "step_1": {
+        "iterations": 1,
+        "residual_initial": 5.913408e-06,
+        "residual_last": 8.715716e-22,
+        "residual_last_over_initial": 1.4738905213372728e-16,
+        "residual_per_iteration": [
+          8.715716e-22
+        ],
+        "displacement_increment_per_iteration": [
+          0.004957779
+        ],
+        "converged": true
+      },
+      "step_100": {
+        "iterations": 1,
+        "residual_initial": 0.001401165,
+        "residual_last": 2.023925e-21,
+        "residual_last_over_initial": 1.4444587182808592e-18,
+        "residual_per_iteration": [
+          2.023925e-21
+        ],
+        "displacement_increment_per_iteration": [
+          1.174731
+        ],
+        "converged": true
+      }
+    },
+    "q3_springs_rhoi0_full_newton_rtol_1e-6": {
+      "springs": true,
+      "rhoi": 0.0,
+      "tolerances": "full_newton_rtol_1e-6",
+      "normal_termination": true,
+      "febio_version": "4.13.0",
+      "turning_points": 19,
+      "period_s": 0.10049281050096293,
+      "decay_rate_per_s": 0.03456720875847389,
+      "first_height_mm": 4.957710174693879,
+      "last_height_mm": 4.813462963622835,
+      "iterations": {
+        "steps": 600,
+        "iterations_mean": 1.0,
+        "iterations_max": 1,
+        "iterations_min": 1,
+        "iterations_total": 600,
+        "reformations_total": 600,
+        "first_steps": [
+          1,
+          1,
+          1,
+          1,
+          1
+        ]
+      },
+      "step_1": {
+        "iterations": 1,
+        "residual_initial": 5.913408e-06,
+        "residual_last": 8.715716e-22,
+        "residual_last_over_initial": 1.4738905213372728e-16,
+        "residual_per_iteration": [
+          8.715716e-22
+        ],
+        "displacement_increment_per_iteration": [
+          0.004957779
+        ],
+        "converged": true
+      },
+      "step_100": {
+        "iterations": 1,
+        "residual_initial": 0.001401165,
+        "residual_last": 2.023925e-21,
+        "residual_last_over_initial": 1.4444587182808592e-18,
+        "residual_per_iteration": [
+          2.023925e-21
+        ],
+        "displacement_increment_per_iteration": [
+          1.174731
+        ],
+        "converged": true
+      }
+    },
+    "q3_springs_rhoi-2_default": {
+      "springs": true,
+      "rhoi": -2.0,
+      "tolerances": "default",
+      "normal_termination": true,
+      "febio_version": "4.13.0",
+      "turning_points": 19,
+      "period_s": 0.10009135767686937,
+      "decay_rate_per_s": 3.3941546094664924e-06,
+      "first_height_mm": 4.969806451387789,
+      "last_height_mm": 4.969793323353141,
+      "iterations": {
+        "steps": 600,
+        "iterations_mean": 1.0,
+        "iterations_max": 1,
+        "iterations_min": 1,
+        "iterations_total": 600,
+        "reformations_total": 600,
+        "first_steps": [
+          1,
+          1,
+          1,
+          1,
+          1
+        ]
+      },
+      "step_1": {
+        "iterations": 1,
+        "residual_initial": 2.365363e-05,
+        "residual_last": 1.486892e-21,
+        "residual_last_over_initial": 6.286104923430358e-17,
+        "residual_per_iteration": [
+          1.486892e-21
+        ],
+        "displacement_increment_per_iteration": [
+          0.004984926
+        ],
+        "converged": true
+      },
+      "step_100": {
+        "iterations": 1,
+        "residual_initial": 0.006009698,
+        "residual_last": 1.423959e-21,
+        "residual_last_over_initial": 2.3694352029003786e-19,
+        "residual_per_iteration": [
+          1.423959e-21
+        ],
+        "displacement_increment_per_iteration": [
+          1.266524
+        ],
+        "converged": true
+      }
+    },
+    "q3_springs_rhoi-2_full_newton_x10": {
+      "springs": true,
+      "rhoi": -2.0,
+      "tolerances": "full_newton_x10",
+      "normal_termination": true,
+      "febio_version": "4.13.0",
+      "turning_points": 19,
+      "period_s": 0.10009135767686937,
+      "decay_rate_per_s": 3.3941546094664924e-06,
+      "first_height_mm": 4.969806451387789,
+      "last_height_mm": 4.969793323353141,
+      "iterations": {
+        "steps": 600,
+        "iterations_mean": 1.0,
+        "iterations_max": 1,
+        "iterations_min": 1,
+        "iterations_total": 600,
+        "reformations_total": 600,
+        "first_steps": [
+          1,
+          1,
+          1,
+          1,
+          1
+        ]
+      },
+      "step_1": {
+        "iterations": 1,
+        "residual_initial": 2.365363e-05,
+        "residual_last": 1.486892e-21,
+        "residual_last_over_initial": 6.286104923430358e-17,
+        "residual_per_iteration": [
+          1.486892e-21
+        ],
+        "displacement_increment_per_iteration": [
+          0.004984926
+        ],
+        "converged": true
+      },
+      "step_100": {
+        "iterations": 1,
+        "residual_initial": 0.006009698,
+        "residual_last": 1.423959e-21,
+        "residual_last_over_initial": 2.3694352029003786e-19,
+        "residual_per_iteration": [
+          1.423959e-21
+        ],
+        "displacement_increment_per_iteration": [
+          1.266524
+        ],
+        "converged": true
+      }
+    },
+    "q3_springs_rhoi-2_full_newton_x100": {
+      "springs": true,
+      "rhoi": -2.0,
+      "tolerances": "full_newton_x100",
+      "normal_termination": true,
+      "febio_version": "4.13.0",
+      "turning_points": 19,
+      "period_s": 0.10009135767686937,
+      "decay_rate_per_s": 3.3941546094664924e-06,
+      "first_height_mm": 4.969806451387789,
+      "last_height_mm": 4.969793323353141,
+      "iterations": {
+        "steps": 600,
+        "iterations_mean": 1.0,
+        "iterations_max": 1,
+        "iterations_min": 1,
+        "iterations_total": 600,
+        "reformations_total": 600,
+        "first_steps": [
+          1,
+          1,
+          1,
+          1,
+          1
+        ]
+      },
+      "step_1": {
+        "iterations": 1,
+        "residual_initial": 2.365363e-05,
+        "residual_last": 1.486892e-21,
+        "residual_last_over_initial": 6.286104923430358e-17,
+        "residual_per_iteration": [
+          1.486892e-21
+        ],
+        "displacement_increment_per_iteration": [
+          0.004984926
+        ],
+        "converged": true
+      },
+      "step_100": {
+        "iterations": 1,
+        "residual_initial": 0.006009698,
+        "residual_last": 1.423959e-21,
+        "residual_last_over_initial": 2.3694352029003786e-19,
+        "residual_per_iteration": [
+          1.423959e-21
+        ],
+        "displacement_increment_per_iteration": [
+          1.266524
+        ],
+        "converged": true
+      }
+    },
+    "q3_springs_rhoi-2_full_newton_rtol_1e-6": {
+      "springs": true,
+      "rhoi": -2.0,
+      "tolerances": "full_newton_rtol_1e-6",
+      "normal_termination": true,
+      "febio_version": "4.13.0",
+      "turning_points": 19,
+      "period_s": 0.10009135767686937,
+      "decay_rate_per_s": 3.3941546094664924e-06,
+      "first_height_mm": 4.969806451387789,
+      "last_height_mm": 4.969793323353141,
+      "iterations": {
+        "steps": 600,
+        "iterations_mean": 1.0,
+        "iterations_max": 1,
+        "iterations_min": 1,
+        "iterations_total": 600,
+        "reformations_total": 600,
+        "first_steps": [
+          1,
+          1,
+          1,
+          1,
+          1
+        ]
+      },
+      "step_1": {
+        "iterations": 1,
+        "residual_initial": 2.365363e-05,
+        "residual_last": 1.486892e-21,
+        "residual_last_over_initial": 6.286104923430358e-17,
+        "residual_per_iteration": [
+          1.486892e-21
+        ],
+        "displacement_increment_per_iteration": [
+          0.004984926
+        ],
+        "converged": true
+      },
+      "step_100": {
+        "iterations": 1,
+        "residual_initial": 0.006009698,
+        "residual_last": 1.423959e-21,
+        "residual_last_over_initial": 2.3694352029003786e-19,
+        "residual_per_iteration": [
+          1.423959e-21
+        ],
+        "displacement_increment_per_iteration": [
+          1.266524
+        ],
+        "converged": true
+      }
+    },
+    "q3_nosprings_rhoi1_default": {
+      "springs": false,
+      "rhoi": 1.0,
+      "tolerances": "default",
+      "normal_termination": true,
+      "febio_version": "4.13.0",
+      "turning_points": 116,
+      "period_s": 0.017118671917693343,
+      "decay_rate_per_s": 0.0016838810429962625,
+      "first_height_mm": 0.1854283906816736,
+      "last_height_mm": 0.1850601105851215,
+      "iterations": {
+        "steps": 600,
+        "iterations_mean": 2.0,
+        "iterations_max": 2,
+        "iterations_min": 2,
+        "iterations_total": 1200,
+        "reformations_total": 600,
+        "first_steps": [
+          2,
+          2,
+          2,
+          2,
+          2
+        ]
+      },
+      "step_1": {
+        "iterations": 2,
+        "residual_initial": 4.880908e-06,
+        "residual_last": 9.191494e-20,
+        "residual_last_over_initial": 1.8831524790059555e-14,
+        "residual_per_iteration": [
+          4.146465e-13,
+          9.191494e-20
+        ],
+        "displacement_increment_per_iteration": [
+          0.003541138,
+          2.150321e-10
+        ],
+        "converged": true
+      },
+      "step_100": {
+        "iterations": 2,
+        "residual_initial": 3.919631e-05,
+        "residual_last": 2.875146e-17,
+        "residual_last_over_initial": 7.335246608673113e-13,
+        "residual_per_iteration": [
+          8.548064e-12,
+          2.875146e-17
+        ],
+        "displacement_increment_per_iteration": [
+          0.03541777,
+          3.849598e-09
+        ],
+        "converged": true
+      }
+    },
+    "q3_nosprings_rhoi1_full_newton_x10": {
+      "springs": false,
+      "rhoi": 1.0,
+      "tolerances": "full_newton_x10",
+      "normal_termination": true,
+      "febio_version": "4.13.0",
+      "turning_points": 116,
+      "period_s": 0.01711867089953947,
+      "decay_rate_per_s": 0.0015848053326310944,
+      "first_height_mm": 0.18542853232790613,
+      "last_height_mm": 0.18507510098862845,
+      "iterations": {
+        "steps": 600,
+        "iterations_mean": 2.82,
+        "iterations_max": 3,
+        "iterations_min": 2,
+        "iterations_total": 1692,
+        "reformations_total": 1692,
+        "first_steps": [
+          3,
+          3,
+          3,
+          3,
+          3
+        ]
+      },
+      "step_1": {
+        "iterations": 3,
+        "residual_initial": 4.880908e-06,
+        "residual_last": 2.522954e-27,
+        "residual_last_over_initial": 5.169025927143064e-22,
+        "residual_per_iteration": [
+          4.146465e-13,
+          1.651572e-20,
+          2.522954e-27
+        ],
+        "displacement_increment_per_iteration": [
+          0.003541138,
+          2.149337e-10,
+          8.795333e-18
+        ],
+        "converged": true
+      },
+      "step_100": {
+        "iterations": 3,
+        "residual_initial": 3.919802e-05,
+        "residual_last": 7.291916e-25,
+        "residual_last_over_initial": 1.8602766160127476e-20,
+        "residual_per_iteration": [
+          8.549493e-12,
+          1.953798e-18,
+          7.291916e-25
+        ],
+        "displacement_increment_per_iteration": [
+          0.03541848,
+          3.856371e-09,
+          1.20223e-15
+        ],
+        "converged": true
+      }
+    },
+    "q3_nosprings_rhoi1_full_newton_x100": {
+      "springs": false,
+      "rhoi": 1.0,
+      "tolerances": "full_newton_x100",
+      "normal_termination": true,
+      "febio_version": "4.13.0",
+      "turning_points": 116,
+      "period_s": 0.01711867089953947,
+      "decay_rate_per_s": 0.0015848053326310944,
+      "first_height_mm": 0.18542853232790613,
+      "last_height_mm": 0.18507510098862845,
+      "iterations": {
+        "steps": 600,
+        "iterations_mean": 2.82,
+        "iterations_max": 3,
+        "iterations_min": 2,
+        "iterations_total": 1692,
+        "reformations_total": 1692,
+        "first_steps": [
+          3,
+          3,
+          3,
+          3,
+          3
+        ]
+      },
+      "step_1": {
+        "iterations": 3,
+        "residual_initial": 4.880908e-06,
+        "residual_last": 2.522954e-27,
+        "residual_last_over_initial": 5.169025927143064e-22,
+        "residual_per_iteration": [
+          4.146465e-13,
+          1.651572e-20,
+          2.522954e-27
+        ],
+        "displacement_increment_per_iteration": [
+          0.003541138,
+          2.149337e-10,
+          8.795333e-18
+        ],
+        "converged": true
+      },
+      "step_100": {
+        "iterations": 3,
+        "residual_initial": 3.919802e-05,
+        "residual_last": 7.291916e-25,
+        "residual_last_over_initial": 1.8602766160127476e-20,
+        "residual_per_iteration": [
+          8.549493e-12,
+          1.953798e-18,
+          7.291916e-25
+        ],
+        "displacement_increment_per_iteration": [
+          0.03541848,
+          3.856371e-09,
+          1.20223e-15
+        ],
+        "converged": true
+      }
+    },
+    "q3_nosprings_rhoi1_full_newton_rtol_1e-6": {
+      "springs": false,
+      "rhoi": 1.0,
+      "tolerances": "full_newton_rtol_1e-6",
+      "normal_termination": true,
+      "febio_version": "4.13.0",
+      "turning_points": 116,
+      "period_s": 0.01711867115024268,
+      "decay_rate_per_s": 0.0016373181414856273,
+      "first_height_mm": 0.18542843119334762,
+      "last_height_mm": 0.18506613957710094,
+      "iterations": {
+        "steps": 600,
+        "iterations_mean": 2.0,
+        "iterations_max": 2,
+        "iterations_min": 2,
+        "iterations_total": 1200,
+        "reformations_total": 1200,
+        "first_steps": [
+          2,
+          2,
+          2,
+          2,
+          2
+        ]
+      },
+      "step_1": {
+        "iterations": 2,
+        "residual_initial": 4.880908e-06,
+        "residual_last": 1.651572e-20,
+        "residual_last_over_initial": 3.3837392550730313e-15,
+        "residual_per_iteration": [
+          4.146465e-13,
+          1.651572e-20
+        ],
+        "displacement_increment_per_iteration": [
+          0.003541138,
+          2.149337e-10
+        ],
+        "converged": true
+      },
+      "step_100": {
+        "iterations": 2,
+        "residual_initial": 3.919723e-05,
+        "residual_last": 1.95364e-18,
+        "residual_last_over_initial": 4.984127704942415e-14,
+        "residual_per_iteration": [
+          8.548998e-12,
+          1.95364e-18
+        ],
+        "displacement_increment_per_iteration": [
+          0.03541798,
+          3.856116e-09
+        ],
+        "converged": true
+      }
+    },
+    "q3_nosprings_rhoi0.9_default": {
+      "springs": false,
+      "rhoi": 0.9,
+      "tolerances": "default",
+      "normal_termination": true,
+      "febio_version": "4.13.0",
+      "turning_points": 116,
+      "period_s": 0.017126527054327198,
+      "decay_rate_per_s": 0.006560015236639406,
+      "first_height_mm": 0.18531851587673387,
+      "last_height_mm": 0.18670648539920087,
+      "iterations": {
+        "steps": 600,
+        "iterations_mean": 2.0,
+        "iterations_max": 2,
+        "iterations_min": 2,
+        "iterations_total": 1200,
+        "reformations_total": 600,
+        "first_steps": [
+          2,
+          2,
+          2,
+          2,
+          2
+        ]
+      },
+      "step_1": {
+        "iterations": 2,
+        "residual_initial": 5.330073e-06,
+        "residual_last": 3.688729e-20,
+        "residual_last_over_initial": 6.92059752277314e-15,
+        "residual_per_iteration": [
+          2.894524e-13,
+          3.688729e-20
+        ],
+        "displacement_increment_per_iteration": [
+          0.003536487,
+          1.400919e-10
+        ],
+        "converged": true
+      },
+      "step_100": {
+        "iterations": 2,
+        "residual_initial": 4.161912e-05,
+        "residual_last": 1.146829e-17,
+        "residual_last_over_initial": 2.7555339949523203e-13,
+        "residual_per_iteration": [
+          6.647914e-12,
+          1.146829e-17
+        ],
+        "displacement_increment_per_iteration": [
+          0.03524075,
+          3.09919e-09
+        ],
+        "converged": true
+      }
+    },
+    "q3_nosprings_rhoi0.9_full_newton_x10": {
+      "springs": false,
+      "rhoi": 0.9,
+      "tolerances": "full_newton_x10",
+      "normal_termination": true,
+      "febio_version": "4.13.0",
+      "turning_points": 116,
+      "period_s": 0.017126527798564155,
+      "decay_rate_per_s": 0.006497924431158451,
+      "first_height_mm": 0.18531859546029494,
+      "last_height_mm": 0.1867194808514352,
+      "iterations": {
+        "steps": 600,
+        "iterations_mean": 2.0,
+        "iterations_max": 2,
+        "iterations_min": 2,
+        "iterations_total": 1200,
+        "reformations_total": 1200,
+        "first_steps": [
+          2,
+          2,
+          2,
+          2,
+          2
+        ]
+      },
+      "step_1": {
+        "iterations": 2,
+        "residual_initial": 5.330073e-06,
+        "residual_last": 2.779423e-27,
+        "residual_last_over_initial": 5.214605878756257e-22,
+        "residual_per_iteration": [
+          2.894524e-13,
+          2.779423e-27
+        ],
+        "displacement_increment_per_iteration": [
+          0.003536487,
+          1.400051e-10
+        ],
+        "converged": true
+      },
+      "step_100": {
+        "iterations": 2,
+        "residual_initial": 4.162028e-05,
+        "residual_last": 1.082626e-24,
+        "residual_last_over_initial": 2.601198262001121e-20,
+        "residual_per_iteration": [
+          6.648609e-12,
+          1.082626e-24
+        ],
+        "displacement_increment_per_iteration": [
+          0.03524117,
+          3.101923e-09
+        ],
+        "converged": true
+      }
+    },
+    "q3_nosprings_rhoi0.9_full_newton_x100": {
+      "springs": false,
+      "rhoi": 0.9,
+      "tolerances": "full_newton_x100",
+      "normal_termination": true,
+      "febio_version": "4.13.0",
+      "turning_points": 116,
+      "period_s": 0.017126527798564155,
+      "decay_rate_per_s": 0.006497924431158451,
+      "first_height_mm": 0.18531859546029494,
+      "last_height_mm": 0.1867194808514352,
+      "iterations": {
+        "steps": 600,
+        "iterations_mean": 2.0,
+        "iterations_max": 2,
+        "iterations_min": 2,
+        "iterations_total": 1200,
+        "reformations_total": 1200,
+        "first_steps": [
+          2,
+          2,
+          2,
+          2,
+          2
+        ]
+      },
+      "step_1": {
+        "iterations": 2,
+        "residual_initial": 5.330073e-06,
+        "residual_last": 2.779423e-27,
+        "residual_last_over_initial": 5.214605878756257e-22,
+        "residual_per_iteration": [
+          2.894524e-13,
+          2.779423e-27
+        ],
+        "displacement_increment_per_iteration": [
+          0.003536487,
+          1.400051e-10
+        ],
+        "converged": true
+      },
+      "step_100": {
+        "iterations": 2,
+        "residual_initial": 4.162028e-05,
+        "residual_last": 1.082626e-24,
+        "residual_last_over_initial": 2.601198262001121e-20,
+        "residual_per_iteration": [
+          6.648609e-12,
+          1.082626e-24
+        ],
+        "displacement_increment_per_iteration": [
+          0.03524117,
+          3.101923e-09
+        ],
+        "converged": true
+      }
+    },
+    "q3_nosprings_rhoi0.9_full_newton_rtol_1e-6": {
+      "springs": false,
+      "rhoi": 0.9,
+      "tolerances": "full_newton_rtol_1e-6",
+      "normal_termination": true,
+      "febio_version": "4.13.0",
+      "turning_points": 116,
+      "period_s": 0.017126527798564155,
+      "decay_rate_per_s": 0.006497924431158451,
+      "first_height_mm": 0.18531859546029494,
+      "last_height_mm": 0.1867194808514352,
+      "iterations": {
+        "steps": 600,
+        "iterations_mean": 2.0,
+        "iterations_max": 2,
+        "iterations_min": 2,
+        "iterations_total": 1200,
+        "reformations_total": 1200,
+        "first_steps": [
+          2,
+          2,
+          2,
+          2,
+          2
+        ]
+      },
+      "step_1": {
+        "iterations": 2,
+        "residual_initial": 5.330073e-06,
+        "residual_last": 2.779423e-27,
+        "residual_last_over_initial": 5.214605878756257e-22,
+        "residual_per_iteration": [
+          2.894524e-13,
+          2.779423e-27
+        ],
+        "displacement_increment_per_iteration": [
+          0.003536487,
+          1.400051e-10
+        ],
+        "converged": true
+      },
+      "step_100": {
+        "iterations": 2,
+        "residual_initial": 4.162028e-05,
+        "residual_last": 1.082626e-24,
+        "residual_last_over_initial": 2.601198262001121e-20,
+        "residual_per_iteration": [
+          6.648609e-12,
+          1.082626e-24
+        ],
+        "displacement_increment_per_iteration": [
+          0.03524117,
+          3.101923e-09
+        ],
+        "converged": true
+      }
+    },
+    "q3_nosprings_rhoi0.5_default": {
+      "springs": false,
+      "rhoi": 0.5,
+      "tolerances": "default",
+      "normal_termination": true,
+      "febio_version": "4.13.0",
+      "turning_points": 115,
+      "period_s": 0.017366061122949524,
+      "decay_rate_per_s": 1.3851448107846405,
+      "first_height_mm": 0.18324721181718395,
+      "last_height_mm": 0.04738233477120346,
+      "iterations": {
+        "steps": 600,
+        "iterations_mean": 1.9983333333333333,
+        "iterations_max": 2,
+        "iterations_min": 1,
+        "iterations_total": 1199,
+        "reformations_total": 600,
+        "first_steps": [
+          2,
+          2,
+          2,
+          2,
+          2
+        ]
+      },
+      "step_1": {
+        "iterations": 2,
+        "residual_initial": 6.177399e-06,
+        "residual_last": 1.589471e-19,
+        "residual_last_over_initial": 2.5730424730537885e-14,
+        "residual_per_iteration": [
+          6.460087e-13,
+          1.589471e-19
+        ],
+        "displacement_increment_per_iteration": [
+          0.003427777,
+          2.355041e-10
+        ],
+        "converged": true
+      },
+      "step_100": {
+        "iterations": 2,
+        "residual_initial": 3.571594e-06,
+        "residual_last": 1.404038e-20,
+        "residual_last_over_initial": 3.931124310321946e-15,
+        "residual_per_iteration": [
+          8.159633e-14,
+          1.404038e-20
+        ],
+        "displacement_increment_per_iteration": [
+          0.002544378,
+          2.984991e-11
+        ],
+        "converged": true
+      }
+    },
+    "q3_nosprings_rhoi0.5_full_newton_x10": {
+      "springs": false,
+      "rhoi": 0.5,
+      "tolerances": "full_newton_x10",
+      "normal_termination": true,
+      "febio_version": "4.13.0",
+      "turning_points": 115,
+      "period_s": 0.01736606127784966,
+      "decay_rate_per_s": 1.3851061528019406,
+      "first_height_mm": 0.18324748602266894,
+      "last_height_mm": 0.04738442049717939,
+      "iterations": {
+        "steps": 600,
+        "iterations_mean": 1.9983333333333333,
+        "iterations_max": 2,
+        "iterations_min": 1,
+        "iterations_total": 1199,
+        "reformations_total": 1199,
+        "first_steps": [
+          2,
+          2,
+          2,
+          2,
+          2
+        ]
+      },
+      "step_1": {
+        "iterations": 2,
+        "residual_initial": 6.177399e-06,
+        "residual_last": 1.748841e-26,
+        "residual_last_over_initial": 2.8310313126932548e-21,
+        "residual_per_iteration": [
+          6.460087e-13,
+          1.748841e-26
+        ],
+        "displacement_increment_per_iteration": [
+          0.003427777,
+          2.352975e-10
+        ],
+        "converged": true
+      },
+      "step_100": {
+        "iterations": 2,
+        "residual_initial": 3.571687e-06,
+        "residual_last": 1.728229e-28,
+        "residual_last_over_initial": 4.838691072314007e-23,
+        "residual_per_iteration": [
+          8.16005e-14,
+          1.728229e-28
+        ],
+        "displacement_increment_per_iteration": [
+          0.002544444,
+          2.985802e-11
+        ],
+        "converged": true
+      }
+    },
+    "q3_nosprings_rhoi0.5_full_newton_x100": {
+      "springs": false,
+      "rhoi": 0.5,
+      "tolerances": "full_newton_x100",
+      "normal_termination": true,
+      "febio_version": "4.13.0",
+      "turning_points": 115,
+      "period_s": 0.01736606127784966,
+      "decay_rate_per_s": 1.3851061528019406,
+      "first_height_mm": 0.18324748602266894,
+      "last_height_mm": 0.04738442049717939,
+      "iterations": {
+        "steps": 600,
+        "iterations_mean": 1.9983333333333333,
+        "iterations_max": 2,
+        "iterations_min": 1,
+        "iterations_total": 1199,
+        "reformations_total": 1199,
+        "first_steps": [
+          2,
+          2,
+          2,
+          2,
+          2
+        ]
+      },
+      "step_1": {
+        "iterations": 2,
+        "residual_initial": 6.177399e-06,
+        "residual_last": 1.748841e-26,
+        "residual_last_over_initial": 2.8310313126932548e-21,
+        "residual_per_iteration": [
+          6.460087e-13,
+          1.748841e-26
+        ],
+        "displacement_increment_per_iteration": [
+          0.003427777,
+          2.352975e-10
+        ],
+        "converged": true
+      },
+      "step_100": {
+        "iterations": 2,
+        "residual_initial": 3.571687e-06,
+        "residual_last": 1.728229e-28,
+        "residual_last_over_initial": 4.838691072314007e-23,
+        "residual_per_iteration": [
+          8.16005e-14,
+          1.728229e-28
+        ],
+        "displacement_increment_per_iteration": [
+          0.002544444,
+          2.985802e-11
+        ],
+        "converged": true
+      }
+    },
+    "q3_nosprings_rhoi0.5_full_newton_rtol_1e-6": {
+      "springs": false,
+      "rhoi": 0.5,
+      "tolerances": "full_newton_rtol_1e-6",
+      "normal_termination": true,
+      "febio_version": "4.13.0",
+      "turning_points": 115,
+      "period_s": 0.01736606127784966,
+      "decay_rate_per_s": 1.3851061528019406,
+      "first_height_mm": 0.18324748602266894,
+      "last_height_mm": 0.04738442049717939,
+      "iterations": {
+        "steps": 600,
+        "iterations_mean": 1.9983333333333333,
+        "iterations_max": 2,
+        "iterations_min": 1,
+        "iterations_total": 1199,
+        "reformations_total": 1199,
+        "first_steps": [
+          2,
+          2,
+          2,
+          2,
+          2
+        ]
+      },
+      "step_1": {
+        "iterations": 2,
+        "residual_initial": 6.177399e-06,
+        "residual_last": 1.748841e-26,
+        "residual_last_over_initial": 2.8310313126932548e-21,
+        "residual_per_iteration": [
+          6.460087e-13,
+          1.748841e-26
+        ],
+        "displacement_increment_per_iteration": [
+          0.003427777,
+          2.352975e-10
+        ],
+        "converged": true
+      },
+      "step_100": {
+        "iterations": 2,
+        "residual_initial": 3.571687e-06,
+        "residual_last": 1.728229e-28,
+        "residual_last_over_initial": 4.838691072314007e-23,
+        "residual_per_iteration": [
+          8.16005e-14,
+          1.728229e-28
+        ],
+        "displacement_increment_per_iteration": [
+          0.002544444,
+          2.985802e-11
+        ],
+        "converged": true
+      }
+    },
+    "q3_nosprings_rhoi0.25_default": {
+      "springs": false,
+      "rhoi": 0.25,
+      "tolerances": "default",
+      "normal_termination": true,
+      "febio_version": "4.13.0",
+      "turning_points": 112,
+      "period_s": 0.01780527321805158,
+      "decay_rate_per_s": 6.265853243287081,
+      "first_height_mm": 0.17495684243150045,
+      "last_height_mm": 0.00033594329747188567,
+      "iterations": {
+        "steps": 600,
+        "iterations_mean": 1.9133333333333333,
+        "iterations_max": 2,
+        "iterations_min": 1,
+        "iterations_total": 1148,
+        "reformations_total": 600,
+        "first_steps": [
+          2,
+          2,
+          2,
+          2,
+          2
+        ]
+      },
+      "step_1": {
+        "iterations": 2,
+        "residual_initial": 5.838977e-06,
+        "residual_last": 4.847665e-19,
+        "residual_last_over_initial": 8.302250548340917e-14,
+        "residual_per_iteration": [
+          1.094052e-12,
+          4.847665e-19
+        ],
+        "displacement_increment_per_iteration": [
+          0.003271807,
+          3.510464e-10
+        ],
+        "converged": true
+      },
+      "step_100": {
+        "iterations": 2,
+        "residual_initial": 5.895145e-06,
+        "residual_last": 2.191798e-19,
+        "residual_last_over_initial": 3.7179713136826997e-14,
+        "residual_per_iteration": [
+          4.495911e-13,
+          2.191798e-19
+        ],
+        "displacement_increment_per_iteration": [
+          0.004275626,
+          1.550168e-10
+        ],
+        "converged": true
+      }
+    },
+    "q3_nosprings_rhoi0.25_full_newton_x10": {
+      "springs": false,
+      "rhoi": 0.25,
+      "tolerances": "full_newton_x10",
+      "normal_termination": true,
+      "febio_version": "4.13.0",
+      "turning_points": 112,
+      "period_s": 0.017805273344507988,
+      "decay_rate_per_s": 6.265846313513417,
+      "first_height_mm": 0.1749573435977183,
+      "last_height_mm": 0.0003359501467574688,
+      "iterations": {
+        "steps": 600,
+        "iterations_mean": 1.9133333333333333,
+        "iterations_max": 2,
+        "iterations_min": 1,
+        "iterations_total": 1148,
+        "reformations_total": 1148,
+        "first_steps": [
+          2,
+          2,
+          2,
+          2,
+          2
+        ]
+      },
+      "step_1": {
+        "iterations": 2,
+        "residual_initial": 5.838977e-06,
+        "residual_last": 6.485108e-26,
+        "residual_last_over_initial": 1.1106582540057958e-20,
+        "residual_per_iteration": [
+          1.094052e-12,
+          6.485108e-26
+        ],
+        "displacement_increment_per_iteration": [
+          0.003271807,
+          3.506342e-10
+        ],
+        "converged": true
+      },
+      "step_100": {
+        "iterations": 2,
+        "residual_initial": 5.895341e-06,
+        "residual_last": 8.820965e-27,
+        "residual_last_over_initial": 1.4962603520305271e-21,
+        "residual_per_iteration": [
+          4.496206e-13,
+          8.820965e-27
+        ],
+        "displacement_increment_per_iteration": [
+          0.004275768,
+          1.549567e-10
+        ],
+        "converged": true
+      }
+    },
+    "q3_nosprings_rhoi0.25_full_newton_x100": {
+      "springs": false,
+      "rhoi": 0.25,
+      "tolerances": "full_newton_x100",
+      "normal_termination": true,
+      "febio_version": "4.13.0",
+      "turning_points": 112,
+      "period_s": 0.017805273344507988,
+      "decay_rate_per_s": 6.265846313513417,
+      "first_height_mm": 0.1749573435977183,
+      "last_height_mm": 0.0003359501467574688,
+      "iterations": {
+        "steps": 600,
+        "iterations_mean": 1.9133333333333333,
+        "iterations_max": 2,
+        "iterations_min": 1,
+        "iterations_total": 1148,
+        "reformations_total": 1148,
+        "first_steps": [
+          2,
+          2,
+          2,
+          2,
+          2
+        ]
+      },
+      "step_1": {
+        "iterations": 2,
+        "residual_initial": 5.838977e-06,
+        "residual_last": 6.485108e-26,
+        "residual_last_over_initial": 1.1106582540057958e-20,
+        "residual_per_iteration": [
+          1.094052e-12,
+          6.485108e-26
+        ],
+        "displacement_increment_per_iteration": [
+          0.003271807,
+          3.506342e-10
+        ],
+        "converged": true
+      },
+      "step_100": {
+        "iterations": 2,
+        "residual_initial": 5.895341e-06,
+        "residual_last": 8.820965e-27,
+        "residual_last_over_initial": 1.4962603520305271e-21,
+        "residual_per_iteration": [
+          4.496206e-13,
+          8.820965e-27
+        ],
+        "displacement_increment_per_iteration": [
+          0.004275768,
+          1.549567e-10
+        ],
+        "converged": true
+      }
+    },
+    "q3_nosprings_rhoi0.25_full_newton_rtol_1e-6": {
+      "springs": false,
+      "rhoi": 0.25,
+      "tolerances": "full_newton_rtol_1e-6",
+      "normal_termination": true,
+      "febio_version": "4.13.0",
+      "turning_points": 112,
+      "period_s": 0.017805273344507988,
+      "decay_rate_per_s": 6.265846313513417,
+      "first_height_mm": 0.1749573435977183,
+      "last_height_mm": 0.0003359501467574688,
+      "iterations": {
+        "steps": 600,
+        "iterations_mean": 1.9133333333333333,
+        "iterations_max": 2,
+        "iterations_min": 1,
+        "iterations_total": 1148,
+        "reformations_total": 1148,
+        "first_steps": [
+          2,
+          2,
+          2,
+          2,
+          2
+        ]
+      },
+      "step_1": {
+        "iterations": 2,
+        "residual_initial": 5.838977e-06,
+        "residual_last": 6.485108e-26,
+        "residual_last_over_initial": 1.1106582540057958e-20,
+        "residual_per_iteration": [
+          1.094052e-12,
+          6.485108e-26
+        ],
+        "displacement_increment_per_iteration": [
+          0.003271807,
+          3.506342e-10
+        ],
+        "converged": true
+      },
+      "step_100": {
+        "iterations": 2,
+        "residual_initial": 5.895341e-06,
+        "residual_last": 8.820965e-27,
+        "residual_last_over_initial": 1.4962603520305271e-21,
+        "residual_per_iteration": [
+          4.496206e-13,
+          8.820965e-27
+        ],
+        "displacement_increment_per_iteration": [
+          0.004275768,
+          1.549567e-10
+        ],
+        "converged": true
+      }
+    },
+    "q3_nosprings_rhoi0_default": {
+      "springs": false,
+      "rhoi": 0.0,
+      "tolerances": "default",
+      "normal_termination": true,
+      "febio_version": "4.13.0",
+      "turning_points": 81,
+      "period_s": 0.024444982019573007,
+      "decay_rate_per_s": 9.310491526954305,
+      "first_height_mm": 0.15377029895675243,
+      "last_height_mm": 2.1712907324555886e-05,
+      "iterations": {
+        "steps": 600,
+        "iterations_mean": 1.3916666666666666,
+        "iterations_max": 2,
+        "iterations_min": 1,
+        "iterations_total": 835,
+        "reformations_total": 600,
+        "first_steps": [
+          2,
+          2,
+          2,
+          2,
+          2
+        ]
+      },
+      "step_1": {
+        "iterations": 2,
+        "residual_initial": 4.880908e-06,
+        "residual_last": 1.737297e-18,
+        "residual_last_over_initial": 3.5593725593680513e-13,
+        "residual_per_iteration": [
+          1.903268e-12,
+          1.737297e-18
+        ],
+        "displacement_increment_per_iteration": [
+          0.003003167,
+          5.564387e-10
+        ],
+        "converged": true
+      },
+      "step_100": {
+        "iterations": 2,
+        "residual_initial": 3.487336e-08,
+        "residual_last": 2.370446e-25,
+        "residual_last_over_initial": 6.797297421298091e-18,
+        "residual_per_iteration": [
+          3.750435e-17,
+          2.370446e-25
+        ],
+        "displacement_increment_per_iteration": [
+          2.825266e-05,
+          1.316238e-14
+        ],
+        "converged": true
+      }
+    },
+    "q3_nosprings_rhoi0_full_newton_x10": {
+      "springs": false,
+      "rhoi": 0.0,
+      "tolerances": "full_newton_x10",
+      "normal_termination": true,
+      "febio_version": "4.13.0",
+      "turning_points": 81,
+      "period_s": 0.024444981982942326,
+      "decay_rate_per_s": 9.310506386632362,
+      "first_height_mm": 0.15377107955982083,
+      "last_height_mm": 2.1712932309014832e-05,
+      "iterations": {
+        "steps": 600,
+        "iterations_mean": 1.3916666666666666,
+        "iterations_max": 2,
+        "iterations_min": 1,
+        "iterations_total": 835,
+        "reformations_total": 835,
+        "first_steps": [
+          2,
+          2,
+          2,
+          2,
+          2
+        ]
+      },
+      "step_1": {
+        "iterations": 2,
+        "residual_initial": 4.880908e-06,
+        "residual_last": 2.873577e-25,
+        "residual_last_over_initial": 5.887382019902853e-20,
+        "residual_per_iteration": [
+          1.903268e-12,
+          2.873577e-25
+        ],
+        "displacement_increment_per_iteration": [
+          0.003003167,
+          5.555544e-10
+        ],
+        "converged": true
+      },
+      "step_100": {
+        "iterations": 2,
+        "residual_initial": 3.487417e-08,
+        "residual_last": 4.260192e-32,
+        "residual_last_over_initial": 1.2215895030620083e-24,
+        "residual_per_iteration": [
+          3.750625e-17,
+          4.260192e-32
+        ],
+        "displacement_increment_per_iteration": [
+          2.825331e-05,
+          1.316371e-14
+        ],
+        "converged": true
+      }
+    },
+    "q3_nosprings_rhoi0_full_newton_x100": {
+      "springs": false,
+      "rhoi": 0.0,
+      "tolerances": "full_newton_x100",
+      "normal_termination": true,
+      "febio_version": "4.13.0",
+      "turning_points": 81,
+      "period_s": 0.024444981982942326,
+      "decay_rate_per_s": 9.310506386632362,
+      "first_height_mm": 0.15377107955982083,
+      "last_height_mm": 2.1712932309014832e-05,
+      "iterations": {
+        "steps": 600,
+        "iterations_mean": 1.3916666666666666,
+        "iterations_max": 2,
+        "iterations_min": 1,
+        "iterations_total": 835,
+        "reformations_total": 835,
+        "first_steps": [
+          2,
+          2,
+          2,
+          2,
+          2
+        ]
+      },
+      "step_1": {
+        "iterations": 2,
+        "residual_initial": 4.880908e-06,
+        "residual_last": 2.873577e-25,
+        "residual_last_over_initial": 5.887382019902853e-20,
+        "residual_per_iteration": [
+          1.903268e-12,
+          2.873577e-25
+        ],
+        "displacement_increment_per_iteration": [
+          0.003003167,
+          5.555544e-10
+        ],
+        "converged": true
+      },
+      "step_100": {
+        "iterations": 2,
+        "residual_initial": 3.487417e-08,
+        "residual_last": 4.260192e-32,
+        "residual_last_over_initial": 1.2215895030620083e-24,
+        "residual_per_iteration": [
+          3.750625e-17,
+          4.260192e-32
+        ],
+        "displacement_increment_per_iteration": [
+          2.825331e-05,
+          1.316371e-14
+        ],
+        "converged": true
+      }
+    },
+    "q3_nosprings_rhoi0_full_newton_rtol_1e-6": {
+      "springs": false,
+      "rhoi": 0.0,
+      "tolerances": "full_newton_rtol_1e-6",
+      "normal_termination": true,
+      "febio_version": "4.13.0",
+      "turning_points": 81,
+      "period_s": 0.024444981982942326,
+      "decay_rate_per_s": 9.310506386632362,
+      "first_height_mm": 0.15377107955982083,
+      "last_height_mm": 2.1712932309014832e-05,
+      "iterations": {
+        "steps": 600,
+        "iterations_mean": 1.3916666666666666,
+        "iterations_max": 2,
+        "iterations_min": 1,
+        "iterations_total": 835,
+        "reformations_total": 835,
+        "first_steps": [
+          2,
+          2,
+          2,
+          2,
+          2
+        ]
+      },
+      "step_1": {
+        "iterations": 2,
+        "residual_initial": 4.880908e-06,
+        "residual_last": 2.873577e-25,
+        "residual_last_over_initial": 5.887382019902853e-20,
+        "residual_per_iteration": [
+          1.903268e-12,
+          2.873577e-25
+        ],
+        "displacement_increment_per_iteration": [
+          0.003003167,
+          5.555544e-10
+        ],
+        "converged": true
+      },
+      "step_100": {
+        "iterations": 2,
+        "residual_initial": 3.487417e-08,
+        "residual_last": 4.260192e-32,
+        "residual_last_over_initial": 1.2215895030620083e-24,
+        "residual_per_iteration": [
+          3.750625e-17,
+          4.260192e-32
+        ],
+        "displacement_increment_per_iteration": [
+          2.825331e-05,
+          1.316371e-14
+        ],
+        "converged": true
+      }
+    },
+    "q3_nosprings_rhoi-2_default": {
+      "springs": false,
+      "rhoi": -2.0,
+      "tolerances": "default",
+      "normal_termination": true,
+      "febio_version": "4.13.0",
+      "turning_points": 116,
+      "period_s": 0.01711864305500741,
+      "decay_rate_per_s": 0.0020218589755473496,
+      "first_height_mm": 0.18538590448411973,
+      "last_height_mm": 0.18494455871869597,
+      "iterations": {
+        "steps": 600,
+        "iterations_mean": 2.0,
+        "iterations_max": 2,
+        "iterations_min": 2,
+        "iterations_total": 1200,
+        "reformations_total": 600,
+        "first_steps": [
+          2,
+          2,
+          2,
+          2,
+          2
+        ]
+      },
+      "step_1": {
+        "iterations": 2,
+        "residual_initial": 1.952363e-05,
+        "residual_last": 1.746791e-18,
+        "residual_last_over_initial": 8.947060561995899e-14,
+        "residual_per_iteration": [
+          3.807769e-12,
+          1.746791e-18
+        ],
+        "displacement_increment_per_iteration": [
+          0.003541138,
+          5.059326e-10
+        ],
+        "converged": true
+      },
+      "step_100": {
+        "iterations": 2,
+        "residual_initial": 0.0001565373,
+        "residual_last": 6.145865e-16,
+        "residual_last_over_initial": 3.926134537902468e-12,
+        "residual_per_iteration": [
+          9.551705e-11,
+          6.145865e-16
+        ],
+        "displacement_increment_per_iteration": [
+          0.03537961,
+          1.196424e-08
+        ],
+        "converged": true
+      }
+    },
+    "q3_nosprings_rhoi-2_full_newton_x10": {
+      "springs": false,
+      "rhoi": -2.0,
+      "tolerances": "full_newton_x10",
+      "normal_termination": true,
+      "febio_version": "4.13.0",
+      "turning_points": 116,
+      "period_s": 0.017118641757199956,
+      "decay_rate_per_s": 0.0016122800766030492,
+      "first_height_mm": 0.18538645542122545,
+      "last_height_mm": 0.1850119306223359,
+      "iterations": {
+        "steps": 600,
+        "iterations_mean": 2.0,
+        "iterations_max": 2,
+        "iterations_min": 2,
+        "iterations_total": 1200,
+        "reformations_total": 1200,
+        "first_steps": [
+          2,
+          2,
+          2,
+          2,
+          2
+        ]
+      },
+      "step_1": {
+        "iterations": 2,
+        "residual_initial": 1.952363e-05,
+        "residual_last": 4.734869e-25,
+        "residual_last_over_initial": 2.4251991048795742e-20,
+        "residual_per_iteration": [
+          3.807769e-12,
+          4.734869e-25
+        ],
+        "displacement_increment_per_iteration": [
+          0.003541138,
+          5.05339e-10
+        ],
+        "converged": true
+      },
+      "step_100": {
+        "iterations": 2,
+        "residual_initial": 0.000156559,
+        "residual_last": 2.168179e-22,
+        "residual_last_over_initial": 1.384895790085527e-18,
+        "residual_per_iteration": [
+          9.556084e-11,
+          2.168179e-22
+        ],
+        "displacement_increment_per_iteration": [
+          0.03538281,
+          1.198693e-08
+        ],
+        "converged": true
+      }
+    },
+    "q3_nosprings_rhoi-2_full_newton_x100": {
+      "springs": false,
+      "rhoi": -2.0,
+      "tolerances": "full_newton_x100",
+      "normal_termination": true,
+      "febio_version": "4.13.0",
+      "turning_points": 116,
+      "period_s": 0.017118641757199956,
+      "decay_rate_per_s": 0.0016122800766030492,
+      "first_height_mm": 0.18538645542122545,
+      "last_height_mm": 0.1850119306223359,
+      "iterations": {
+        "steps": 600,
+        "iterations_mean": 2.0,
+        "iterations_max": 2,
+        "iterations_min": 2,
+        "iterations_total": 1200,
+        "reformations_total": 1200,
+        "first_steps": [
+          2,
+          2,
+          2,
+          2,
+          2
+        ]
+      },
+      "step_1": {
+        "iterations": 2,
+        "residual_initial": 1.952363e-05,
+        "residual_last": 4.734869e-25,
+        "residual_last_over_initial": 2.4251991048795742e-20,
+        "residual_per_iteration": [
+          3.807769e-12,
+          4.734869e-25
+        ],
+        "displacement_increment_per_iteration": [
+          0.003541138,
+          5.05339e-10
+        ],
+        "converged": true
+      },
+      "step_100": {
+        "iterations": 2,
+        "residual_initial": 0.000156559,
+        "residual_last": 2.168179e-22,
+        "residual_last_over_initial": 1.384895790085527e-18,
+        "residual_per_iteration": [
+          9.556084e-11,
+          2.168179e-22
+        ],
+        "displacement_increment_per_iteration": [
+          0.03538281,
+          1.198693e-08
+        ],
+        "converged": true
+      }
+    },
+    "q3_nosprings_rhoi-2_full_newton_rtol_1e-6": {
+      "springs": false,
+      "rhoi": -2.0,
+      "tolerances": "full_newton_rtol_1e-6",
+      "normal_termination": true,
+      "febio_version": "4.13.0",
+      "turning_points": 116,
+      "period_s": 0.017118641757199956,
+      "decay_rate_per_s": 0.0016122800766030492,
+      "first_height_mm": 0.18538645542122545,
+      "last_height_mm": 0.1850119306223359,
+      "iterations": {
+        "steps": 600,
+        "iterations_mean": 2.0,
+        "iterations_max": 2,
+        "iterations_min": 2,
+        "iterations_total": 1200,
+        "reformations_total": 1200,
+        "first_steps": [
+          2,
+          2,
+          2,
+          2,
+          2
+        ]
+      },
+      "step_1": {
+        "iterations": 2,
+        "residual_initial": 1.952363e-05,
+        "residual_last": 4.734869e-25,
+        "residual_last_over_initial": 2.4251991048795742e-20,
+        "residual_per_iteration": [
+          3.807769e-12,
+          4.734869e-25
+        ],
+        "displacement_increment_per_iteration": [
+          0.003541138,
+          5.05339e-10
+        ],
+        "converged": true
+      },
+      "step_100": {
+        "iterations": 2,
+        "residual_initial": 0.000156559,
+        "residual_last": 2.168179e-22,
+        "residual_last_over_initial": 1.384895790085527e-18,
+        "residual_per_iteration": [
+          9.556084e-11,
+          2.168179e-22
+        ],
+        "displacement_increment_per_iteration": [
+          0.03538281,
+          1.198693e-08
+        ],
+        "converged": true
+      }
+    }
+  },
+  "q4_energy": {
+    "rhoi_1": {
+      "total_energy_start_mJ": 0.0,
+      "total_energy_end_mJ": -0.012436022964140345,
+      "bounce_energy_about_rest_t0_mJ": 0.012919751118487158,
+      "bounce_energy_fraction_left_at_end": 0.037440980860276404,
+      "bounce_energy_fraction_left_mean_last_0p1s": 0.04455912767271778,
+      "strain_energy_max_mJ": 2.8161376688511248e-08,
+      "terms": "kinetic 0.5 M |v_centre|^2, springs 0.5 K (L - L0)^2 each, cube strain sum(sed x V_tet), gravity M g (z - z0)",
+      "centre_mean_last_0p5s_mm": 2.5188892888630883,
+      "centre_expected_at_rest_mm": 2.515097971171666,
+      "sag_error_vs_static_extension": -0.0015257413159301969
+    },
+    "rhoi_0.5": {
+      "total_energy_start_mJ": 0.0,
+      "total_energy_end_mJ": -0.011472718020809118,
+      "bounce_energy_about_rest_t0_mJ": 0.012919751118487158,
+      "bounce_energy_fraction_left_at_end": 0.11200162328262252,
+      "bounce_energy_fraction_left_mean_last_0p1s": 0.12561974839929813,
+      "strain_energy_max_mJ": 2.8922722649627083e-08,
+      "terms": "kinetic 0.5 M |v_centre|^2, springs 0.5 K (L - L0)^2 each, cube strain sum(sed x V_tet), gravity M g (z - z0)",
+      "centre_mean_last_0p5s_mm": 2.5192592877535747,
+      "centre_expected_at_rest_mm": 2.515097971171666,
+      "sag_error_vs_static_extension": -0.0016746400999441682
+    },
+    "rhoi_-2": {
+      "total_energy_start_mJ": 0.0,
+      "total_energy_end_mJ": 9.814383523202587e-10,
+      "bounce_energy_about_rest_t0_mJ": 0.012919751118487158,
+      "bounce_energy_fraction_left_at_end": 1.000000075964184,
+      "bounce_energy_fraction_left_mean_last_0p1s": 1.0000001545841892,
+      "strain_energy_max_mJ": 3.055472764788312e-08,
+      "terms": "kinetic 0.5 M |v_centre|^2, springs 0.5 K (L - L0)^2 each, cube strain sum(sed x V_tet), gravity M g (z - z0)",
+      "centre_mean_last_0p5s_mm": 2.521085585454294,
+      "centre_expected_at_rest_mm": 2.515097971171666,
+      "sag_error_vs_static_extension": -0.0024095977278634625
+    }
+  },
+  "febio_version": "4.13.0"
+}
