@@ -13,8 +13,8 @@
     physics/settled_frame<n>.json the shape after the gravity-only settle, at the trajectory's
     physics/settled_frame<n>.obj  settle_until_frame n (14 for the lab's controller, ADR-30: its starting
                                   point): tet nodes and display mesh, and the display mesh as an OBJ with
-                                  its faces. Written only when the trajectory names n and every driver
-                                  in use is at rest through frame n
+                                  its faces. Written only when the trajectory names n >= 1 and every
+                                  driver in use is at rest through frame n
     playback.json, playback.pc2   the display mesh and its point cache for Blender (`playback`)
     run_report.json               every temporary value and its source, the scene's simplifications,
                                   the generator's report, max|u|/δ per spring group, the plausibility
@@ -41,7 +41,8 @@ REPORT = "run_report.json"
 DISPLAY = "physics/display.json"  # the header; the numbers are in DISPLAY_ARRAY
 DISPLAY_ARRAY = "physics/display.npy"
 DISPLAY_FORMAT = "asrp-display/2"
-SETTLE_FRAMES = 5  # check (c) averages this many frames ending at settle_until_frame (one frame aliases the ringing)
+SETTLE_FRAMES = 5  # check (c) averages up to this many frames ending at settle_until_frame (one frame aliases the
+# ringing); never frame 0, the rest pose, whose sag is exactly 0
 SLIP_LIMIT = 0.1  # docs/05 section 3: max|u| / δ above this, the spring result is off by more than ~2 %
 
 # Settings the generator chose (all "ours"), for the run report next to the scene's own parameters.
@@ -215,17 +216,19 @@ def run_scene(scene_path, trajectory_path, runs_dir: Path, exe: Path, name: str 
         attached = np.unique(np.concatenate([g.vertices for g in model.groups])) if model.groups else np.zeros(0, int)
         free = np.setdiff1d(np.arange(len(model.display)), attached)
         settle = model.trajectory.settle_until_frame
-        settled = settle is not None and _still_until(model, settle)
+        settled = settle is not None and settle >= 1 and _still_until(model, settle)
         report["settled_shape"] = {"available": settled, "frame": settle if settled else None}
         if settled:
             material = model.scene.soft_tissues[0].material.params
             estimate = plausibility.expected_sag(model.display, free, attached, model.gravity,
                                                  material["density_t_per_mm3"].value, material["E_mpa"].value, model.k)
             checks["c"] = plausibility.gravity_sag(model.display, display, free, model.gravity, estimate,
-                                                   range(max(0, settle - SETTLE_FRAMES + 1), settle + 1))
+                                                   range(max(1, settle - SETTLE_FRAMES + 1), settle + 1))
         else:
             if settle is None:
                 reason = "the trajectory does not say where the gravity-only settle ends (settle_until_frame)"
+            elif settle == 0:
+                reason = "settle_until_frame is 0: there is no frame after the rest pose in the gravity-only settle"
             else:
                 reason = f"the motion starts on or before frame {settle}, the end of the gravity-only settle"
             checks["c"] = plausibility.Check("gravity sag", None, reason)

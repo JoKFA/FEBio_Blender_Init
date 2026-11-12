@@ -16,7 +16,8 @@ Format `asrp-trajectory/1`, one JSON object:
       "settle_until_frame": 14,       # optional: the last frame of the gravity-only settle (0 <= n < frames).
                                       #   Every driver the scene uses must be at rest (identity) on frames
                                       #   0..n. The run writes the settled shape at frame n and check (c)
-                                      #   (gravity sag) reads frames n-4..n; without it neither is done
+                                      #   (gravity sag) averages frames max(1, n-4)..n (never frame 0, the rest
+                                      #   pose); without it, or with n = 0, neither is done
       "landmarks": ...                # optional; its format is docs/04 section 5.2, T-09 reads and checks it
     }
 

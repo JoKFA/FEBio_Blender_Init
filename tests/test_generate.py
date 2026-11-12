@@ -669,8 +669,8 @@ def test_the_settled_shape_is_written_at_the_frame_the_trajectory_names_and_not_
     assert other.report["checks"]["c"]["numbers"]["frames"] == [3, 7]
     assert "physics/settled_frame7.obj" in json.loads((other.run_dir / "provenance.json").read_text())["outputs"]
 
-    early = run(tmp_path / "still", cs.still(20), "still_at_2", settle=2)  # fewer than five frames: starts at frame 0
-    assert early.report["checks"]["c"]["numbers"]["frames"] == [0, 2]
+    early = run(tmp_path / "still", cs.still(20), "still_at_2", settle=2)  # fewer than five frames: starts at frame 1
+    assert early.report["checks"]["c"]["numbers"]["frames"] == [1, 2]
 
     none = run(tmp_path / "still", cs.still(20), "no_settle")  # the trajectory does not say
     assert none.report["settled_shape"]["available"] is False and none.report["settled_shape"]["frame"] is None
@@ -678,6 +678,23 @@ def test_the_settled_shape_is_written_at_the_frame_the_trajectory_names_and_not_
     c_check = none.report["checks"]["c"]
     assert c_check["passed"] is None and "does not say where the gravity-only settle ends (settle_until_frame)" in c_check["message"]
     assert none.passed and "physics/settled_frame14.json" not in json.loads((none.run_dir / "provenance.json").read_text())["outputs"]
+
+
+@needs_febio
+def test_check_c_never_averages_the_rest_pose_frame(tmp_path):
+    cs.write(tmp_path / "cube", attachments=[("top", "skull", "hard", None, at_z(10.0))])
+    zero = run(tmp_path / "cube", cs.still(20), "settle_0", settle=0)  # no frame after the rest pose: not run
+    c_check = zero.report["checks"]["c"]
+    assert c_check["passed"] is None and c_check["message"] == (
+        "settle_until_frame is 0: there is no frame after the rest pose in the gravity-only settle")
+    assert zero.status == "complete" and zero.passed and "c" in zero.report["not_run"]
+    shape = zero.report["settled_shape"]
+    assert shape["available"] is False and shape["frame"] is None and "settle_until_frame is 0" in shape["reason"]
+    assert not list((zero.run_dir / "physics").glob("settled_frame*"))
+    for n, want in ((1, [1, 1]), (2, [1, 2]), (14, [10, 14])):
+        r = run(tmp_path / "cube", cs.still(20), f"settle_{n}", settle=n)
+        assert r.report["checks"]["c"]["numbers"]["frames"] == want, n
+        assert r.report["settled_shape"] == {"available": True, "frame": n}
 
 
 @needs_febio
