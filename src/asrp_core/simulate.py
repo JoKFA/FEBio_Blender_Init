@@ -37,7 +37,6 @@ REPORT = "run_report.json"
 DISPLAY = "physics/display.json"
 DISPLAY_FORMAT = "asrp-display/1"
 SETTLE_FRAMES = 5  # check (c) averages this many frames ending at settle_until_frame (one frame aliases the ringing)
-SPEED_BUDGET_S_PER_FRAME = 2.5  # docs/02 N-07, provisional: about Ziva's 2.5 s per frame; reported only
 SLIP_LIMIT = 0.1  # docs/05 section 3: max|u| / δ above this, the spring result is off by more than ~2 %
 
 # Settings the generator chose (all "ours"), for the run report next to the scene's own parameters.
@@ -241,8 +240,6 @@ def run_scene(scene_path, trajectory_path, runs_dir: Path, exe: Path, name: str 
     report["timing"] = {
         "generate_s": round(generated_s, 3), "febio_s": febio_s, "post_s": round(time.perf_counter() - t1, 3),
         "febio_s_per_frame": round(febio_s / steps, 3) if febio_s else None,
-        "budget_s_per_frame": SPEED_BUDGET_S_PER_FRAME,
-        "budget_note": "docs/02 N-07, provisional (about Ziva's 2.5 s per frame): reported, not a pass/fail",
     }
     (run_dir / REPORT).write_text(json.dumps(report, indent=2, ensure_ascii=False) + "\n", encoding="utf-8", newline="\n")
     record["outputs"] = {**record.get("outputs", {}), **provenance.hash_files(run_dir, [REPORT])} \

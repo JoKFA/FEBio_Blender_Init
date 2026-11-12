@@ -156,8 +156,8 @@ def run_scene(args: argparse.Namespace, show) -> int:
         print(f"check {key}    [{verdict}] {c['name']}: {c['message']}")
     t = r["timing"]
     if t.get("febio_s_per_frame") is not None:
-        print(f"timing     FEBio {t['febio_s']} s, {t['febio_s_per_frame']} s per frame (budget {t['budget_s_per_frame']}, "
-              f"reported only); generate {t['generate_s']} s, post {t['post_s']} s")
+        print(f"timing     FEBio {t['febio_s']} s, {t['febio_s_per_frame']} s per frame; "
+              f"generate {t['generate_s']} s, post {t['post_s']} s")
     print(f"report     {result.run_dir / simulate.REPORT}")
     if result.status == "complete":
         skipped = r.get("not_run", {})

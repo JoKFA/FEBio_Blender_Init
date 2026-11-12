@@ -322,6 +322,7 @@ def test_the_run_folder_holds_its_inputs_results_and_report(hard_plate):
     assert len(scene_params) > 5 and all(f"scene.{w}" in where for w, _ in scene_params)
     assert report["simplifications"] == []  # the cube scene lists none; the lips' three are checked in test_prototype
     assert "attachments_not_built" not in report
+    assert not {"budget_s_per_frame", "budget_note"} & set(report["timing"])
     assert where["trajectory.source"] == "unstated"  # cube_scene.motion writes no source_tag: never guessed
     manifest = json.loads((d / "playback.json").read_text())
     assert manifest["frame_count"] == 30 and len(manifest["vertices"]) == len(c["display"])
@@ -493,6 +494,7 @@ def test_asrp_run_with_a_scene_prints_the_checks(hard_plate, capsys):
     code = cli.main(["run", str(c["scene"]), str(c["scene"].parent / "motion.json"), "--runs-dir", str(folder / "cli")])
     out = capsys.readouterr().out
     assert code == 0 and "plausibility PASSED" in out and "check b    [PASS]" in out and "s per frame" in out
+    assert "budget" not in out and "reported only" not in out
 
 
 # --- PR #8 review: a dropped frame leaves no results; names stay safe for XML --------------------
