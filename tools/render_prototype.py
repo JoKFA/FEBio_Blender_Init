@@ -8,6 +8,9 @@ frame and the last one. Then, unless --check-only, adds the skull and the jaw fr
 meshes (the jaw moved by its driver's transform from trajectory.json on each frame) and renders three side
 views: rest (frame 0), settled (frame 14) and jaw fully open (the frame where the jaw's angle is largest) to
 <out>/prototype_rest.png, prototype_settled.png, prototype_open.png (default out: data/preview).
+
+With --frames-dir <dir> [--frames-size <px>] it also renders every frame of the same side view to
+<dir>/frame_000.png ... (default 560 px square), for assembling an animation (docs/15).
 """
 
 import json
@@ -124,3 +127,16 @@ for label, f in (("rest", 0), ("settled", 14), ("open", open_frame)):
     scene.render.filepath = str(out / f"prototype_{label}.png")
     bpy.ops.render.render(write_still=True)
     print(f"rendered frame {f} ({label}): {scene.render.filepath}")
+
+if "--frames-dir" in args:
+    frames_dir = Path(args[args.index("--frames-dir") + 1]).resolve()
+    frames_dir.mkdir(parents=True, exist_ok=True)
+    size = int(args[args.index("--frames-size") + 1]) if "--frames-size" in args else 560
+    scene.render.resolution_x = scene.render.resolution_y = size
+    for f in range(len(display)):
+        scene.frame_set(f)
+        m = jaw_motion[f]
+        jaw_obj.matrix_world = Matrix.Scale(0.001, 4) @ Matrix([m[0:4], m[4:8], m[8:12], m[12:16]])
+        scene.render.filepath = str(frames_dir / f"frame_{f:03d}.png")
+        bpy.ops.render.render(write_still=True)
+    print(f"rendered {len(display)} frames to {frames_dir}")

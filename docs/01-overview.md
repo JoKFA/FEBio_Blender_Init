@@ -34,7 +34,7 @@ FEBio 是一个专门为生物力学开发、经过同行评审的开源有限�
 - 逐项、逐点复刻 Ziva 的行为。两者的算法不同，Ziva 的参数很可能也只是默认值，对齐它的意义不大。
 - 任何医学结论。
 
-## 现在做到哪了（2026-11-11）
+## 现在做到哪了（2026-11-12）
 
 | 已完成 | 证据 |
 |---|---|
@@ -56,7 +56,11 @@ FEBio 是一个专门为生物力学开发、经过同行评审的开源有限�
 | 被哈希的数据在任何电脑上检出都逐字节相同（`.gitattributes`） | 打开 `core.autocrlf` 克隆后跑测试，[08](08-engineering-standards.md) 第 10 节 |
 | **原型机（T-06a）**：真实嘴唇被下颌带动（代用运动，张开 12°）、算完 51 帧（含第 0 帧，FEBio 算 50 步；0.90 秒/帧，重试 0 次），四项合理性检查通过，第 14 帧沉降后的形状单独存下，回放包在 Blender 里逐帧对得上；同一份输入两次的回放文件逐位相同。材料、粘连刚度、k 都是标明来源的临时值 | `uv run asrp import-asset data/lab_export <out>`、`uv run python tools/placeholder_jaw_motion.py <out>/scene.json <out>/placeholder_jaw.json`、`uv run asrp run <out>/scene.json <out>/placeholder_jaw.json`；图在 `data/preview/prototype_*.png`；[09](09-roadmap-and-tasks.md) T-06a 的结果 |
 
-原型机已经跑通（T-06a，2026-11-11）。下一步：T-06b（应变能、k 的对比、网格敏感性报告）；拿到 Ziva 设置和运动文件以后换掉临时值（T-12）、做 landmark 段（M3），见 [09 路线图与任务](09-roadmap-and-tasks.md) 第 1 节。
+**原型机已经跑通（2026-11-12 的参考运行）**：实验室的真实嘴唇被下颌带动，FEBio 算完 51 帧、四项合理性检查通过，结果在 Blender 里回放，同一份输入两次的回放文件逐字节相同。它只有物理层，下颌运动和材料都是临时值，还没有 landmark 层，也没有和 Ziva 对比。动图、数字、自己跑一遍的命令和结果的局限，都在一页里：[15 原型机：怎么跑、跑出了什么](15-prototype.md)。
+
+![原型机：真实嘴唇被下颌带动，张开再合上](../data/preview/prototype_motion.gif)
+
+下一步：T-06b（应变能、k 的对比、网格敏感性报告）；拿到 Ziva 设置和运动文件以后换掉临时值（T-12）、做 landmark 段（M3）；见 [09 路线图与任务](09-roadmap-and-tasks.md) 第 1 节。
 
 ## 谁参与、各自负责什么
 

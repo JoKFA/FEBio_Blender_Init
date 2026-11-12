@@ -6,10 +6,11 @@
 
 | 你是谁 | 按顺序读 |
 |---|---|
-| 第一次接触项目的任何人 | [01 项目一页纸](01-overview.md) → [术语表](glossary.md) |
-| 实验室成员 | 01 → [02 需求](02-requirements.md) → [03 资产说明](03-asset.md) → [11 风险与待决问题](11-risks-and-questions.md) → [12 导出清单](12-lab-export-checklist.md) |
-| 开发者 | 01 → 02 → 03 → [04 系统设计](04-architecture.md) → [05 Ziva 到 FEBio 的对应](05-ziva-to-febio.md) → [07 验证与验收](07-validation.md) → [08 开发规范](08-engineering-standards.md) → [10 决策记录](10-decisions.md) → [09 路线图与任务](09-roadmap-and-tasks.md) 里分给你的任务卡 |
+| 第一次接触项目的任何人 | [15 原型机：怎么跑、跑出了什么](15-prototype.md)（先看结果）→ [01 项目一页纸](01-overview.md) → [术语表](glossary.md) |
+| 实验室成员 | 15 → 01 → [02 需求](02-requirements.md) → [03 资产说明](03-asset.md) → [11 风险与待决问题](11-risks-and-questions.md) → [12 导出清单](12-lab-export-checklist.md) |
+| 开发者 | 15 → 01 → 02 → 03 → [04 系统设计](04-architecture.md) → [05 Ziva 到 FEBio 的对应](05-ziva-to-febio.md) → [07 验证与验收](07-validation.md) → [08 开发规范](08-engineering-standards.md) → [10 决策记录](10-decisions.md) → [09 路线图与任务](09-roadmap-and-tasks.md) 里分给你的任务卡 |
 | 审查者 | 08 开发规范 → [07 验证与验收](07-validation.md) → 被审查任务的任务卡 |
+| 想看原型机动起来、自己跑一遍 | [15](15-prototype.md)，或仓库根目录的 [README](../README.md) |
 | 读的时候有疑问 | 先查 [13 设计解释](13-explanations.md) 的目录；没有的话问出来，答完补进 13 |
 
 ## 全部文档
@@ -30,6 +31,7 @@
 | 12 | [导出清单](12-lab-export-checklist.md) | 哪些数据已经从 Maya 导出、哪些要在 Ziva 机器上做、怎么做 |
 | 13 | [设计解释（问答）](13-explanations.md) | 看文档、做任务时冒出的"为什么要这样""这一步从哪来"，答案在这里 |
 | 14 | [实验室演示的 Ziva 操作流程](14-ziva-demo-walkthrough.md) | 2026-11-10 会议录像里看到的 Maya + Ziva 操作、读到的设置，和我们假设的对照 |
+| 15 | [原型机：怎么跑、跑出了什么](15-prototype.md) | 原型机长什么样、怎么自己跑、跑出的数字说明什么、不说明什么 |
 | — | [术语表](glossary.md) | 文档里出现的专业词是什么意思 |
 | — | [templates/](templates/) | 任务卡和合并请求的模板 |
 
@@ -37,11 +39,11 @@
 
 ## 仓库目录
 
-✅ 提交进仓库；🚫 被 git 忽略，只在本机。"待开发"的模块按 [04](04-architecture.md) 第 3 节放，不要自己新建顶层目录。
+✅ 提交进仓库；🚫 被 git 忽略，只在本机。还没有的模块按 [04](04-architecture.md) 第 3 节放，不要自己新建顶层目录。
 
 ```
 asrp/
-├─ README.md                  安装、自动检查、Blender 插件、回放的命令
+├─ README.md                  GitHub 首页：原型机动图、三条运行命令、安装、自动检查、Blender 插件、回放
 ├─ AGENTS.md                  给开发者和 AI 开发会话的项目规则
 ├─ pyproject.toml  uv.lock    Python 依赖（Python 3.13）
 ├─ .github/                   合并请求模板
@@ -49,34 +51,53 @@ asrp/
 ├─ .gitattributes             data/、tests/fixtures/ 按字节检出，哈希在任何电脑上都对得上（08 第 10 节）
 │
 ├─ docs/                      设计文档（本目录），唯一依据
-│  ├─ 01 … 13、glossary.md    见上面的"全部文档"
+│  ├─ 01 … 15、glossary.md    见上面的"全部文档"
 │  └─ templates/              任务卡、合并请求模板
 │
 ├─ src/
 │  ├─ asrp_core/              核心程序，不能 import bpy
-│  │  ├─ cli.py               命令行 asrp（doctor、check、import-asset）
+│  │  ├─ cli.py               命令行 asrp（doctor、check、import-asset、run）
 │  │  ├─ doctor.py            找 FEBio、Blender，查路径
 │  │  ├─ febio.py             调用 FEBio、读日志
 │  │  ├─ playback.py          回放包（表面网格 + PC2 点缓存）
 │  │  ├─ tetmesh.py           四面体网格的检查和读写（ADR-20）
 │  │  ├─ scene.py             场景描述 scene.json 的格式和校验（asrp check）
 │  │  ├─ trajectory.py        运动 trajectory.json 的格式、铰链运动生成
+│  │  ├─ generate.py          生成器：scene + trajectory → FEBio 输入 .feb（真实大小、× k，粘连）
+│  │  ├─ embed.py             把显示网格嵌进四面体网格，算出每帧显示顶点位置
+│  │  ├─ simulate.py          asrp run 的整条流程：生成 → FEBio → ÷ k → 嵌入 → 检查 → 回放包
+│  │  ├─ plausibility.py      合理性检查 (a)(b)(b2)(c)
+│  │  ├─ run.py               运行外壳：运行文件夹、进度、取消、出错处理
+│  │  ├─ provenance.py        溯源记录 provenance.json
 │  │  └─ asset/               资产导入（asrp import-asset）
 │  │     ├─ lab.py            读实验室导出，写 scene.json 和检查报告
 │  │     └─ coords.py         唯一的一份坐标换算
-│  │                          待开发：run.py、skinning.py、compare.py……
+│  │                          待开发：skinning.py、compare.py……
 │
 ├─ blender_addon/asrp_blender/  Blender 插件，只管界面，不用第三方库
 ├─ tests/                     自动测试（pytest）
-│  └─ fixtures/s1/            S1 写成的示例 scene.json、trajectory.json，由同目录的 build.py 生成
+│  ├─ fixtures/s1/            S1 写成的示例 scene.json、trajectory.json，由同目录的 build.py 生成
+│  ├─ cube_scene.py           生成器测试用的方块场景（有教科书答案）
+│  ├─ test_generate.py        生成器、嵌入、合理性检查、asrp run（方块算例）
+│  ├─ test_prototype.py       真实嘴唇整条运行（ASRP_SLOW=1 才跑，约 2 分钟）
+│  ├─ test_run.py             运行外壳（替身模式）
+│  ├─ test_lip_attachments.py test_s3_attachment.py
+│  └─ test_line_endings.py    被跟踪的文本文件一律 LF
+│                              （其余 test_*.py：asset、asset_report、doctor、febio、lab_export、playback、scene、tetmesh、trajectory、ziva_capture）
 ├─ spikes/                    一次性试验，不是产品代码
 │  ├─ s1_dynamic_jaw.py       S1：FEBio 动力学、刚体铰链、重力方向
 │  ├─ s2_tetmesh.py           S2：四面体化工具和包络各档的比较表（ADR-20）
-│  └─ s2_lips_febio.py        S2：嘴唇四面体网格进 FEBio（重力沉降 smoke、下颌张开 jaw）
+│  ├─ s2_lips_febio.py        S2：嘴唇四面体网格进 FEBio（重力沉降 smoke、下颌张开 jaw）
+│  ├─ s3_attachment.py        S3（T-07）：弹簧和重力是否给出教科书答案、弹簧加硬是否趋近硬绑定
+│  └─ attachment_overlap.py   一次性测量：四组嘴唇粘连是否共用四面体计算点
 │
 ├─ tools/                     迁移、检查、渲染工具，不是产品代码
 │  ├─ verify.py               "完成"的定义：测试 + doctor + 插件 + 回放检查
 │  ├─ build_tetmesh.py        生成嘴唇四面体网格 data/tetmesh/lips.json，只显式跑一次（ADR-20）
+│  ├─ lip_attachments.py      导出嘴唇的四组粘连顶点集 data/lab_export/lip_attachments.json（T-03）
+│  ├─ lip_attachments_preview.py  把四组粘连画在真实网格上，给人看
+│  ├─ placeholder_jaw_motion.py   写代用的下颌运动 trajectory.json（张开 12°，没有实验室运动时用）
+│  ├─ render_prototype.py     在 Blender 里加载原型机的回放包、逐帧核对、渲染侧视图和逐帧动画
 │  ├─ check_blender_addon.py  check_playback.py  render_playback.py
 │  ├─ mb_inventory.py  asset_report.py     不开 Maya 读 .mb，打印 03 里的数字（含粘连权重的读法）
 │  ├─ maya_export.py  check_lab_export.py  本机 Maya 导出网格、权重、关节并逐点核对
@@ -86,11 +107,14 @@ asrp/
 │  └─ briefing/               讲解页的源文件（build.py、template.html、app.js）
 │
 ├─ data/                      导出和派生数据（ADR-19）
-│  ├─ lab_export/        ✅   网格 OBJ、mesh_report.json、skin_skinCluster7.json、joints.json；
+│  ├─ lab_export/        ✅   网格 OBJ、mesh_report.json、skin_skinCluster7.json、joints.json、
+│  │                          lip_attachments.json（四组嘴唇粘连顶点集，T-03）；
 │  │                          Ziva 机器上导出的文件收到后也放这里；T-10 转换后的运动放 trajectories/
 │  │  └─ manual_maya_obj/     用 Maya 自带 OBJ 导出手动导的下巴、嘴唇、颅骨、两只眼睛和一个 .blend
 │  │                          （提交 e24ff1b，原在 src/resources/）。只作参考，见 12 第一部分
-│  ├─ preview/           ✅   Blender 预览图和 asset_preview.blend
+│  ├─ preview/           ✅   Blender 预览图和 asset_preview.blend；原型机的动图 prototype_motion.gif、
+│  │                          三张侧视图 prototype_{rest,settled,open}.png、参考运行的
+│  │                          prototype_run_report.json 和 prototype_provenance.json（15 的数字来源）
 │  ├─ briefing/          ✅   新成员讲解页 asrp-briefing.html
 │  ├─ tetmesh/           ✅   嘴唇四面体网格 lips.json，由 tools/build_tetmesh.py 生成一次（ADR-20）
 │  ├─ asset_inventory*.json  🚫  .mb 的完整清单，约 40 MB，能重新生成
