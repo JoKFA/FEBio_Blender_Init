@@ -91,7 +91,7 @@ runs/2026-11-03_neutral-to-AA_001/
 
 **运行报告的内容**（`run_report.json`，07 第 3 节）：临时值和来源（运动那一行的来源取运动文件的 `source_tag`，没写记 `unstated`）；`simplifications`（场景 `simplifications` 里的说明，原样照抄，场景没写就是空列表；取代原来的 `attachments_not_built`）；生成器报告；`checks`（a、b、b2、c、d，没运行的在 `not_run`；d 的数字是 `min_volume_ratio`、`min_volume_ratio_frame`、`max_volume_ratio`、`inverted_tets`、`frames_with_inverted_tets`）；`settled_shape`（含 `frame`：n，没有沉降形状时为 `null`）；`return_to_settled`（只报告，`{frames, max_mm, mean_mm}`，没有这样的帧时 `frames` 是空列表）；用时。没有速度预算的键：耗时只报告，不和别的数并排（ADR-38 第 5 条）。运行用的线程数记在溯源里（`febio_env`）。
 
-还没有的：`final/`（T-09）、应变能（T-06b）、`compare/`（T-11）。FEBio 失败或取消时只写 `run_report.json`（检查 (a) 不通过），不写任何结果。生成器拒绝的场景（检查有错、显示顶点离四面体太远、一个点被两个刚体要走……）不建运行文件夹，`asrp run` 打印原因和 `run NOT STARTED`。
+还没有的：`final/`（T-09）、应变能（T-26）、`compare/`（T-11）。FEBio 失败或取消时只写 `run_report.json`（检查 (a) 不通过），不写任何结果。生成器拒绝的场景（检查有错、显示顶点离四面体太远、一个点被两个刚体要走……）不建运行文件夹，`asrp run` 打印原因和 `run NOT STARTED`。
 
 `runs/` 不进 git。`data/` 里提交的有 `lab_export/`、`preview/`、`briefing/`、`tetmesh/`（四面体网格是只读输入，ADR-19、ADR-20），其余不进。四面体网格是**显式生成一次、落盘并记哈希的输入**，运行时只读，不在运行中重新生成（fTetWild 同输入多次运行结果不同，见 ADR-20 和 [13](13-explanations.md) E-03）。需要分享某次运行时，把整个文件夹打包发送。
 
