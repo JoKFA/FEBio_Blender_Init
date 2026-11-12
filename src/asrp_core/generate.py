@@ -59,7 +59,7 @@ from xml.sax.saxutils import escape
 
 import numpy as np
 
-from asrp_core import embed, scene as scene_module, tetmesh
+from asrp_core import embed, febio, scene as scene_module, tetmesh
 from asrp_core.asset import coords
 
 FEBIO_GRAVITY_SIGN = -1.0  # docs/05 pit 1: FEBio's const body load acts opposite to the manual
@@ -496,7 +496,7 @@ def _feb(m: Model) -> str:
   </LoadData>
   <Output>
     <logfile>
-      <node_data data="x;y;z" name="positions" delim=","/>
+      <node_data data="x;y;z" name="{febio.NODE_DATA_NAME}" delim="," file="{febio.NODE_DATA_FILE}"/>
     </logfile>
   </Output>
 </febio_spec>

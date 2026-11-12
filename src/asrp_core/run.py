@@ -19,14 +19,17 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
+import numpy as np
+
 from asrp_core import febio, provenance
 
 FEB_NAME = "model.feb"
 LOG_NAME = "model.log"
 PLOT_NAME = "model.xplt"
 CANCEL_FILE = "cancel"  # create this in a running run folder to cancel it from another process
-POSITIONS = "physics/positions.json"
-POSITIONS_FORMAT = "asrp-positions/1"
+POSITIONS = "physics/positions.json"  # the header; the numbers are in POSITIONS_ARRAY
+POSITIONS_ARRAY = "physics/positions.npy"
+POSITIONS_FORMAT = "asrp-positions/2"
 POLL_SECONDS = 0.1
 
 
@@ -44,7 +47,7 @@ class Prepared:
     parameters: dict = field(default_factory=dict)
     extra_inputs: dict[str, Path] = field(default_factory=dict)  # name inside the run folder -> source file
     # ADR-36: the .feb is written at real size with coordinates x k; FEBio's positions come back scaled by k
-    # and are divided by it before they are saved, so positions.json is always geometric mm.
+    # and are divided by it before they are saved, so positions.npy is always geometric mm.
     length_scale: float = 1.0
 
 
@@ -109,29 +112,63 @@ def scrub_paths(text: str, run_dir: Path) -> str:
     return _ABS_PATH.sub(lambda m: re.split(r"[\\/]", m.group(0).rstrip("\\/"))[-1], text)
 
 
-def write_positions(log: Path, out: Path, length_scale: float = 1.0) -> int:
-    """physics/positions.json: every node's position (geometric mm: FEBio's coordinates / k) at every frame,
-    parsed from the log. Returns frames."""
-    hist = febio.read_node_data(log, "positions")
-    if not hist.times:
-        raise RunError("The FEBio log has no node positions. The .feb must output "
-                       '<node_data data="x;y;z" name="positions"> in its <logfile>.')
-    ids = sorted(hist.values[0])
-    out.parent.mkdir(exist_ok=True)
-    out.write_text(json.dumps({
-        "format": POSITIONS_FORMAT, "units": "mm", "times_s": hist.times, "node_ids": ids,
-        "positions": [[[c / length_scale for c in frame[n]] for n in ids] for frame in hist.values],
-    }), encoding="utf-8")
-    return len(hist.times)
+def save_array(header_path: Path, header: dict, array: np.ndarray, array_name: str) -> None:
+    """A result as a small JSON header plus a .npy next to it (float64, no pickle): the header gets the array's
+    file name and shape. The same array always gives the same bytes."""
+    header_path.parent.mkdir(exist_ok=True)
+    with (header_path.parent / array_name).open("wb") as f:
+        np.save(f, np.ascontiguousarray(array, dtype=np.float64), allow_pickle=False)
+    header_path.write_text(json.dumps({**header, "array": array_name, "shape": list(array.shape)}),
+                           encoding="utf-8", newline="\n")
+
+
+def load_array(header_path: Path, key: str) -> dict:
+    """The header of `save_array` plus the array under `key`. Refuses a header that does not describe its array."""
+    header = json.loads(header_path.read_text(encoding="utf-8"))
+    name = header.get("array")
+    if not isinstance(name, str) or Path(name).name != name:
+        raise RunError(f"{header_path} does not name its array file as a plain file name next to it.")
+    try:
+        array = np.load(header_path.parent / name, allow_pickle=False)
+    except (OSError, ValueError) as e:
+        raise RunError(f"Cannot read {name} next to {header_path.name} ({e}). The two files go together; "
+                       "copy both or run again.") from e
+    if list(array.shape) != header.get("shape"):
+        raise RunError(f"{header_path.name} says the array has shape {header.get('shape')} but {name} has shape "
+                       f"{list(array.shape)}. The two files do not belong together; run again.")
+    return {**header, key: array}
+
+
+def write_positions(feb: Path, log: Path, out: Path, length_scale: float = 1.0) -> int:
+    """physics/positions.json + positions.npy: every node's position (geometric mm: FEBio's coordinates / k) at
+    every frame, read from the data file the .feb names or else from the log. Returns frames."""
+    try:
+        series = febio.read_node_series(feb, log)
+    except ValueError as e:
+        raise RunError(str(e)) from e
+    if not len(series.times):
+        raise RunError("FEBio wrote no node positions. The .feb must output "
+                       f'<node_data data="x;y;z" name="{febio.NODE_DATA_NAME}"> in its <logfile>.')
+    save_array(out, {"format": POSITIONS_FORMAT, "units": "mm", "times_s": series.times.tolist(),
+                     "node_ids": series.node_ids.tolist()},
+               series.values / length_scale, Path(POSITIONS_ARRAY).name)
+    return len(series.times)
 
 
 def read_positions(path: Path) -> dict:
-    return json.loads(path.read_text(encoding="utf-8"))
+    """The positions header plus "positions": a float64 array (frames, nodes, 3), geometric mm."""
+    data = load_array(path, "positions")
+    shape = data["positions"].shape
+    if len(shape) != 3 or shape[0] != len(data["times_s"]) or shape[1] != len(data["node_ids"]) or shape[2] != 3:
+        raise RunError(f"{path.name} lists {len(data['times_s'])} frames and {len(data['node_ids'])} nodes but its "
+                       f"array has shape {list(shape)}. Run again.")
+    return data
 
 
 def _wait(proc, run_dir, total, on_progress, cancel, timeout) -> tuple[bool, febio.Failure | None]:
     """Poll a running FEBio: report progress, honour cancel and timeout. Returns (cancelled, failure)."""
     started, last = time.perf_counter(), -1
+    steps = febio.StepCounter(run_dir / LOG_NAME)  # reads only what FEBio appended since the last poll
     try:
         while proc.poll() is None:
             if (cancel is not None and cancel.is_set()) or (run_dir / CANCEL_FILE).exists():
@@ -140,7 +177,7 @@ def _wait(proc, run_dir, total, on_progress, cancel, timeout) -> tuple[bool, feb
             if time.perf_counter() - started > timeout:
                 febio.kill_tree(proc)
                 return False, febio.Failure(None, f"FEBio did not finish within {timeout:g} s and was stopped")
-            done = febio.steps_done(run_dir / LOG_NAME)
+            done = steps.poll()
             if done != last and on_progress:
                 last = done
                 on_progress(Progress(done, total, "running"))
@@ -217,8 +254,8 @@ def execute(
                 if want is not None and (got is None or abs(got - want) > 1e-5 * want):
                     failure = febio.Failure(None, f"FEBio stopped at time {got} of {want:g}")
                 else:
-                    record["result"] = {"frames_written": write_positions(log, run_dir / POSITIONS, prepared.length_scale)}
-                    record["outputs"] = provenance.hash_files(run_dir, [POSITIONS])
+                    record["result"] = {"frames_written": write_positions(feb, log, run_dir / POSITIONS, prepared.length_scale)}
+                    record["outputs"] = provenance.hash_files(run_dir, [POSITIONS, POSITIONS_ARRAY])
                     status = "complete"
             else:
                 failure = febio.read_failure(log) or febio.Failure(
@@ -241,9 +278,15 @@ def _finish(run_dir: Path, record: dict, status: str, failure, frames: int, proc
     if status != "complete":
         shutil.rmtree(run_dir / "physics", ignore_errors=True)  # a failed run shows no results, ever (04 sec. 9)
         record["outputs"] = {}
+    try:
+        data_file = febio.data_file(run_dir / FEB_NAME, febio.NODE_DATA_NAME)
+    except ValueError:
+        data_file = None  # not a plain name: it was refused when the results were read, and nothing is deleted
     for attempt in range(50):  # Windows may hold the killed FEBio's file handle for a moment
         try:
             (run_dir / PLOT_NAME).unlink(missing_ok=True)  # derived, large, not part of the run folder (04 sec. 4)
+            if data_file:  # likewise the raw node data: it is read into physics/positions.npy and not kept
+                (run_dir / data_file).unlink(missing_ok=True)
             break
         except PermissionError:
             if attempt == 49:
