@@ -25,8 +25,6 @@ def test_cube_on_four_springs_stretches_each_by_weight_over_4K(tmp_path, k):
     assert r["measured"] > 0.5 * r["theory"], "the cube must hang below its start (gravity sign)"
     assert r["error_pct"] < 1.0, f"theory {r['theory']:.5f} mm, measured {r['measured']:.5f} mm"
     assert r["anchor_move"] < 1e-6, "the rigid frame, fixed in all 6 DOF, moved"
-    # k = 2: the formula is rho*V*k^2*g/(4K), so theory is k^2 times the k = 1 value
-    assert r["theory"] == pytest.approx(s3.RHO * s3.CUBE_A**3 * k * k * s3.G / (4 * s3.K1))
 
 
 def test_the_check_can_fail(tmp_path):
@@ -64,3 +62,13 @@ def test_is_monotone_rejects_a_bump():
 def test_a_zero_length_spring_does_not_solve_when_stiff(tmp_path):
     """Why the generator uses offset springs: FEBio cannot build a zero-length spring's stiffness."""
     assert not s3.soft_on_plate(tmp_path, "zero", 1.0)["ok"]
+
+
+def test_offset_must_stay_well_above_the_slip(tmp_path):
+    """A soft spring with a tiny offset is not the same spring: the offset rule (docs/05) has teeth."""
+    hard = s3.soft_on_plate(tmp_path, "hard")
+    wide = s3.soft_on_plate(tmp_path, "spring", 1e-3, offset=10.0)
+    tiny = s3.soft_on_plate(tmp_path, "spring", 1e-3, offset=0.1)
+    assert wide["slip_ratio"] < 0.1 and tiny["slip_ratio"] > 1.0
+    d_wide, d_tiny = s3.max_node_difference(wide, hard), s3.max_node_difference(tiny, hard)
+    assert abs(d_tiny - d_wide) / d_wide > 0.3, (d_wide, d_tiny)

@@ -9,7 +9,9 @@ springs (physical stiffness K N/mm, each from a cube corner to an anchor node th
 condition ties to a rigid frame). The frame is fixed in all 6 degrees of freedom (the T-07 step-4
 question: a rigid body fixed as a whole). Gravity is ramped in, then held. Each spring extends by
 weight / (4K); in geometric mm, extension = rho * V * k^2 * g / (4K), V the geometric volume.
-Run for k = 1 and k = 2, dynamic (generalized alpha, rhoi = 0) and static.
+Run for k = 1 and k = 2, dynamic (generalized alpha, rhoi = 0). Static analysis is not used: four vertical
+springs leave the sideways translations and the spin about the vertical with no stiffness, so a static
+solve is singular there (it solved at k = 1 once and failed on repeats).
 
 Step 2 (checks that can fail): a soft cube (E = 20 kPa) hangs under a rigid plate that turns about a
 hinge. The top face is attached (a) hard: those nodes joined into the plate with a `rigid` boundary
@@ -17,7 +19,9 @@ condition, or (b) with springs: the same nodes, each with a spring to an anchor 
 Gravity plus a prescribed plate rotation. The base spring stiffness is swept over decades; the largest
 node difference to (a) must shrink monotonically. Reports run time and where it gets slow or fails.
 
-    uv run python spikes/s3_attachment.py [out_dir]        # prints the tables, exits 1 on any FAIL
+    uv run python spikes/s3_attachment.py [out_dir]            # the checks: prints the tables, exits 1 on any FAIL
+    uv run python spikes/s3_attachment.py --extra [out_dir]    # also the studies behind docs/05 section 3: the
+                                                               # spring offset, time step, E and mesh size
 """
 
 import itertools
@@ -333,6 +337,14 @@ def soft_on_plate(out: Path, mode: str, K: float | None = None, k: float = 1.0, 
             math.dist(row["final"][i], hinge_rotate(m.nodes[i - 1], turn_angle(hist.times[-1]))) for i in top
         ) if mode == "hard" else None
         row["frames"] = hist.times
+        if mode == "spring":
+            # slip u of each node from its rest place on the moving plate, over all frames, against the offset
+            ax = anchors[0::3]  # the x anchors, offset +offset along x from their node
+            u = max(
+                math.dist(tuple(c / k for c in f[t]), (f[a][0] / k - offset, f[a][1] / k, f[a][2] / k))
+                for f in hist.values for t, a in zip(top, ax)
+            )
+            row["max_slip"], row["slip_ratio"] = u, u / offset
     return row
 
 
@@ -374,16 +386,10 @@ def main(out: Path) -> int:
 
     print("Step 1: cube on 4 springs (K = %g N/mm each, cube side %g mm, rho %g t/mm3)" % (K1, CUBE_A, RHO))
     print(f"{'run':<22}{'theory mm':>11}{'measured mm':>13}{'error %':>10}{'lateral mm':>12}{'s':>7}")
-    for k, dynamic in [(1.0, True), (2.0, True)]:
-        r = cube_on_springs(out, k, dynamic)
+    for k in (1.0, 2.0):
+        r = cube_on_springs(out, k, True)
         print(f"{r['tag']:<22}{r['theory']:>11.5f}{r['measured']:>13.5f}{r['error_pct']:>10.4f}"
               f"{r.get('lateral', float('nan')):>12.2e}{r['seconds']:>7.2f}")
-        if not dynamic:
-            # Static is reported only: four vertical springs leave the sideways translations and the spin
-            # about the vertical with no stiffness, so a static solve is singular there. Not run here: it
-            # is flaky (solved once at k = 1, failed at k = 2 and on repeats); the dynamic runs are the checks.
-            print(f"  (static: reported, not a check; {'solved' if r['ok'] else 'did not converge'})")
-            continue
         check(f"{r['tag']} within 1%", r["ok"] and r["error_pct"] < 1.0, f"{r['error_pct']:.4f} %")
         if r["ok"]:
             check(f"{r['tag']} frame holds", r["anchor_move"] < 1e-6,
@@ -426,5 +432,35 @@ def main(out: Path) -> int:
     return 1 if fails else 0
 
 
+def extras(out: Path) -> None:
+    """The studies behind docs/05 section 3. Printed, not pass/fail (the point is the numbers)."""
+    hard = soft_on_plate(out, "hard")
+    print("\nExtra 1: spring offset delta vs stiffness (max node difference to hard, mm; slip = max |u|/delta)")
+    print(f"{'K N/mm':>8}{'delta mm':>10}{'diff mm':>11}{'max |u| mm':>12}{'|u|/delta':>11}")
+    for K in (1e-3, 0.05, 1.0, 100.0):
+        for delta in (0.1, 0.5, 1.0, 2.0, 5.0, 10.0):
+            r = soft_on_plate(out, "spring", K, offset=delta)
+            print(f"{K:>8g}{delta:>10g}{max_node_difference(r, hard):>11.4e}{r['max_slip']:>12.3e}{r['slip_ratio']:>11.2e}")
+    print("\nExtra 2: one zero-length spring per node, 1/30 s steps vs 1/120 s steps")
+    for sub in (1, 4):
+        h = soft_on_plate(out, "hard", sub=sub)
+        print(f"  step 1/{FPS * sub} s: " + ", ".join(
+            f"K={K:g} {'ok' if soft_on_plate(out, 'zero', K, sub=sub)['ok'] else 'FAILED'}" for K in (0.01, 0.1, 1.0, 1000.0)
+        ) + ("" if h["ok"] else "  (hard failed!)"))
+    print("\nExtra 3: tissue stiffness E and mesh size (n^3 hexes), spring K, 3 springs/node, offset 2 mm")
+    print(f"{'E MPa':>7}{'n':>3}{'nodes':>6}{'E*h N/mm':>10}{'K':>7}{'diff mm':>11}{'diff*K*N':>10}")
+    for E, n in [(0.02, 2), (0.02, 4), (0.02, 6), (0.2, 4), (2.0, 4)]:
+        h = soft_on_plate(out, "hard", E=E, n=n)
+        for K in (0.05, 1.0, 100.0):
+            r = soft_on_plate(out, "spring", K, E=E, n=n)
+            d = max_node_difference(r, h)
+            print(f"{E:>7g}{n:>3}{(n + 1) ** 2:>6}{E * CUBE_A / n:>10.3g}{K:>7g}{d:>11.3e}{d * K * (n + 1) ** 2:>10.3f}")
+
+
 if __name__ == "__main__":
-    sys.exit(main(Path(sys.argv[1]) if len(sys.argv) > 1 else Path("runs/s3_attachment")))
+    args = [a for a in sys.argv[1:] if a != "--extra"]
+    folder = Path(args[0]) if args else Path("runs/s3_attachment")
+    code = main(folder)
+    if "--extra" in sys.argv:
+        extras(folder)
+    sys.exit(code)
