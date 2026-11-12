@@ -77,14 +77,15 @@ uv run asrp run runs/prototype_scene/scene.json runs/prototype_scene/placeholder
 | `scene.json`、`trajectory.json` | 这次运行的全部输入（场景和运动），拷进来所以整个文件夹可以原样重跑 |
 | `meshes/`、`landmarks/` | 场景用到的网格（`lips.obj`、`lips_tet.json` 四面体网格、`jaw.obj`、`skull.obj`、两排牙）和 landmark 蒙皮权重（原样拷贝，这一版还没用上） |
 | `model.feb` | 生成给 FEBio 的输入。想用 FEBio Studio 打开检查就看它 |
-| `model.log` | FEBio 的日志 |
-| `physics/positions.*` | 每帧每个计算点的位置（毫米，已除以 k） |
-| `physics/display.*` | 每帧显示网格（嘴唇的 10,240 个顶点）的位置 |
+| `model.log` | FEBio 的日志，只有进度和提示（约 0.15 MB）；节点位置不在里面 |
+| `physics/positions.json`、`positions.npy` | 每帧每个计算点的位置（毫米，已除以 k）。`.json` 是小表头（单位、每帧时间、节点编号、数组形状），数字在 `.npy` 里（float64，帧 × 节点 × 3）；自己的脚本用 `numpy.load` 读 |
+| `physics/display.json`、`display.npy` | 每帧显示网格（嘴唇的 10,240 个顶点）的位置，同样是表头加数组；给检查、回放包和 Blender 核对用 |
 | `physics/settled_frame14.json`、`.obj` | 沉降后的形状（控制器的起点，ADR-30）；文件名里的帧号来自运动文件的 `settle_until_frame`，原型运动写 14；`.obj` 带面，可以直接拖进 Blender |
 | `playback.json`、`playback.pc2` | 回放包：Load Result 加载的就是它 |
 | **`run_report.json`** | **运行报告：每个临时值和来源、没建的东西、生成器报告、五项检查的数字、用时。第 1、3 节的数字都来自这里** |
 | `provenance.json` | 溯源：输入文件的哈希、软件版本（asrp、Python、FEBio）、命令、线程数、开始和结束时间 |
-<!-- coordinator: update after batch 5 -->
+
+整个运行文件夹在参考运行（51 帧、4 线程）里约 45 MB，其中显示网格 12.0 MB，位置 9.4 MB，回放包 6.0 MB，输入约 15 MB（蒙皮权重 JSON 一个就 4 MB）。格式为什么这样选、以前是多大：[10](10-decisions.md) ADR-38 第 10 条。
 
 `import-asset` 写出的场景文件夹里还有 `import_report.json`（导入报告）。
 
@@ -222,7 +223,7 @@ flowchart LR
 | `src/asrp_core/generate.py` | 生成器：scene + trajectory → `.feb`（真实大小、节点坐标 × k；硬粘连并入刚体；弹簧按档生成） |
 | `src/asrp_core/embed.py` | 把 10,240 个显示顶点嵌进四面体网格，用重心坐标算每帧位置（我们对 Ziva zEmbedder 的替身） |
 | `src/asrp_core/simulate.py` | `asrp run` 的整条流程：生成 → 运行外壳 → 嵌入、沉降形状 → 检查 → 回放包 → 运行报告 |
-| `src/asrp_core/run.py` | 运行外壳：运行文件夹、进度、取消、出错处理、把位置除以 k |
+| `src/asrp_core/run.py` | 运行外壳：运行文件夹、进度、取消、出错处理、读 FEBio 写的位置并除以 k、存成 `.npy` |
 | `src/asrp_core/plausibility.py` | 五项合理性检查 |
 | `src/asrp_core/provenance.py` | 溯源记录 |
 | `src/asrp_core/febio.py`、`playback.py`、`tetmesh.py` | 调用 FEBio 读日志；回放包；四面体网格读写 |

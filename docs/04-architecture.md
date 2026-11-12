@@ -58,7 +58,7 @@ landmark 段是物理之后的**可替换层**：顺序按实验室源码和论�
 | 嵌入 `asrp_core/embed.py` | 显示网格跟着四面体网格动（zEmbedder 的替代）：每个显示顶点的四面体和重心坐标，粘连也用同一套 | — | ✅ 已有（T-06a） |
 | 合理性检查 `asrp_core/plausibility.py` | [07](07-validation.md) 第 3 节的五项检查 (a)(b)(b2)(c)(d)；"没运行"（`passed` 为 `null`）不算失败，只有明确的 `false` 才算 | — | ✅ 已有（T-06a，ADR-37） |
 | 场景运行 `asrp_core/simulate.py` | `asrp run <scene.json> <trajectory.json>`：生成器 → 运行外壳 → 嵌入、沉降后的形状、回放包、合理性检查、运行报告 | 运行文件夹的外壳（`run.py`） | ✅ 已有（T-06a） |
-| 运行外壳 `asrp_core/run.py` | 一次运行 = 一个文件夹：拷入输入、启动 FEBio、进度、取消、出错处理、把位置除以 k 后写成 `physics/positions.json`、写溯源（T-08） | 生成 FEBio 输入（`simulate.py` 通过 `run.Prepared` 接入） | ✅ 已有（替身模式 T-08，生成模式 T-06a） |
+| 运行外壳 `asrp_core/run.py` | 一次运行 = 一个文件夹：拷入输入、启动 FEBio、进度（只读日志新增的部分）、取消、出错处理、读 FEBio 写的 `positions.txt`、把位置除以 k 后存成 `physics/positions.json` + `positions.npy`、写溯源（T-08、T-25） | 生成 FEBio 输入（`simulate.py` 通过 `run.Prepared` 接入） | ✅ 已有（替身模式 T-08，生成模式 T-06a） |
 | landmark 变形层 `asrp_core/skinning.py` | 用蒙皮权重把 landmark 的运动叠加到物理结果上 | — | 待开发 |
 | 回放包 `asrp_core/playback.py` | 把结果打包成 Blender 能直接播放的格式 | — | ✅ 已有 |
 | 对比 `asrp_core/compare.py` | 读入 Ziva 参考结果，计算误差，出报告和热力图数据 | — | 待开发 |
@@ -77,7 +77,7 @@ runs/2026-11-03_neutral-to-AA_001/
   meshes/             用到的网格（毫米、Z 轴朝上），包括已落盘的四面体网格（只读，哈希记在 provenance.json）
   landmarks/          场景引用的 landmark 蒙皮权重（原样拷贝）
   model.feb           生成的 FEBio 输入
-  model.log           FEBio 日志（包含每帧节点位置）
+  model.log           FEBio 日志（只有进度和提示，约 0.15 MB；节点位置不在这里）
   physics/            物理段结果（含沉降后的形状 settled_frame{n}、每帧每块组织的应变能；n 是运动文件的 settle_until_frame；只有运动文件写了它、而且第 0 到 n 帧所有被用到的驱动源都停在静止位置时才写沉降形状，否则运行报告说明它不可用）
   final/              叠加 landmark 段之后的结果
   playback.json       回放包（Blender 加载用）
@@ -87,7 +87,7 @@ runs/2026-11-03_neutral-to-AA_001/
   provenance.json     溯源记录
 ```
 
-`asrp run <scene.json> <trajectory.json>`（T-06a，`simulate.py`）现在写出：场景文件夹里场景引用的每个文件按原来的相对路径拷进来（所以运行文件夹里的 `scene.json` 能直接再跑），运动改名为 `trajectory.json`；`physics/positions.json`（外壳写的，FEBio 的全部计算点，只有第 1 到 N−1 帧，坑 15）；`physics/display.json`（显示网格每帧的位置，第 0 帧是静止姿态，`asrp-display/1`）；`physics/settled_frame{n}.json`（沉降最后一帧的计算点和显示网格）和 `physics/settled_frame{n}.obj`（同一帧的显示网格，带面；n 是运动文件的 `settle_until_frame`，原型机的代用运动 n = 14）；回放包是显示网格本身（嘴唇 10,240 个顶点，不是四面体网格的表面，`node_ids` 为 null）；`run_report.json`。
+`asrp run <scene.json> <trajectory.json>`（T-06a，`simulate.py`）现在写出：场景文件夹里场景引用的每个文件按原来的相对路径拷进来（所以运行文件夹里的 `scene.json` 能直接再跑），运动改名为 `trajectory.json`；`physics/positions.json` + `physics/positions.npy`（外壳写的，FEBio 的全部计算点，只有第 1 到 N−1 帧，坑 15）；`physics/display.json` + `physics/display.npy`（显示网格每帧的位置，第 0 帧是静止姿态）；`physics/settled_frame{n}.json`（沉降最后一帧的计算点和显示网格）和 `physics/settled_frame{n}.obj`（同一帧的显示网格，带面；n 是运动文件的 `settle_until_frame`，原型机的代用运动 n = 14）；回放包是显示网格本身（嘴唇 10,240 个顶点，不是四面体网格的表面，`node_ids` 为 null）；`run_report.json`。
 
 **运行报告的内容**（`run_report.json`，07 第 3 节）：临时值和来源（运动那一行的来源取运动文件的 `source_tag`，没写记 `unstated`）；`simplifications`（场景 `simplifications` 里的说明，原样照抄，场景没写就是空列表；取代原来的 `attachments_not_built`）；生成器报告；`checks`（a、b、b2、c、d，没运行的在 `not_run`；d 的数字是 `min_volume_ratio`、`min_volume_ratio_frame`、`max_volume_ratio`、`inverted_tets`、`frames_with_inverted_tets`）；`settled_shape`（含 `frame`：n，没有沉降形状时为 `null`）；`return_to_settled`（只报告，`{frames, max_mm, mean_mm}`，没有这样的帧时 `frames` 是空列表）；用时。没有速度预算的键：耗时只报告，不和别的数并排（ADR-38 第 5 条）。运行用的线程数记在溯源里（`febio_env`）。
 
@@ -95,7 +95,18 @@ runs/2026-11-03_neutral-to-AA_001/
 
 `runs/` 不进 git。`data/` 里提交的有 `lab_export/`、`preview/`、`briefing/`、`tetmesh/`（四面体网格是只读输入，ADR-19、ADR-20），其余不进。四面体网格是**显式生成一次、落盘并记哈希的输入**，运行时只读，不在运行中重新生成（fTetWild 同输入多次运行结果不同，见 ADR-20 和 [13](13-explanations.md) E-03）。需要分享某次运行时，把整个文件夹打包发送。
 
-替身模式（T-08）的运行文件夹只有 `model.feb`、`model.log`、`physics/positions.json`（每帧每个节点的位置，几何毫米：已除以 k，ADR-36）、`provenance.json`，FEBio 的 `.xplt` 运行结束后删掉；失败和取消的运行没有 `physics/`；`provenance.json` 里不写任何本机绝对路径，输入按文件夹内的名字记哈希，所以整个文件夹复制到别处也能原样重跑。
+**位置和显示网格存成数组，日志不装坐标**（T-25，ADR-38 第 10 条）。生成的 `.feb` 让 FEBio 把节点位置写进自己的文件 `positions.txt`（和 `.feb` 同目录，每条记录是 `*Step`、`*Time`、`*Data  = positions`，然后每行 `id,x,y,z`，12 位有效数字），不再写进 `model.log`。整段算完后外壳读它、存成数组，再把它删掉（和 `model.xplt` 一样；失败和取消的运行也删）。两个结果各由一个小的 JSON 表头和一个 `.npy` 组成，数字在 `.npy` 里：
+
+| 文件 | 格式名 | 内容 |
+|---|---|---|
+| `physics/positions.json` | `asrp-positions/2` | 表头：单位、`times_s`、`node_ids`、`"array": "positions.npy"`、`shape` |
+| `physics/positions.npy` | — | float64，帧 × 节点 × 3，几何毫米（已除以 k） |
+| `physics/display.json` | `asrp-display/2` | 表头，字段同上的写法 |
+| `physics/display.npy` | — | float64，帧 × 显示顶点 × 3 |
+
+沉降形状（`settled_frame{n}.json` 和 `.obj`）、`playback.json`、`playback.pc2` 的格式没变，同一次运行的回放文件和以前逐字节相同。进度只读日志上次读过之后新增的部分，不再每次重读整个日志。运行外壳的 `provenance.json` 在 `outputs` 里同时列出每个结果的表头和数组。实测的大小和用时见 [10](10-decisions.md) ADR-38 第 10 条和 [15](15-prototype.md) 第 3 节。
+
+替身模式（T-08）的运行文件夹只有 `model.feb`、`model.log`、`physics/positions.json` + `physics/positions.npy`（每帧每个节点的位置，几何毫米：已除以 k，ADR-36）、`provenance.json`，FEBio 的 `.xplt` 运行结束后删掉；替身 `.feb`（`asrp run --feb`）自己把位置记进日志，所以仍从 `model.log` 里读；失败和取消的运行没有 `physics/`；`provenance.json` 里不写任何本机绝对路径，输入按文件夹内的名字记哈希，所以整个文件夹复制到别处也能原样重跑。
 
 ## 5. 主要文件的内容
 
