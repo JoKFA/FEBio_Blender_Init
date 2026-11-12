@@ -108,11 +108,13 @@ def test_the_scene_has_the_roles_of_docs_03(imported):
     assert [t.name for t in s.soft_tissues] == ["lips"]
     assert {b.name: (b.motion, b.driver) for b in s.bones} == {
         "jaw": ("prescribed", "jaw01"), "teeth_lower": ("prescribed", "jaw01"),
-        "skull": ("fixed", None), "teeth_upper": ("fixed", None),
+        "skull": ("prescribed", "head"), "teeth_upper": ("prescribed", "head"),
     }
-    jaw01, blend = s.drivers
+    jaw01, blend, head = s.drivers
+    assert head.name == "head" and head.hinge is None and head.blend is None and head.absent_means_rest  # T-28
     assert blend.name == "lip_corner_blend" and blend.hinge is None
     assert blend.blend.of == "jaw01" and blend.blend.factor.value == 0.5 and blend.blend.factor.source == "ours"
+    assert blend.blend.relative_to == "head"
     assert [(a.name, a.driver) for a in s.anchors] == [("lip_corner_anchor", "lip_corner_blend")]
     assert jaw01.name == "jaw01" and np.allclose(jaw01.hinge.pivot_mm, [0.0, -121.7126, -54.6536], atol=1e-3)
     assert np.allclose(jaw01.hinge.axis, [1, 0, 0], atol=1e-9)  # left-right

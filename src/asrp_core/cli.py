@@ -78,6 +78,10 @@ def cmd_import_asset(args: argparse.Namespace) -> int:
         size = " x ".join(f"{v:.1f}" for v in m["size_mm"])
         print(f"mesh       {m['name']:12} {m['vertices']:6d} vertices  {size} mm  ({m['role']})")
     for name, d in r["drivers"].items():
+        if "pivot_mm" not in d:  # no hinge (the head, T-28)
+            rest = ", at rest when a motion leaves it out" if d.get("absent_means_rest") else ""
+            print(f"driver     {name}: no hinge{rest}, moves {', '.join(d['moves'])}")
+            continue
         pivot = ", ".join(f"{v:.2f}" for v in d["pivot_mm"])
         axis = ", ".join(f"{v:.3f}" for v in d["axis"])
         print(f"driver     {name}: pivot ({pivot}) mm, axis ({axis}), moves {', '.join(d['moves'])}")

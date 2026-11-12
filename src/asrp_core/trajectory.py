@@ -163,6 +163,21 @@ def blend_transforms(parent_transforms, factor) -> list[list[float]]:
     return out
 
 
+def relative_blend_transforms(base_transforms, parent_transforms, factor) -> list[list[float]]:
+    """A derived driver relative to another one (docs/04 section 5.1): per frame
+    T = T_base exp(factor log(T_base^-1 T_of)), i.e. `factor` of the parent's motion as seen from the base. factor 0
+    follows the base, factor 1 the parent; with the base at rest it is `blend_transforms`."""
+    relative = []
+    for b, p in zip(base_transforms, parent_transforms):
+        relative.append((np.linalg.inv(np.array(b, dtype=float).reshape(4, 4)) @ np.array(p, dtype=float).reshape(4, 4))
+                        .ravel().tolist())
+    out = []
+    for b, r in zip(base_transforms, blend_transforms(relative, factor)):
+        m = np.array(b, dtype=float).reshape(4, 4) @ np.array(r, dtype=float).reshape(4, 4)
+        out.append([float(v) for v in m.ravel()])
+    return out
+
+
 def apply(transform, point) -> tuple[float, float, float]:
     """Move a point (mm) by one transform as stored here (column vectors, row by row)."""
     m = transform

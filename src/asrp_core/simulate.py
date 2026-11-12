@@ -22,7 +22,10 @@
                                   the tet nodes are from the settled shape once the drivers are back
                                   at rest; reported only), motion (the largest
                                   distance of any display vertex from its rest position over all frames,
-                                  and the frame it occurs at), landmark_layer (below), timing
+                                  and the frame it occurs at), relative_to_head (per frame, the largest
+                                  displacement of the free display vertices relative to the head, the
+                                  body the hard attachments hold, minus the settled value; its maximum
+                                  and frame; reported only, T-28), landmark_layer (below), timing
 
 When the trajectory has a `landmarks` section (T-09) the landmark layer is applied on top of the physics,
 `final = physics + weights @ translations` (`skinning.deform`; the physics results above are not touched):
@@ -75,16 +78,21 @@ FINAL_PLAYBACK = "playback_final.pc2"
 PLAYBACK_FILES = ("playback.json", "playback.pc2")
 RESULT_DIRS = ("physics", "final")
 RESULT_FILES = (*PLAYBACK_FILES, FINAL_PLAYBACK)
-RESULT_REPORT_KEYS = ("settled_shape", "return_to_settled", "spring_slip", "motion", "landmark_layer")
+RESULT_REPORT_KEYS = ("settled_shape", "return_to_settled", "spring_slip", "motion", "landmark_layer", "relative_to_head")
 SLIP_LIMIT = 0.1  # docs/05 section 3: max|u| / δ above this, the spring result is off by more than ~2 %
 
-def generator_settings() -> list[tuple]:
+def generator_settings(model: generate.Model | None = None) -> list[tuple]:
     """The settings the generator chose (all "ours"), for the run report next to the scene's own parameters. Read when
-    a run is made, not when this module is imported, so the report says what the generator really used."""
+    a run is made, not when this module is imported, so the report says what the generator really used. With a model,
+    the rhoi row is the value written into its .feb and says whether it came from the scene."""
+    from_scene = model is not None and model.rhoi_from_scene
+    rhoi = model.rhoi if model is not None else generate.RHOI
     return [
-        ("generator.rhoi", generate.RHOI, "generalized-alpha spectral radius at infinity: 0 is FEBio's strongest damping of "
-         "fast modes; numerical, not physical damping. Used by T-07's runs (spikes/s3_attachment.py); docs/05 pit 2, T-12 "
-         "revisits it"),
+        ("generator.rhoi", rhoi, ("generalized-alpha spectral radius at infinity, from the scene's "
+         "solver.numerical_damping_rhoi" if from_scene else "generalized-alpha spectral radius at infinity, the "
+         "generator's default because the scene does not set solver.numerical_damping_rhoi") + ": 0 is FEBio's strongest "
+         "damping of fast modes; numerical, not physical damping. Used by T-07's runs (spikes/s3_attachment.py); docs/05 "
+         "pit 2, T-28"),
         ("generator.gravity_sign_in_febio", generate.FEBIO_GRAVITY_SIGN, "docs/05 pit 1 (ADR-10): FEBio's const body load "
          "acts opposite to the manual, so the scene's physical gravity is written negated"),
         ("generator.gravity_from", 0.0, "gravity is on at full strength from t = 0, like the lab's frames 0-14"),
@@ -162,7 +170,7 @@ def slips(model: generate.Model, node_frames: np.ndarray) -> dict:
 
 def _parameters(model: generate.Model, trajectory_path: Path) -> list[dict]:
     rows = [{"where": f"scene.{w}", **p} for w, p in scene_module.parameters(model.scene.to_json())]
-    rows += [{"where": w, "value": v, "source": "ours", "note": n} for w, v, n in generator_settings()]
+    rows += [{"where": w, "value": v, "source": "ours", "note": n} for w, v, n in generator_settings(model)]
     rows.append({"where": "trajectory.source", "value": model.trajectory.source,
                  "source": model.trajectory.source_tag or "unstated",
                  "note": f"{trajectory_path.name}: {model.trajectory.frames} frames at {model.trajectory.fps} fps"})
@@ -246,7 +254,19 @@ def _physics_checks(model: generate.Model, node_frames: np.ndarray, display: np.
         report["return_to_settled"] = plausibility.return_to_settled(
             node_frames, settle, [b.transforms for b in model.bodies.values()])
     report["spring_slip"] = slips(model, node_frames)
+    report["relative_to_head"] = _relative_to_head(model, display, free, settle if settled else 0)
     return checks, (settle if settled else None)
+
+
+def _relative_to_head(model: generate.Model, display: np.ndarray, free: np.ndarray, reference: int) -> dict:
+    """Reported only (T-28): how far the free display vertices move against the head beyond the reference frame (the
+    settled shape, else the rest pose). "The head" is the body the hard attachments hold (the skull in the lab's
+    scene, moving when the head driver moves); with no hard attachment, or hard ones to two bodies, it is the world."""
+    held = sorted({g.target for g in model.groups if g.kind == "hard"})
+    body = held[0] if len(held) == 1 else None
+    out = plausibility.relative_motion(model.display, display, free,
+                                       model.bodies[body].transforms if body else None, reference)
+    return {"body": body, "reference_frame": reference, **out}
 
 
 def _landmark_layer(model: generate.Model, run_dir: Path, display: np.ndarray, report: dict) -> np.ndarray | None:
@@ -309,7 +329,7 @@ def run_scene(scene_path, trajectory_path, runs_dir: Path, exe: Path, name: str 
         feb.write_text(model.feb_text, encoding="ascii", newline="\n")
         prepared = run.Prepared(
             feb, "generated", ["asrp", "run", scene_path.name, trajectory_path.name],
-            {"generator": {w.split(".", 1)[1]: v for w, v, _ in generator_settings() if w.startswith("generator.")}
+            {"generator": {w.split(".", 1)[1]: v for w, v, _ in generator_settings(model) if w.startswith("generator.")}
              | {"spring_offset_delta_febio_mm": model.delta}},
             _inputs(model, trajectory_path), length_scale=model.k)
         result = run.execute(prepared, runs_dir, exe, name or trajectory_path.stem, on_progress, cancel, timeout, threads,

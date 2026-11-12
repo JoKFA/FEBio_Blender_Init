@@ -10,12 +10,14 @@ Writes into an output folder:
     import_report.json   units, axes, meshes, every parameter and its source, what is missing, and
                          the result of the scene check
 
-Roles follow docs/03 sections 3 and 4: the lips are the soft tissue; skull and upper teeth are
+Roles follow docs/03 sections 3 and 4: the lips are the soft tissue; skull and upper teeth follow
+the driver head (T-28), which is at rest whenever a trajectory leaves it out, so they are then
 fixed; jaw and lower teeth both follow the driver jaw01, the joint that moves them in Maya. The
 Ziva attribute list has not arrived (docs/12 item 2), so material, solver settings and bone masses
 are placeholders marked "ours". The four lip attachments come from T-03's lip_attachments.json
 (docs/05 section 3): upper lip hard on the skull, lower lip a spring to the jaw, the two lip
-corners springs to an anchor that turns half as far as the jaw (T-06a). Their stiffness and the
+corners springs to an anchor that moves half as far as the jaw relative to the head (T-06a, T-28).
+Their stiffness and the
 blend factor are provisional values marked "ours". `asrp check` passes with no warning.
 """
 
@@ -39,14 +41,17 @@ SIMPLIFICATIONS = [
     "the 6 muscles around the mouth attached to the lips (zAttachment to zTissue around the orbicularis): not built in "
     "phase 1, ADR-32",
     "the 9 skin attachments to the lips (zCloth): not built in phase 1, ADR-32 (skin is phase 2, T-18)",
-    "the chain mouth-corner node -> zTissue2/3 -> skull and jaw: replaced by the lip-corner anchor that turns alpha x the "
-    "jaw angle (A-35, docs/05 section 3)",
+    "the chain mouth-corner node -> zTissue2/3 -> skull and jaw: replaced by the lip-corner anchor that moves alpha x the "
+    "jaw's motion relative to the head (A-35, docs/05 section 3)",
 ]
+# T-28: the skull and the upper teeth follow a head driver. A trajectory that leaves it out keeps the head at rest
+# (absent_means_rest), and the generator then writes the skull as a fixed body, exactly as before T-28.
+HEAD_DRIVER = "head"
 # name in scene.json -> (Maya mesh name, motion, driver); docs/03 sections 3 and 4.
 BONES = {
     "jaw": ("middleres_Jaw", "prescribed", JAW_DRIVER),
-    "skull": ("middleres_skull", "fixed", None),
-    "teeth_upper": ("middleres_TeethUp", "fixed", None),
+    "skull": ("middleres_skull", "prescribed", HEAD_DRIVER),
+    "teeth_upper": ("middleres_TeethUp", "prescribed", HEAD_DRIVER),
     "teeth_lower": ("middleres_TeethDown", "prescribed", JAW_DRIVER),
 }
 SKIN = "skin_skinCluster7.json"  # the lab export's name
@@ -218,8 +223,10 @@ def import_asset(export: Path, out: Path, tet_mesh: Path,
         )),
         scene.Driver(CORNER_DRIVER, None, scene.Blend(JAW_DRIVER, ours(
             CORNER_BLEND,
-            "alpha: the lip corner anchor turns this fraction of the jaw's angle about jaw01's hinge "
-            "(docs/05 section 3, A-35); 0 follows the skull, 1 the jaw. Provisional")))
+            "alpha: the lip corner anchor moves this fraction of the jaw's motion relative to the head (for the jaw "
+            "turning about jaw01's hinge, alpha x its angle; docs/05 section 3, A-35); 0 follows the skull, 1 the "
+            "jaw. Provisional"), HEAD_DRIVER)),
+        scene.Driver(HEAD_DRIVER, None, None, True),
     ]
     anchors = [scene.Anchor(CORNER_ANCHOR, CORNER_DRIVER,
                             "stands for the mouth corner node of the Ziva model (zTissue4/5): no mesh, "
@@ -339,7 +346,9 @@ def import_asset(export: Path, out: Path, tet_mesh: Path,
         "meshes": meshes_report,
         "landmarks": len(names),
         "drivers": {JAW_DRIVER: {"pivot_mm": pivot.tolist(), "axis": axis.tolist(),
-                                 "moves": [b.name for b in bones if b.driver == JAW_DRIVER]}},
+                                 "moves": [b.name for b in bones if b.driver == JAW_DRIVER]},
+                    HEAD_DRIVER: {"absent_means_rest": True,
+                                  "moves": [b.name for b in bones if b.driver == HEAD_DRIVER]}},
         "parameters": [{"where": w, **p} for w, p in scene.parameters(model.to_json())],
         "missing": [*check.warnings, *STILL_MISSING],
         "check": {"errors": check.errors, "warnings": check.warnings},
