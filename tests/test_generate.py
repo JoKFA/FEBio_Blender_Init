@@ -369,6 +369,18 @@ def test_the_run_folder_holds_its_inputs_results_and_report(hard_plate):
     assert manifest["frame_count"] == 30 and len(manifest["vertices"]) == len(c["display"])
 
 
+@needs_febio
+def test_the_report_gives_the_largest_distance_any_display_vertex_moves_and_the_frame(hard_plate):
+    _, c, top, r = hard_plate
+    shown = display(r.run_dir)
+    far = np.linalg.norm(shown - shown[0][None], axis=2)  # worked out again here, from the written display file
+    motion = r.report["motion"]
+    assert set(motion) == {"max_display_distance_mm", "frame"}
+    assert motion["max_display_distance_mm"] == pytest.approx(far.max(), rel=1e-12) and motion["max_display_distance_mm"] > 5.0
+    assert far[motion["frame"]].max() == far.max()
+    assert cs.report(r.run_dir)["motion"] == motion  # and it is in the file, not only in memory
+
+
 # --- k with springs: a stiff box hanging on springs (ADR-36, docs/05 section 2) -----------------
 
 

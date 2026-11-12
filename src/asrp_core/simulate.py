@@ -20,7 +20,9 @@
                                   the generator's report, max|u|/δ per spring group, the plausibility
                                   checks a, b, b2, c, d (`plausibility`), return_to_settled (how far
                                   the tet nodes are from the settled shape once the drivers are back
-                                  at rest; reported only), timing
+                                  at rest; reported only), motion (the largest
+                                  distance of any display vertex from its rest position over all frames,
+                                  and the frame it occurs at), timing
 
 A failed or cancelled run gets run_report.json (with check (a) failed) but no physics results.
 """
@@ -196,6 +198,9 @@ def run_scene(scene_path, trajectory_path, runs_dir: Path, exe: Path, name: str 
                 if 0 < f < model.frames:
                     node_frames[f] = np.asarray(frame)[tissue]
             display = np.stack([embed.apply(model.embedding, p) for p in node_frames])
+            moved = np.linalg.norm(display - model.display[None], axis=2)  # (frames, vertices), geometric mm
+            at = int(np.argmax(moved.max(axis=1)))
+            report["motion"] = {"max_display_distance_mm": float(moved[at].max()), "frame": at}
             groups = [{"name": g.name, "kind": g.kind, "target": g.target, "nodes": g.nodes, "vertices": g.vertices}
                       for g in model.groups]
             transforms = {name: b.transforms for name, b in model.bodies.items()}
