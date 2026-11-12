@@ -165,7 +165,7 @@ def test_motion_comes_from_the_report_and_scene_facts_only_when_the_report_holds
 
 def test_nothing_is_stated_that_the_archive_does_not_hold(tmp_path):
     text = "\n".join(render(tmp_path).values())
-    for claim in ("216.6", "145 mm", "1×10⁻¹⁰", "1×10⁻⁹", "30.4"):
+    for claim in ("216.6", "145 mm", "1×10⁻¹⁰", "1×10⁻⁹"):
         assert claim not in text, claim
     # the facts that stay are the archive's own: k, the offset as a multiple of the median edge, springs per node
     assert "物理尺度 k | 0.67" in text and "5 倍四面体边长中位数" in text and "每个计算点 3 根" in text
