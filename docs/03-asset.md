@@ -262,7 +262,7 @@ blender --background --factory-startup --python-exit-code 1 --python tools/blend
 - **唯一进物理的是下颌**：`jaw01` → `skinCluster1` → 下颌网格 → `zBone1`；
 - 140 个粘连的两端全是 Ziva 物体，没有关节；脚本也不改 Ziva 的静止形状（`UI:565-602` 的重置技巧被 `if False` 关掉了，`UI:4457`）；
 - 皮肤的显示形状由包在最终嘴唇上的曲线带动（`skinCluster13`），也在物理之后（论文附录 I 的"分层线变形"）；
-- 下颌怎么驱动：训练环境三个轴都转（`ENV:1855`）；钢琴界面只转俯仰并打关键帧（`UI:1343-1360`）；下牙和舌头的显示网格另外多转 0.25（`teeth_correction_weight`，`UI:278`、`UI:1367-1388`），注释说是因为嘴唇被拉得比刚性牙齿远；
+- 下颌怎么驱动：训练环境三个轴都转，每一步给的是**相对上一步**的转动，绕世界坐标轴（`ENV:1855`：`cmds.rotate(rx, ry, rz, 'jaw0N', relative=True, ws=True)`）；landmark 则是每一步移到**绝对**位置（`ENV:1899-1931`，`cmds.move(..., absolute=True)`）；钢琴界面只转俯仰并打关键帧（`UI:1343-1360`）；下牙和舌头的显示网格另外多转 0.25（`teeth_correction_weight`，`UI:278`、`UI:1367-1388`），注释说是因为嘴唇被拉得比刚性牙齿远；
 - 控制器读的网格：训练时读 `middleres_OrbicularisOris` 的世界坐标（`ENV:4279-4297`），也就是**物理 + landmark 蒙皮之后**的最终形状；界面优先读 `*_RENDER` 代理网格，它用 blendShape 跟着实时的 Ziva 网格（`UI:526`、`UI:640-654`）。
 
 ### 13.3 控制器优化时物理不在环 🔶（训练时不推进时间 ✅；同一帧会不会重新求解 ❓，Q20）
