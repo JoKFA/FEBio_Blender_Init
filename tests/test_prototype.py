@@ -21,7 +21,7 @@ import numpy as np
 import pytest
 
 import placeholder_jaw_motion
-from asrp_core import scene, simulate, trajectory
+from asrp_core import run, scene, simulate, trajectory
 from asrp_core.asset import lab
 from asrp_core.doctor import febio_exe
 
@@ -77,7 +77,7 @@ def test_the_whole_motion_runs_and_all_five_checks_pass(prototype):
 
 def test_the_jaw_carries_the_lower_lip_down(prototype):
     _, runs = prototype
-    d = np.array(json.loads((runs[0].run_dir / "physics" / "display.json").read_text())["positions"])
+    d = simulate.read_display(runs[0].run_dir / simulate.DISPLAY)["positions"]
     s = scene.load(runs[0].run_dir / "scene.json")
     lower = [v for v, _ in next(a for a in s.attachments if a.name == "lower_lip_on_jaw").weights]
     upper = [v for v, _ in next(a for a in s.attachments if a.name == "upper_lip_on_skull").weights]
@@ -88,9 +88,10 @@ def test_the_jaw_carries_the_lower_lip_down(prototype):
 
 def test_same_input_twice_agrees_within_1e_9_mm_at_the_default_threads(prototype):
     _, (a, b) = prototype
-    for name in ("physics/positions.json", "physics/display.json"):
-        pa = np.array(json.loads((a.run_dir / name).read_text(encoding="utf-8"))["positions"])
-        pb = np.array(json.loads((b.run_dir / name).read_text(encoding="utf-8"))["positions"])
+    for reader, header in ((run.read_positions, run.POSITIONS), (simulate.read_display, simulate.DISPLAY)):
+        name = header
+        pa = reader(a.run_dir / header)["positions"]
+        pb = reader(b.run_dir / header)["positions"]
         assert pa.shape == pb.shape and pa.size > 0 and np.abs(pa - pb).max() <= 1e-9, name
         assert np.abs(pa - pa[0]).max() > 1.0  # the lips really move, so "equal" is not "nothing happened"
     assert len(json.loads((a.run_dir / "physics" / "settled_frame14.json").read_text())["display"]) > 0

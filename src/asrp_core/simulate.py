@@ -3,11 +3,13 @@
 1. `generate.build` checks the scene and trajectory, maps the attachments and writes the .feb (nothing is
    started if it refuses);
 2. the run shell (`run.Prepared` -> `run.execute`, length_scale = k) makes the run folder, copies the
-   inputs in, runs FEBio and writes physics/positions.json already divided by k;
+   inputs in, runs FEBio and writes physics/positions.json + positions.npy (the numbers, float64, frames x
+   nodes x 3) already divided by k;
 3. after a complete run, this module adds (all geometric mm, Z up, frames 0..N-1 of the trajectory; FEBio
    logs no frame 0, so frame 0 is the rest pose):
 
-    physics/display.json          the display mesh at every frame, carried by the tet mesh (`embed`)
+    physics/display.json          the display mesh at every frame, carried by the tet mesh (`embed`): a small
+    physics/display.npy           header and the numbers (float64, frames x vertices x 3); `read_display`
     physics/settled_frame<n>.json the shape after the gravity-only settle, at the trajectory's
     physics/settled_frame<n>.obj  settle_until_frame n (14 for the lab's controller, ADR-30: its starting
                                   point): tet nodes and display mesh, and the display mesh as an OBJ with
@@ -36,8 +38,9 @@ from asrp_core import embed, febio, generate, playback, plausibility, provenance
 from asrp_core import scene as scene_module
 
 REPORT = "run_report.json"
-DISPLAY = "physics/display.json"
-DISPLAY_FORMAT = "asrp-display/1"
+DISPLAY = "physics/display.json"  # the header; the numbers are in DISPLAY_ARRAY
+DISPLAY_ARRAY = "physics/display.npy"
+DISPLAY_FORMAT = "asrp-display/2"
 SETTLE_FRAMES = 5  # check (c) averages this many frames ending at settle_until_frame (one frame aliases the ringing)
 SLIP_LIMIT = 0.1  # docs/05 section 3: max|u| / δ above this, the spring result is off by more than ~2 %
 
@@ -233,9 +236,9 @@ def run_scene(scene_path, trajectory_path, runs_dir: Path, exe: Path, name: str 
                 node_frames, settle, [b.transforms for b in model.bodies.values()])
         report["spring_slip"] = slips(model, node_frames)
         _write_results(run_dir, model, node_frames, display, settle if settled else None)
-        files = [run.POSITIONS, DISPLAY, "playback.json", "playback.pc2"]
+        files = [run.POSITIONS, run.POSITIONS_ARRAY, DISPLAY, DISPLAY_ARRAY, "playback.json", "playback.pc2"]
         if settled:
-            files[2:2] = [f"{settled_path(settle)}.json", f"{settled_path(settle)}.obj"]
+            files[4:4] = [f"{settled_path(settle)}.json", f"{settled_path(settle)}.obj"]
         record["outputs"] = provenance.hash_files(run_dir, files)
     report["checks"] = {key: c.to_json() for key, c in checks.items()}
     # Only an explicit False is a failure; None is "not run" (the reason is in the check). (a) must always run.
@@ -255,6 +258,16 @@ def run_scene(scene_path, trajectory_path, runs_dir: Path, exe: Path, name: str 
     record["status"] = status
     provenance.write(run_dir, record)
     return SceneRun(run_dir, status, report, passed)
+
+
+def read_display(path: Path) -> dict:
+    """The display header plus "positions": a float64 array (frames, vertices, 3), geometric mm."""
+    data = run.load_array(path, "positions")
+    shape = data["positions"].shape
+    if list(shape) != [data["frames"], data["vertex_count"], 3]:
+        raise run.RunError(f"{path.name} says {data['frames']} frames of {data['vertex_count']} vertices but its "
+                           f"array has shape {list(shape)}. Run again.")
+    return data
 
 
 def settled_path(frame: int) -> str:
@@ -277,12 +290,11 @@ def _still_until(model: generate.Model, last: int) -> bool:
 def _write_results(run_dir: Path, model: generate.Model, node_frames: np.ndarray, display: np.ndarray,
                    settle: int | None = None) -> None:
     (run_dir / "physics").mkdir(exist_ok=True)
-    (run_dir / DISPLAY).write_text(json.dumps({
+    run.save_array(run_dir / DISPLAY, {
         "format": DISPLAY_FORMAT, "units": "mm", "fps": model.fps, "frames": model.frames,
         "vertex_count": int(len(model.display)), "mesh": model.scene.soft_tissues[0].mesh.path,
         "note": "frame 0 is the rest pose (FEBio logs no frame 0); positions are geometric mm (FEBio's / k)",
-        "positions": display.tolist(),
-    }), encoding="utf-8", newline="\n")
+    }, display, Path(DISPLAY_ARRAY).name)
     if settle is not None:
         f = settle
         (run_dir / f"{settled_path(f)}.json").write_text(json.dumps({
@@ -292,6 +304,6 @@ def _write_results(run_dir: Path, model: generate.Model, node_frames: np.ndarray
         }), encoding="utf-8", newline="\n")
         _write_obj(run_dir / f"{settled_path(f)}.obj", display[f], model.faces,
                    f"{model.scene.soft_tissues[0].name}, frame {f} (settled under gravity), mm, Z up, asrp run (T-06a)")
-    playback.write_surface_bundle(run_dir, model.display, model.faces, display.tolist(), model.fps,
+    playback.write_surface_bundle(run_dir, model.display, model.faces, display, model.fps,
                                   run_dir / run.FEB_NAME, model.scene.soft_tissues[0].name,
                                   model.scene.soft_tissues[0].mesh.path)
