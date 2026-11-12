@@ -105,7 +105,7 @@ class Job:
         return got
 
     def frames(self):
-        return [(t, l) for t, l in self.lines if l.startswith("progress")]
+        return [(t, ln) for t, ln in self.lines if ln.startswith("progress")]
 
     def run_folder(self):
         subs = [p for p in self.runs_dir.iterdir() if p.is_dir()] if self.runs_dir and self.runs_dir.exists() else []
@@ -178,8 +178,8 @@ class Phases:
         r["ticks_during_run"] = n
         r["largest_tick_gap_s_during_run"] = round(g, 3)
         r["tick_interval_wanted_s"] = TICK if MODE == "timer" else 0.05
-        r["errors"] = [l for _, l in job.lines if l.startswith("ERROR")]
-        r["last_lines"] = [l for _, l in job.lines[-3:]]
+        r["errors"] = [ln for _, ln in job.lines if ln.startswith("ERROR")]
+        r["last_lines"] = [ln for _, ln in job.lines[-3:]]
         folder = job.run_folder()
         if name == "cancel":
             r["seconds_cancel_to_exit"] = round(job.exit_at - job.cancel_at, 2) if job.cancel_at else None
@@ -254,6 +254,6 @@ if MODE == "timer":
         finish_all() if timer_fires[0] == 0 else None
 else:
     while phases.tick():
-        bpy.context.scene.frame_current  # cheap bpy read to stand in for UI work
+        _ = bpy.context.scene.frame_current  # cheap bpy read to stand in for UI work
         time.sleep(0.05)
     finish_all()
