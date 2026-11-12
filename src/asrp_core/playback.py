@@ -5,7 +5,10 @@ The bundle is a directory with:
   vertex the FEBio node id it came from (null for a display mesh carried by the tet
   mesh, `write_surface_bundle`, T-06a);
 - playback.pc2: per-frame surface vertex positions in the same order, read by
-  Blender's Mesh Cache modifier.
+  Blender's Mesh Cache modifier;
+- playback_final.pc2, only when the run has a landmark layer (T-09): the same vertices with the landmarks
+  moved. playback.json then also has "versions": {"physics": "playback.pc2", "final": "playback_final.pc2"}
+  and the add-on loads either one; "cache" is always the physics version.
 Data stays in mm here; the add-on converts to Blender units at the boundary.
 """
 
@@ -95,10 +98,14 @@ def write_surface_bundle(
     feb: Path,
     material: str,
     surface: str,
+    final_frames: Sequence[Sequence[Sequence[float]]] | None = None,
 ) -> Path:
     """The same bundle for a display mesh carried by the tet mesh (T-06a, asrp_core.embed): the surface is
     that mesh as it is (its own faces, triangles or quads), so there is no FEBio node per vertex and
-    `node_ids` is null. `surface` names the mesh file it came from."""
+    `node_ids` is null. `surface` names the mesh file it came from.
+    `final_frames` (T-09): the same surface with the landmark layer applied; it gets its own cache,
+    playback_final.pc2, and the manifest then names both under "versions". Without it nothing changes: the
+    files are exactly what they were before the layer existed."""
     manifest = {
         "format": FORMAT,
         "units": "mm",
@@ -112,6 +119,9 @@ def write_surface_bundle(
         "cache": "playback.pc2",
         "source": {"feb": feb.name, "feb_sha256": hashlib.sha256(feb.read_bytes()).hexdigest(), "surface": surface},
     }
+    if final_frames is not None:
+        manifest["versions"] = {"physics": "playback.pc2", "final": "playback_final.pc2"}
+        write_pc2(out / "playback_final.pc2", final_frames)
     write_pc2(out / "playback.pc2", frames)
     path = out / "playback.json"
     path.write_text(json.dumps(manifest), encoding="utf-8", newline="\n")

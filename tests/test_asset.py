@@ -129,6 +129,23 @@ def test_the_scene_has_the_roles_of_docs_03(imported):
 
 
 @needs_export
+def test_the_landmark_skin_is_written_converted_and_the_raw_export_is_not_copied(imported):
+    from asrp_core import skinning
+    out, _ = imported
+    s = scene.load(out / "scene.json")
+    assert s.landmarks.weights.path == "landmarks/skin_mm.json"
+    assert not (out / "landmarks" / lab.SKIN).exists()
+    raw = json.loads((out / "landmarks" / "skin_mm.json").read_text())
+    assert raw["format"] == "asrp-skin/1" and raw["axes"] == coords.AXES and raw["units"] == "mm"
+    assert raw["source"] == {"file": lab.SKIN, "sha256": hashlib.sha256((EXPORT / lab.SKIN).read_bytes()).hexdigest()}
+    skin = skinning.load(out / "landmarks" / "skin_mm.json")
+    assert skin.names == s.landmarks.names and skin.weights.shape == (10240, 300)
+    # The scene's rest positions and the skin's rest matrices are the same points in the same coordinates.
+    assert np.allclose(skin.rest_world[:, :3, 3], s.landmarks.rest_positions_mm, atol=1e-9)
+    assert b"\r" not in (out / "landmarks" / "skin_mm.json").read_bytes()
+
+
+@needs_export
 def test_the_scene_passes_the_check_with_no_warning(imported):
     out, result = imported
     report = scene.check(out / "scene.json")

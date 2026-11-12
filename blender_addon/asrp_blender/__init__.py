@@ -59,8 +59,23 @@ class ASRP_OT_check_backend(bpy.types.Operator):
         return {"FINISHED"}
 
 
-def build_playback_object(context, manifest: dict, folder: Path):
-    mesh = bpy.data.meshes.new(f"ASRP {Path(manifest['source']['feb']).stem}")
+def playback_cache(manifest: dict, version: str = "physics") -> str:
+    """The point cache file of a version. A bundle with a landmark layer lists "physics" and "final" under
+    "versions"; one without has only its "cache" (the physics version)."""
+    versions = manifest.get("versions")
+    if versions is None:
+        if version != "physics":
+            raise ValueError(f"this result has only the physics version, not {version!r} (no landmark layer in the run)")
+        return manifest["cache"]
+    if version not in versions:
+        raise ValueError(f"this result has the versions {sorted(versions)}, not {version!r}")
+    return versions[version]
+
+
+def build_playback_object(context, manifest: dict, folder: Path, version: str = "physics"):
+    cache_file = playback_cache(manifest, version)
+    label = f" ({version})" if manifest.get("versions") else ""
+    mesh = bpy.data.meshes.new(f"ASRP {Path(manifest['source']['feb']).stem}{label}")
     # from_pydata keeps vertex order, which the point cache relies on.
     mesh.from_pydata(manifest["vertices"], [], manifest["faces"])
     for name in manifest["materials"]:
@@ -76,7 +91,7 @@ def build_playback_object(context, manifest: dict, folder: Path):
 
     cache = obj.modifiers.new("ASRP result", "MESH_CACHE")
     cache.cache_format = "PC2"
-    cache.filepath = str(folder / manifest["cache"])
+    cache.filepath = str(folder / cache_file)
     cache.deform_mode = "OVERWRITE"
     cache.time_mode = "FRAME"
     cache.play_mode = "SCENE"
@@ -105,6 +120,7 @@ class ASRP_OT_load_playback(bpy.types.Operator):
     bl_options = {"REGISTER", "UNDO"}
 
     directory: bpy.props.StringProperty(subtype="DIR_PATH")
+    version: bpy.props.StringProperty(default="physics")  # "physics" or, when the run has a landmark layer, "final"
 
     def invoke(self, context, event):
         context.window_manager.fileselect_add(self)
@@ -120,7 +136,11 @@ class ASRP_OT_load_playback(bpy.types.Operator):
         if manifest.get("format") != PLAYBACK_FORMAT:
             self.report({"ERROR"}, f"unsupported bundle format {manifest.get('format')!r}")
             return {"CANCELLED"}
-        obj = build_playback_object(context, manifest, folder)
+        try:
+            obj = build_playback_object(context, manifest, folder, self.version)
+        except ValueError as exc:
+            self.report({"ERROR"}, str(exc))
+            return {"CANCELLED"}
         self.report({"INFO"}, f"loaded {obj.name}: {manifest['frame_count']} frames at {manifest['fps']} fps")
         return {"FINISHED"}
 
