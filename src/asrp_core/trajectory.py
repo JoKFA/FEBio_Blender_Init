@@ -18,7 +18,12 @@ Format `asrp-trajectory/1`, one JSON object:
                                       #   0..n. The run writes the settled shape at frame n and check (c)
                                       #   (gravity sag) averages frames max(1, n-4)..n (never frame 0, the rest
                                       #   pose); without it, or with n = 0, neither is done
-      "landmarks": ...                # optional; its format is docs/04 section 5.2, T-09 reads and checks it
+      "landmarks": {                  # optional: the landmark layer's motion (T-09, docs/04 section 5.2)
+        "names": ["oor_01", ...],     #   K unique landmark names, as listed in scene.json
+        "translations_mm": [          #   one entry per frame; each holds K [x, y, z] triples, the landmark's
+          [[x, y, z], ...], ...       #   translation relative to its rest position, mm, Z up
+        ]
+      }                               #   a landmark the file does not name does not move
     }
 
 Each transform is a 4x4 rigid transform in mm, Z up: the world transform of the driver relative
@@ -52,7 +57,7 @@ class Trajectory:
     frames: int
     drivers: dict[str, list[list[float]]]
     source: str = ""
-    landmarks: object = None  # format in docs/04 section 5.2; T-09 adds reading and checks; kept as read
+    landmarks: object = None  # the validated "landmarks" section as read (None: absent); see landmark_translations
     source_tag: str | None = None  # "lab_setting" | "ziva_default" | "ours"; None: the file does not say
     settle_until_frame: int | None = None  # last frame of the gravity-only settle; None: the file does not say
     extra: dict = field(default_factory=dict)  # unknown top-level keys, kept for the round trip
@@ -187,6 +192,55 @@ def rigid_problem(m) -> str | None:
     return None
 
 
+def _check_landmarks(section, frames: int) -> None:
+    if not isinstance(section, dict):
+        raise TrajectoryError("'landmarks' must be an object with 'names' and 'translations_mm'")
+    for key in ("names", "translations_mm"):
+        if key not in section:
+            raise TrajectoryError(
+                f"landmarks: '{key}' is missing; give 'names' (a list) and 'translations_mm' (one list per frame)"
+            )
+    names, per_frame = section["names"], section["translations_mm"]
+    if not isinstance(names, list) or not all(isinstance(n, str) and n for n in names):
+        raise TrajectoryError("landmarks.names must be a list of non-empty strings")
+    seen = set()
+    for n in names:
+        if n in seen:
+            raise TrajectoryError(f"landmarks.names lists {n!r} twice; give each landmark once")
+        seen.add(n)
+    if not isinstance(per_frame, list) or len(per_frame) != frames:
+        found = len(per_frame) if isinstance(per_frame, list) else type(per_frame).__name__
+        raise TrajectoryError(
+            f"landmarks.translations_mm has {found} frames but the file says frames = {frames}; "
+            "give exactly one list of translations per frame"
+        )
+    for f, row in enumerate(per_frame):
+        if not isinstance(row, list) or len(row) != len(names):
+            found = len(row) if isinstance(row, list) else type(row).__name__
+            raise TrajectoryError(
+                f"landmarks.translations_mm, frame {f}: {found} entries for {len(names)} landmarks; "
+                "give one [x, y, z] per name, in the order of 'names'"
+            )
+        for i, t in enumerate(row):
+            ok = (isinstance(t, list) and len(t) == 3
+                  and all(isinstance(c, (int, float)) and not isinstance(c, bool) and math.isfinite(c) for c in t))
+            if not ok:
+                raise TrajectoryError(
+                    f"landmarks.translations_mm, frame {f}, landmark {names[i]!r}: expected three finite numbers "
+                    f"[x, y, z] in mm, got {t!r}"
+                )
+
+
+def landmark_translations(trajectory: Trajectory) -> tuple[list[str], np.ndarray] | None:
+    """The landmark names and their translations as a (frames, K, 3) float64 array, mm relative to rest,
+    Z up; None when the trajectory has no landmark section."""
+    if trajectory.landmarks is None:
+        return None
+    names = list(trajectory.landmarks["names"])
+    t = np.asarray(trajectory.landmarks["translations_mm"], dtype=np.float64)
+    return names, t.reshape(trajectory.frames, len(names), 3)
+
+
 def from_json(data) -> Trajectory:
     """Build a Trajectory from parsed JSON, refusing anything the solver could misread."""
     if not isinstance(data, dict):
@@ -231,6 +285,8 @@ def from_json(data) -> Trajectory:
             f"settle_until_frame is {settle!r}; it must be a whole frame number from 0 to {frames - 1} (the last "
             "frame of the gravity-only settle), or leave it out if the motion has no such settle"
         )
+    if data.get("landmarks") is not None:
+        _check_landmarks(data["landmarks"], frames)
     known = {"format_version", "fps", "frames", "source", "source_tag", "settle_until_frame", "drivers", "landmarks"}
     return Trajectory(
         fps=fps,
@@ -260,7 +316,15 @@ def write(path, trajectory: Trajectory) -> None:
     round-trips exactly, so reading it back gives the same numbers."""
     data = trajectory.to_json()
     drivers = data.pop("drivers")
+    landmarks = data.pop("landmarks", None)
     lines = ["{"] + [f"  {json.dumps(k)}: {json.dumps(v, ensure_ascii=False)}," for k, v in data.items()]
+    if landmarks is not None:  # one frame per line, like the drivers
+        lines.append('  "landmarks": {')
+        lines.append(f'    "names": {json.dumps(landmarks["names"], ensure_ascii=False)},')
+        lines.append('    "translations_mm": [')
+        lines.append(",\n".join(f"      {json.dumps(row)}" for row in landmarks["translations_mm"]))
+        lines.append("    ]")
+        lines.append("  },")
     lines.append('  "drivers": {')
     names = list(drivers)
     for n, name in enumerate(names):
