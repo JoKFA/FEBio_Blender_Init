@@ -83,6 +83,10 @@ uv run python tools/check_lab_export.py data/lab_export "assets/w64 from v36 pro
 - □ 请研究员准备平时研究用的**完整场景**，以及至少两条可播放的运动：`neutral_to_AA`（张嘴、landmark 有变化）和 `head_shake`（整个头平移）。有时间再做第三条表情。
 - □ 请研究员用原来的界面加载运动、打好关键帧，确认时间轴从 **0** 开始，前 **0–14** 帧沉降，随后运动，30 fps。脚本不替代原控制器，也不会执行 `.pkl`。
 - □ 取 AA 对应的原始检查点 `.pkl`：在 Ziva 机器上远程登录取，路径列在实验室仓库的 `a3-stochastic-V1/automation/deformation_path_db.json`，键 `dataV22_AU0_neutral to dataV22_phoneme_AA`（2026-11-11 项目负责人转述）。甩头的运动是实验室仓库的脚本 `automation/passive_dynamics_test.py`（[03](03-asset.md) 第 13.8 节）；若甩头是手工关键帧，没有 `.pkl`，记录制作方式，骨头矩阵仍会导出。
+- □ 用的场景是研究员演示时那份完整场景：`C:\keyLabLocal_D\c99-maya-ziva-workshop\different pose as rest pose\neutral 260825 v15 made the teeth MESH.mb`（[14](14-ziva-demo-walkthrough.md) 第 1 节）。简化的 v36 代理场景在 Ziva 里会算崩（14 第 3 节），不要用它取参考结果。
+- □ 机器和文件夹是几个人共用的（14 第 1 节）：进机器先看有没有别人没关的场景，请对方保存后再关，不要覆盖别人的文件。
+- □ 每条运动开始前回到中性姿态，用钢琴界面的按钮 `Reset to Neutral (Reopen Rest Pose)`。
+- □ 上机时要问研究员的两件事：他平时开关 Ziva 实时求解和缓存的实际步骤（B 节的"禁用/清空缓存"按他的做法来）；脚本和导出结果放共享文件夹的哪个位置。
 - □ 保存好研究员自己的场景工作。诊断和临时导出节点会使 Maya 显示场景已修改；**不要把导出后的状态另存覆盖原研究场景**。
 - □ 确认可用机器时段（许可到期时间已问到：约一年半后，大约 2028 年年中，所以不急）、输出磁盘空间和允许的拷贝方式。每个运动会同时保存 Alembic 与逐帧顶点备份；备份约为 `12 × 所有输出顶点数 × 帧数` 字节，此外还有 Alembic、静态资料与关节矩阵。
 

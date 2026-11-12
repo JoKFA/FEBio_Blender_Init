@@ -117,7 +117,7 @@
 3. 〔已做〕预检的 `Ziva 版本` 要打印出来（视频里读不到）。状态：每次运行的报告里记录 Ziva 插件的名字和版本（脚本的 `ziva_plugin()`）。
 4. 对完整场景才解算：预检遇到 `middleres_*` 节点太少、`zSolver1` 求解后无输出时，提示"这可能是简化代理场景"。状态：脚本里没有找到这个提示，还没做。
 
-**导出清单 [12](12-lab-export-checklist.md)**（这五条在 12 里都没有找到，还没做）：
+**导出清单 [12](12-lab-export-checklist.md)**（2026-11-12 已写进 12 第二部分的"去之前"一节：第 1、3、4 条直接写成清单项；第 2、5 条要问研究员，写成"上机时要问的两件事"）：
 
 1. "去之前"的场景名，写成 `C:\keyLabLocal_D\c99-maya-ziva-workshop\different pose as rest pose\neutral 260825 v15 made the teeth MESH.mb`，并说明 v36 代理会算崩（链到本文）。
 2. 研究员的 Ziva playback 开关是什么，要在第 B 节"禁用/清空缓存"里换成他实际用的步骤。
