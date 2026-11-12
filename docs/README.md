@@ -89,7 +89,10 @@ asrp/
 │  ├─ s2_tetmesh.py           S2：四面体化工具和包络各档的比较表（ADR-20）
 │  ├─ s2_lips_febio.py        S2：嘴唇四面体网格进 FEBio（重力沉降 smoke、下颌张开 jaw）
 │  ├─ s3_attachment.py        S3（T-07）：弹簧和重力是否给出教科书答案、弹簧加硬是否趋近硬绑定
-│  └─ attachment_overlap.py   一次性测量：四组嘴唇粘连是否共用四面体计算点
+│  ├─ attachment_overlap.py   一次性测量：四组嘴唇粘连是否共用四面体计算点
+│  ├─ audit_material.py       审计（E-08）：嘴唇的 E 乘 10、除以 10 各重跑一遍，比下垂和形状
+│  ├─ audit_threads.py        审计（E-08）：同一份 .feb 用不同线程数，比用时和坐标
+│  └─ audit_cycles.py         审计（E-08）：张嘴来回多次，看形状会不会越跑越偏
 │
 ├─ tools/                     迁移、检查、渲染工具，不是产品代码
 │  ├─ verify.py               "完成"的定义：测试 + doctor + 插件 + 回放检查
@@ -97,6 +100,7 @@ asrp/
 │  ├─ lip_attachments.py      导出嘴唇的四组粘连顶点集 data/lab_export/lip_attachments.json（T-03）
 │  ├─ lip_attachments_preview.py  把四组粘连画在真实网格上，给人看
 │  ├─ placeholder_jaw_motion.py   写代用的下颌运动 trajectory.json（张开 12°，没有实验室运动时用）
+│  ├─ prototype_numbers.py    从存档的参考运行写出 15 里的数字表（--write 重写，--check 核对，验证门会跑）
 │  ├─ render_prototype.py     在 Blender 里加载原型机的回放包、逐帧核对、渲染侧视图和逐帧动画
 │  ├─ check_blender_addon.py  check_playback.py  render_playback.py
 │  ├─ mb_inventory.py  asset_report.py     不开 Maya 读 .mb，打印 03 里的数字（含粘连权重的读法）

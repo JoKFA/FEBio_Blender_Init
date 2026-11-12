@@ -54,9 +54,9 @@ FEBio 是一个专门为生物力学开发、经过同行评审的开源有限�
 | 嘴唇的四组粘连顶点集已导出（T-03）：74、76、348、309 个顶点，位置核对通过（上唇贴颅骨、下唇贴下颌） | `uv run python tools/lip_attachments.py --inventory ...`，[09](09-roadmap-and-tasks.md) T-03 |
 | `asrp run --feb` 能跑现成的 `.feb`：运行文件夹、溯源、进度、取消、出错处理，位置除以 k 后才写入（T-08） | `uv run pytest tests/test_run.py -q`，[09](09-roadmap-and-tasks.md) T-08 |
 | 被哈希的数据在任何电脑上检出都逐字节相同（`.gitattributes`） | 打开 `core.autocrlf` 克隆后跑测试，[08](08-engineering-standards.md) 第 10 节 |
-| **原型机（T-06a）**：真实嘴唇被下颌带动（代用运动，张开 12°）、算完 51 帧（含第 0 帧，FEBio 算 50 步；0.9–2.0 秒/帧（随本机负载，[15](15-prototype.md) 第 3 节），重试 0 次），四项合理性检查通过，第 14 帧沉降后的形状单独存下，回放包在 Blender 里逐帧对得上；同一份输入两次的回放文件逐位相同。材料、粘连刚度、k 都是标明来源的临时值 | `uv run asrp import-asset data/lab_export <out>`、`uv run python tools/placeholder_jaw_motion.py <out>/scene.json <out>/placeholder_jaw.json`、`uv run asrp run <out>/scene.json <out>/placeholder_jaw.json`；图在 `data/preview/prototype_*.png`；[09](09-roadmap-and-tasks.md) T-06a 的结果 |
+| **原型机（T-06a）**：真实嘴唇被下颌带动（代用运动，张开 12°）、算完 51 帧（含第 0 帧，FEBio 算 50 步；默认 4 线程，用时见 [15](15-prototype.md) 第 3 节，重试 0 次），五项合理性检查通过，第 14 帧沉降后的形状单独存下，回放包在 Blender 里逐帧对得上；同一份输入两次，默认坐标差不超过 1×10⁻⁹ mm，`--threads 1` 时回放文件逐位相同（ADR-38）。材料、粘连刚度、k 都是标明来源的临时值 | `uv run asrp import-asset data/lab_export <out>`、`uv run python tools/placeholder_jaw_motion.py <out>/scene.json <out>/placeholder_jaw.json`、`uv run asrp run <out>/scene.json <out>/placeholder_jaw.json`；图在 `data/preview/prototype_*.png`；[09](09-roadmap-and-tasks.md) T-06a 的结果 |
 
-**原型机已经跑通（2026-11-11 的参考运行）**：实验室的真实嘴唇被下颌带动，FEBio 算完 51 帧、四项合理性检查通过，结果在 Blender 里回放，同一份输入两次的回放文件逐字节相同。它只有物理层，下颌运动和材料都是临时值，还没有 landmark 层，也没有和 Ziva 对比。动图、数字、自己跑一遍的命令和结果的局限，都在一页里：[15 原型机：怎么跑、跑出了什么](15-prototype.md)。
+**原型机已经跑通（2026-11-11 的参考运行）**：实验室的真实嘴唇被下颌带动，FEBio 算完 51 帧、五项合理性检查通过，结果在 Blender 里回放，同一份输入两次的结果在 1×10⁻⁹ mm 内相同（`--threads 1` 时回放文件逐字节相同）。它只有物理层，下颌运动和材料都是临时值，还没有 landmark 层，也没有和 Ziva 对比。动图、数字、自己跑一遍的命令和结果的局限，都在一页里：[15 原型机：怎么跑、跑出了什么](15-prototype.md)。
 
 ![原型机：真实嘴唇被下颌带动，张开再合上](../data/preview/prototype_motion.gif)
 
