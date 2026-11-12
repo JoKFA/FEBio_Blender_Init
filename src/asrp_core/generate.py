@@ -6,7 +6,7 @@ What it writes, all in mm, N, MPa, s (mass in tonnes):
 - **Real size (ADR-36, docs/05 section 2).** Every coordinate in the .feb is geometric mm times k
   (`units.physics_length_scale`): tet nodes, rigid reference points, rigid-body translations, spring
   anchors. Physical values stay real: E, ν, density, gravity 9810 mm/s², spring stiffness in N/mm.
-  `run` divides the positions FEBio logs by k again. Multiplying by k = 1.0 is exact, so k = 1 gives
+  `run` divides the positions FEBio writes (to positions.txt, next to the .feb) by k again. Multiplying by k = 1.0 is exact, so k = 1 gives
   the same .feb as an unscaled model, byte for byte.
 - **Gravity** is written with its sign flipped (docs/05 pit 1, ADR-10): FEBio's `const` body load pushes
   the other way from the manual's formula. It is on from t = 0, as in the lab's frames 0-14.
@@ -39,7 +39,7 @@ What it writes, all in mm, N, MPa, s (mass in tonnes):
 - **Nodes in no element** are refused: FEBio drops them with only a warning (docs/05 pit 18).
 - **Guard**: a display vertex farther than MAX_DISTANCE_EDGES × the median tet edge from its tet is
   an error; nothing is written (the correspondence cannot be trusted, docs/05 section 3 rule 5).
-- **Dynamic analysis** at the scene's fps and substeps, one must point per frame (FEBio then logs
+- **Dynamic analysis** at the scene's fps and substeps, one must point per frame (FEBio then writes
   frames 1..N and no frame 0, pit 15), adaptive stepping as in spikes/s2_lips_febio.py (up to
   MAX_RETRIES retries, the step may shrink to dt × DTMIN_FRACTION), generalized-α with spectral radius
   RHOI = 0 (the strongest damping of fast modes FEBio offers; T-07's runs used it; a value we chose).
