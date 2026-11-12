@@ -34,6 +34,8 @@ from asrp_core.asset import coords, lab  # noqa: E402
 DEFAULT_LAB_DATA = "E:/Codebase/_lab/data"
 LAB_COMMIT = "506cd69"
 LIMIT_MM = 1e-4  # the comparison with the lab's formula must stay under this
+CONVERSION_LIMIT_MM = 1e-3  # landmarks at rest must give the rest lips back within this
+REDUCTION_LIMIT_MM = 1e-9  # deform against the general matrix form
 SEED = 0
 
 
@@ -112,7 +114,7 @@ def main() -> None:
         numbers = run(folder, Path(tmp))
     for key, value in numbers.items():
         print(f"{key}: {value}")
-    ok = (numbers["conversion_rest_max_mm"] < 1e-3 and numbers["deform_vs_deform_matrices_max_mm"] < 1e-9
+    ok = (numbers["conversion_rest_max_mm"] < CONVERSION_LIMIT_MM and numbers["deform_vs_deform_matrices_max_mm"] < REDUCTION_LIMIT_MM
           and numbers["ours_vs_lab_formula_max_mm"] < LIMIT_MM and numbers["control_shifted_columns_max_mm"] > LIMIT_MM
           and numbers["vertices"] > 0 and numbers["landmarks"] > 0)
     target = REPO / "data" / "preview" / "landmark_layer_check.json"

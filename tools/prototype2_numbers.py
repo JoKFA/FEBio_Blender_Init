@@ -28,6 +28,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+import landmark_layer_check  # noqa: E402
 import prototype_numbers as base  # noqa: E402
 
 REPO = Path(__file__).resolve().parents[1]
@@ -49,8 +50,8 @@ GROUP_NAME = {"upper lip": "上唇（硬粘颅骨）", "lower lip": "下唇（�
 VARIANT = {"physics_only": "只有物理（没有 landmark）", "a": "甲", "b": "乙"}
 CHECK_NAMES = (("a", "(a) 整段算完"), ("b", "(b) 粘在骨头上的点跟着骨头"), ("b2", "(b2) 弹簧锚点跟着刚体"),
                ("c", "(c) 重力下垂和估计一致"), ("d", "(d) 四面体网格保持有效"))
-# The thresholds tools/landmark_layer_check.py itself uses for its verdict (mm).
-CONVERSION_LIMIT, REDUCTION_LIMIT = 1e-3, 1e-9
+# The thresholds tools/landmark_layer_check.py itself uses for its verdict (mm): read from that tool, not copied.
+CONVERSION_LIMIT, REDUCTION_LIMIT = landmark_layer_check.CONVERSION_LIMIT_MM, landmark_layer_check.REDUCTION_LIMIT_MM
 
 
 def mm2(x: float) -> str:
