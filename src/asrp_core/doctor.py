@@ -77,7 +77,7 @@ def check_ascii_path(path: Path) -> Check:
 
 def check_python() -> Check:
     version = ".".join(map(str, sys.version_info[:3]))
-    if sys.version_info >= (3, 13):
+    if sys.version_info >= (3, 13):  # noqa: UP036 (a runtime check for a user on an older interpreter)
         return Check("python", "ok", f"{version} ({sys.executable})")
     return Check("python", "error", f"{version}; need >= 3.13 to match Blender 5.2")
 

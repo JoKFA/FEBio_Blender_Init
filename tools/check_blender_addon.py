@@ -12,9 +12,8 @@ from pathlib import Path
 sys.dont_write_bytecode = True  # keep the repo clean when run from the verify gate
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "blender_addon"))
 
-import bpy  # noqa: E402
-
 import asrp_blender  # noqa: E402
+import bpy  # noqa: E402
 
 asrp_blender.register()
 try:

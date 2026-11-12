@@ -19,7 +19,7 @@ FEBio 是一个专门为生物力学开发、经过同行评审的开源有限�
 
 **第一阶段（v0.1 原型）**：用实验室提供的资产（颅骨、下颌、牙齿、嘴唇肌肉），在 Blender 里算出"下颌张合带动嘴唇"的物理过程，由 FEBio 计算。结果要通过合理性检查，并且实验室研究员把它和以前 Ziva 的结果并排看过以后，认为可以用于继续研究。
 
-**原型机**：实验室负责人期待 1–2 周出。定义和路径见 [09](09-roadmap-and-tasks.md) 第 1 节，项目负责人已确认（2026-11-11，11 的 P-05），目标日期 2026-11-17。
+**原型机**：实验室负责人期待 1–2 周出。定义和路径见 [09](09-roadmap-and-tasks.md) 第 1 节，项目负责人已确认（2026-11-11，11 的 P-05），目标日期 2026-11-17；已完成（2026-11-11，T-06a）。
 
 **我们不是要复刻 Ziva**（ADR-17）。实验室的成果是控制器，物理层只要让控制器能继续工作、结果合理就够了。实验室会议也说：解出和 Ziva 一样的数值不是成功标准，实验看的是动作本身，所以模型按真人大小算（ADR-31）。和 Ziva 的差别会算出来，但只作参考，不当合格线。
 
@@ -34,33 +34,24 @@ FEBio 是一个专门为生物力学开发、经过同行评审的开源有限�
 - 逐项、逐点复刻 Ziva 的行为。两者的算法不同，Ziva 的参数很可能也只是默认值，对齐它的意义不大。
 - 任何医学结论。
 
-## 现在做到哪了（2026-11-11）
+## 现在做到哪了（2026-11-12）
 
 | 已完成 | 证据 |
 |---|---|
-| 代码仓库、开发环境、自动检查 | 本机 `E:\Codebase\asrp`；GitHub 私有仓库 `JoKFA/FEBio_Blender_Init`（ADR-14） |
-| 确认 FEBio 能在本机算动力学（重力 + 骨头带动软组织） | `spikes/s1_dynamic_jaw.py`，每次自动检查都会重跑 |
-| FEBio 的结果能逐帧放回 Blender 播放 | `tools/check_playback.py`，误差小于 0.000001 mm |
-| 实验室资产的完整盘点 | [03 资产说明](03-asset.md)，`tools/mb_inventory.py`、`tools/asset_report.py` |
-| 真实网格、landmark 权重和关节已经导出。网格和 `.mb` 逐点核对过；权重和关节目前只有 Maya 自检 | [03](03-asset.md) 第 12 节，`tools/maya_export.py`、`tools/check_lab_export.py` |
-| 真实资产已经进了 Blender，下颌能绕真实铰链转动 | `tools/blender_import_preview.py`，结果在 `data/preview/` |
-| Ziva 机器要跑的脚本已经准备好，并在普通 Maya 上排练过（需要 Ziva 的部分只能到现场验证） | [12](12-lab-export-checklist.md) 第二部分，`tools/ziva_machine_export.py`、`tools/rehearse_ziva_export.py` |
-| 任何电脑都能运行的自动检查 | `uv run python tools/verify.py` |
-| 对照实验室论文做了一次需求审计：论文里每种用法对物理层意味着什么，第一阶段覆盖多少；并定了 7 个新决定 | [02](02-requirements.md) 第 4 节的对照表、[10](10-decisions.md) ADR-21 到 ADR-27、[13](13-explanations.md) E-04 |
-| 场景描述和运动的格式定稿，`asrp check` 能查出场景和运动里的错误（T-05） | `uv run asrp check tests/fixtures/s1/scene.json tests/fixtures/s1/trajectory.json`，[09](09-roadmap-and-tasks.md) T-05 |
-| 实验室资产能一条命令导入成场景描述，并通过 `asrp check`（T-02，里程碑 M1 完成；留下一处缺口：landmark 蒙皮矩阵还没换算成毫米和 Z 轴朝上，见 [09](09-roadmap-and-tasks.md) T-09） | `uv run asrp import-asset data/lab_export <输出文件夹>`，[09](09-roadmap-and-tasks.md) T-02 |
-| 读完实验室控制器源码：landmark 和物理的关系、优化时物理不在环（部分验证，11 的 Q20）、Hill 模型的位置、各实验怎么做、运动文件的格式；目标姿态已经拿到 | [03](03-asset.md) 第 13 节，[10](10-decisions.md) ADR-28 到 ADR-35，[13](13-explanations.md) E-05 |
-| 更正了粘连权重的读法（按强推断，默认值 1.0 待 A-33 确认）：上唇 74 个顶点连颅骨、下唇 76 个连下颌，嘴角经口角组织连骨头；第一阶段的粘连方案定了 | `uv run python tools/asset_report.py data/asset_inventory.json`，[03](03-asset.md) 第 6 节，ADR-32 |
-| 嘴唇的四组粘连顶点集已导出（T-03）：74、76、348、309 个顶点，位置核对通过（上唇贴颅骨、下唇贴下颌） | `uv run python tools/lip_attachments.py --inventory ...`，[09](09-roadmap-and-tasks.md) T-03 |
-| `asrp run --feb` 能跑现成的 `.feb`：运行文件夹、溯源、进度、取消、出错处理，位置除以 k 后才写入（T-08） | `uv run pytest tests/test_run.py -q`，[09](09-roadmap-and-tasks.md) T-08 |
-| 被哈希的数据在任何电脑上检出都逐字节相同（`.gitattributes`） | 打开 `core.autocrlf` 克隆后跑测试，[08](08-engineering-standards.md) 第 10 节 |
-| **原型机（T-06a）**：真实嘴唇被下颌带动（代用运动，张开 12°）、算完 51 帧（含第 0 帧，FEBio 算 50 步；默认 4 线程，用时见 [15](15-prototype.md) 第 3 节，重试 0 次），五项合理性检查通过，第 14 帧沉降后的形状单独存下，回放包在 Blender 里逐帧对得上；同一份输入两次，默认坐标差不超过 1×10⁻⁹ mm，`--threads 1` 时回放文件逐位相同（ADR-38）。材料、粘连刚度、k 都是标明来源的临时值 | `uv run asrp import-asset data/lab_export <out>`、`uv run python tools/placeholder_jaw_motion.py <out>/scene.json <out>/placeholder_jaw.json`、`uv run asrp run <out>/scene.json <out>/placeholder_jaw.json`；图在 `data/preview/prototype_*.png`；[09](09-roadmap-and-tasks.md) T-06a 的结果 |
+| 地基：代码仓库（GitHub 私有，ADR-14）、开发环境、任何电脑都能运行的自动检查；FEBio 能在本机算动力学，结果能逐帧放回 Blender（T-00）；被哈希的数据在任何电脑上检出都逐字节相同（`.gitattributes`，08 第 10 节） | `uv run python tools/verify.py`；`spikes/s1_dynamic_jaw.py`、`tools/check_playback.py`；[09](09-roadmap-and-tasks.md) T-00 |
+| 实验室资产：完整盘点；网格、landmark 权重和关节已导出（网格和 `.mb` 逐点核对过，权重和关节目前只有 Maya 自检）；真实资产已进 Blender，下颌能绕真实铰链转动（`data/preview/`）；一条命令导入成场景描述（T-02，里程碑 M1）；嘴唇的四组粘连顶点集（T-03，粘连权重的读法已更正，ADR-32） | [03](03-asset.md) 第 6、12 节；`uv run asrp import-asset data/lab_export <输出文件夹>`；09 的 T-02、T-03。一处缺口：landmark 蒙皮矩阵还没换算成毫米和 Z 轴朝上，归 T-09 |
+| 读完实验室控制器源码和论文：landmark 和物理的关系、优化时物理不在环（部分验证，11 的 Q20）、Hill 模型的位置、各实验怎么做、运动文件的格式、目标姿态；对照论文做了需求审计 | [03](03-asset.md) 第 13 节；[02](02-requirements.md) 第 4 节；[10](10-decisions.md) ADR-21 到 ADR-35；[13](13-explanations.md) E-04、E-05 |
+| 场景和运动的格式定稿，`asrp check` 查错（T-05）；运行命令、运行文件夹、溯源（T-08） | `uv run asrp check tests/fixtures/s1/scene.json tests/fixtures/s1/trajectory.json`；[04](04-architecture.md) 第 4、5 节 |
+| **原型机（T-06a）**，以及审计后的小修（T-22）和二进制结果（T-25）：真实嘴唇被下颌带动，五项合理性检查通过，回放包在 Blender 里逐帧对得上，同一份输入两次相同；材料、粘连刚度、k 都是标明来源的临时值 | [15](15-prototype.md)；[09](09-roadmap-and-tasks.md) T-06a、T-22、T-25；`data/preview/prototype_*.png` |
+| Ziva 机器要跑的脚本已准备好，并在普通 Maya 上排练过（需要 Ziva 的部分只能到现场验证） | [12](12-lab-export-checklist.md) 第二部分；`tools/ziva_machine_export.py`、`tools/rehearse_ziva_export.py` |
 
 **原型机已经跑通（2026-11-11 的参考运行）**：实验室的真实嘴唇被下颌带动，FEBio 算完 51 帧、五项合理性检查通过，结果在 Blender 里回放，同一份输入两次的结果在 1×10⁻⁹ mm 内相同（`--threads 1` 时回放文件逐字节相同）。它只有物理层，下颌运动和材料都是临时值，还没有 landmark 层，也没有和 Ziva 对比。动图、数字、自己跑一遍的命令和结果的局限，都在一页里：[15 原型机：怎么跑、跑出了什么](15-prototype.md)。
 
 ![原型机：真实嘴唇被下颌带动，张开再合上](../data/preview/prototype_motion.gif)
 
-下一步（2026-11-11 项目负责人接受的顺序，[13](13-explanations.md) E-08）：先是 T-22（审计后的小修，已完成），再做 landmark 层（T-09），然后是三个独立的试验（T-17 软粘软、T-23 方块上的主动收缩、T-24 原型机上的"landmark 进物理"）；拿到 Ziva 设置和运动文件以后换掉临时值（T-12）；见 [09 路线图与任务](09-roadmap-and-tasks.md) 第 1 节。
+**第二轮审计（2026-11-12，[13](13-explanations.md) E-09）**查出一件要紧的事：实验室的 AA 目标形状里，嘴唇几乎不跟着下颌走，而我们的物理让下唇完全跟着走。所以原型机二的"中性到 AA"两种拼法都做、并排报告（ADR-40）；哪一种当正式结果，等项目负责人定（11 的 P-07）。
+
+下一步是**原型机二**（ADR-39、ADR-40）：landmark 层（T-09）→ 中性到 AA（T-27）→ 甩头（T-28）→ 来回 10 次（T-29）；然后是几个互不依赖的试验（T-17 软粘软、T-23 主动收缩、T-24 "landmark 进物理"、T-30 逐帧接着算、T-20 规则格子），再定 `asrp-scene/2`（T-26）。拿到 Ziva 设置和运动文件以后换掉临时值（T-12）。顺序和理由见 [09 路线图与任务](09-roadmap-and-tasks.md) 第 1、2 节。等项目负责人拍板的五件事（P-06 到 P-10）只列在 [11](11-risks-and-questions.md) 第 1 节。
 
 ## 谁参与、各自负责什么
 
@@ -73,7 +64,7 @@ FEBio 是一个专门为生物力学开发、经过同行评审的开源有限�
 
 ## 最需要尽快解决的三件事
 
-1. **约 Ziva 机器，趁许可还有效拿到只有它能给的数据**（ADR-35）：Ziva 的完整设置和权重表、一条运动的参考结果、Ziva 存的各物体网格（尤其嘴角链条上的），以及运动的检查点文件（远程登录取）。许可约一年半后到期（Q5，2026-11-11 项目负责人转述），不急，排在 landmark 层和三个试验之后。步骤见 [12 导出清单](12-lab-export-checklist.md) 第二部分；第二阶段要的多网格、多运动，脚本也已支持（T-19），可以同一次做。
+1. **约 Ziva 机器，趁许可还有效拿到只有它能给的数据**（ADR-35）：Ziva 的完整设置和权重表、一条运动的参考结果、Ziva 存的各物体网格（尤其嘴角链条上的），以及运动的检查点文件（远程登录取）。许可约一年半后到期（Q5，2026-11-11 项目负责人转述），不急，也不挡原型机二；但它决定 AA 的两种读法哪一种是实验室实际得到的（E-09）。步骤见 [12 导出清单](12-lab-export-checklist.md) 第二部分；第二阶段要的多网格、多运动，脚本也已支持（T-19），可以同一次做。
 2. **把问题发给实验室**：可以直接转发的一页在 [12](12-lab-export-checklist.md) 第三部分（现在实际是第 1、3、5 问，Q5、Q17 不再等实验室）；运动文件不再向实验室要，在 Ziva 机器上取（D2）。
 3. **原型机给实验室看**：T-06a 已跑通（2026-11-11，目标日期 2026-11-17），可以拿 `data/preview/prototype_*.png` 和回放包给研究员看下唇跟下颌、嘴角拉长是否合理；参数都是临时值（09 T-06a 卡）。
 

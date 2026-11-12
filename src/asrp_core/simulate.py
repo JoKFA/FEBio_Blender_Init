@@ -36,7 +36,7 @@ from pathlib import Path
 
 import numpy as np
 
-from asrp_core import embed, febio, generate, playback, plausibility, provenance, run
+from asrp_core import embed, febio, generate, plausibility, playback, provenance, run
 from asrp_core import scene as scene_module
 
 REPORT = "run_report.json"
@@ -47,29 +47,31 @@ SETTLE_FRAMES = 5  # check (c) averages up to this many frames ending at settle_
 # ringing); never frame 0, the rest pose, whose sag is exactly 0
 SLIP_LIMIT = 0.1  # docs/05 section 3: max|u| / δ above this, the spring result is off by more than ~2 %
 
-# Settings the generator chose (all "ours"), for the run report next to the scene's own parameters.
-GENERATOR_SETTINGS = [
-    ("generator.rhoi", generate.RHOI, "generalized-alpha spectral radius at infinity: 0 is FEBio's strongest damping of "
-     "fast modes; numerical, not physical damping. Used by T-07's runs (spikes/s3_attachment.py); docs/05 pit 2, T-12 "
-     "revisits it"),
-    ("generator.gravity_sign_in_febio", generate.FEBIO_GRAVITY_SIGN, "docs/05 pit 1 (ADR-10): FEBio's const body load "
-     "acts opposite to the manual, so the scene's physical gravity is written negated"),
-    ("generator.gravity_from", 0.0, "gravity is on at full strength from t = 0, like the lab's frames 0-14"),
-    ("generator.spring_offset_delta", f"{generate.SPRING_OFFSET_EDGES:g} x median tet edge x k", "docs/05 section 3: the anchors sit delta away along x, y, z "
-     "(FEBio coordinates); delta must stay >= 10 x the slip, see max|u|/delta"),
-    ("generator.spring_level_tolerance", generate.SPRING_LEVEL_TOLERANCE, "stiffness levels per spring group: log-spaced, as "
-     "few as keep every node's binned stiffness within this fraction of its own value, each the mean of its members "
-     "(one FEBio spring material per level); the level count and the largest error are in the generator report"),
-    ("generator.max_distance_edges", generate.MAX_DISTANCE_EDGES, "a display vertex farther than this x the median tet edge "
-     "from its tet stops the run (docs/05 section 3 rule 5)"),
-    ("generator.max_retries", generate.MAX_RETRIES, "adaptive stepping as in spikes/s2_lips_febio.py"),
-    ("generator.dtmin_fraction", generate.DTMIN_FRACTION, "the step may shrink to this fraction of a frame step"),
-    ("generator.motion_between_frames", "linear", "the rigid bodies' translation and rotation vector are interpolated "
-     "linearly between frames (exact for a fixed hinge)"),
-    ("plausibility.hard_tolerance_mm", plausibility.HARD_TOLERANCE_MM, "docs/07 section 3"),
-    ("plausibility.sag_factor", plausibility.SAG_FACTOR, "check (c) passes when the measured sag is within this factor "
-     "of the model's estimate, rho |g| k L^2 / (2 E), either way"),
-]
+def generator_settings() -> list[tuple]:
+    """The settings the generator chose (all "ours"), for the run report next to the scene's own parameters. Read when
+    a run is made, not when this module is imported, so the report says what the generator really used."""
+    return [
+        ("generator.rhoi", generate.RHOI, "generalized-alpha spectral radius at infinity: 0 is FEBio's strongest damping of "
+         "fast modes; numerical, not physical damping. Used by T-07's runs (spikes/s3_attachment.py); docs/05 pit 2, T-12 "
+         "revisits it"),
+        ("generator.gravity_sign_in_febio", generate.FEBIO_GRAVITY_SIGN, "docs/05 pit 1 (ADR-10): FEBio's const body load "
+         "acts opposite to the manual, so the scene's physical gravity is written negated"),
+        ("generator.gravity_from", 0.0, "gravity is on at full strength from t = 0, like the lab's frames 0-14"),
+        ("generator.spring_offset_delta", f"{generate.SPRING_OFFSET_EDGES:g} x median tet edge x k", "docs/05 section 3: the anchors sit delta away along x, y, z "
+         "(FEBio coordinates); delta must stay >= 10 x the slip, see max|u|/delta"),
+        ("generator.spring_level_tolerance", generate.SPRING_LEVEL_TOLERANCE, "stiffness levels per spring group: log-spaced, as "
+         "few as keep every node's binned stiffness within this fraction of its own value, each the mean of its members "
+         "(one FEBio spring material per level); the level count and the largest error are in the generator report"),
+        ("generator.max_distance_edges", generate.MAX_DISTANCE_EDGES, "a display vertex farther than this x the median tet edge "
+         "from its tet stops the run (docs/05 section 3 rule 5)"),
+        ("generator.max_retries", generate.MAX_RETRIES, "adaptive stepping as in spikes/s2_lips_febio.py"),
+        ("generator.dtmin_fraction", generate.DTMIN_FRACTION, "the step may shrink to this fraction of a frame step"),
+        ("generator.motion_between_frames", "linear", "the rigid bodies' translation and rotation vector are interpolated "
+         "linearly between frames (exact for a fixed hinge)"),
+        ("plausibility.hard_tolerance_mm", plausibility.HARD_TOLERANCE_MM, "docs/07 section 3"),
+        ("plausibility.sag_factor", plausibility.SAG_FACTOR, "check (c) passes when the measured sag is within this factor "
+         "of the model's estimate, rho |g| k L^2 / (2 E), either way"),
+    ]
 
 class SceneRunError(Exception):
     """The scene could not be run; nothing was started. The message says what to do."""
@@ -129,7 +131,7 @@ def slips(model: generate.Model, node_frames: np.ndarray) -> dict:
 
 def _parameters(model: generate.Model, trajectory_path: Path) -> list[dict]:
     rows = [{"where": f"scene.{w}", **p} for w, p in scene_module.parameters(model.scene.to_json())]
-    rows += [{"where": w, "value": v, "source": "ours", "note": n} for w, v, n in GENERATOR_SETTINGS]
+    rows += [{"where": w, "value": v, "source": "ours", "note": n} for w, v, n in generator_settings()]
     rows.append({"where": "trajectory.source", "value": model.trajectory.source,
                  "source": model.trajectory.source_tag or "unstated",
                  "note": f"{trajectory_path.name}: {model.trajectory.frames} frames at {model.trajectory.fps} fps"})
@@ -150,7 +152,7 @@ def run_scene(scene_path, trajectory_path, runs_dir: Path, exe: Path, name: str 
         feb.write_text(model.feb_text, encoding="ascii", newline="\n")
         prepared = run.Prepared(
             feb, "generated", ["asrp", "run", scene_path.name, trajectory_path.name],
-            {"generator": {w.split(".", 1)[1]: v for w, v, _ in GENERATOR_SETTINGS if w.startswith("generator.")}
+            {"generator": {w.split(".", 1)[1]: v for w, v, _ in generator_settings() if w.startswith("generator.")}
              | {"spring_offset_delta_febio_mm": model.delta}},
             _inputs(model, trajectory_path), length_scale=model.k)
         result = run.execute(prepared, runs_dir, exe, name or trajectory_path.stem, on_progress, cancel, timeout, threads)

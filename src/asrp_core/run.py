@@ -243,7 +243,7 @@ def execute(
         "software": provenance.software(None),
         "outputs": {},
         "failure": None,
-        "timing": {"started_utc": datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds")},
+        "timing": {"started_utc": datetime.datetime.now(datetime.UTC).isoformat(timespec="seconds")},
     }
     provenance.write(run_dir, record)
 
@@ -315,6 +315,6 @@ def _finish(run_dir: Path, record: dict, status: str, failure, frames: int, proc
     record["status"] = status
     record["failure"] = ({"frame": failure.frame, "message": scrub_paths(failure.message, run_dir)}
                          if failure else None)
-    record["timing"]["finished_utc"] = datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds")
+    record["timing"]["finished_utc"] = datetime.datetime.now(datetime.UTC).isoformat(timespec="seconds")
     provenance.write(run_dir, record)
     return Result(run_dir, status, frames, failure, proc.pid if proc else None)

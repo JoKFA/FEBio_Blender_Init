@@ -78,39 +78,74 @@ runs/2026-11-03_neutral-to-AA_001/
   landmarks/          场景引用的 landmark 蒙皮权重（原样拷贝）
   model.feb           生成的 FEBio 输入
   model.log           FEBio 日志（只有进度和提示，约 0.15 MB；节点位置不在这里）
-  physics/            物理段结果（含沉降后的形状 settled_frame{n}、每帧每块组织的应变能；n 是运动文件的 settle_until_frame；只有运动文件写了它、而且第 0 到 n 帧所有被用到的驱动源都停在静止位置时才写沉降形状，否则运行报告说明它不可用）
+  physics/            物理段结果（含沉降后的形状 settled_frame{n}；n 是运动文件的 settle_until_frame；只有运动文件写了 n ≥ 1、而且第 0 到 n 帧所有被用到的驱动源都停在静止位置时才写沉降形状，否则运行报告说明它不可用；每帧每块组织的应变能是 T-26，现在还没有）
   final/              叠加 landmark 段之后的结果
   playback.json       回放包（Blender 加载用）
   playback.pc2
-  run_report.json     运行报告：临时值和来源、场景写的简化说明（simplifications）、生成器报告、合理性检查（checks，没运行的在 not_run）、网格健康和回到沉降形状的程度、用时
+  run_report.json     运行报告（键见下面"运行报告的内容"）
   compare/            和 Ziva 对比的报告（如果做了对比）
   provenance.json     溯源记录
 ```
 
-`asrp run <scene.json> <trajectory.json>`（T-06a，`simulate.py`）现在写出：场景文件夹里场景引用的每个文件按原来的相对路径拷进来（所以运行文件夹里的 `scene.json` 能直接再跑），运动改名为 `trajectory.json`；`physics/positions.json` + `physics/positions.npy`（外壳写的，FEBio 的全部计算点，只有第 1 到 N−1 帧，坑 15）；`physics/display.json` + `physics/display.npy`（显示网格每帧的位置，第 0 帧是静止姿态）；`physics/settled_frame{n}.json`（沉降最后一帧的计算点和显示网格）和 `physics/settled_frame{n}.obj`（同一帧的显示网格，带面；n 是运动文件的 `settle_until_frame`，原型机的代用运动 n = 14）；回放包是显示网格本身（嘴唇 10,240 个顶点，不是四面体网格的表面，`node_ids` 为 null）；`run_report.json`。
+`asrp run <scene.json> <trajectory.json>`（T-06a，`simulate.py`）现在写出：
 
-**运行报告的内容**（`run_report.json`，07 第 3 节）：临时值和来源（运动那一行的来源取运动文件的 `source_tag`，没写记 `unstated`）；`simplifications`（场景 `simplifications` 里的说明，原样照抄，场景没写就是空列表；取代原来的 `attachments_not_built`）；生成器报告；`checks`（a、b、b2、c、d，没运行的在 `not_run`；d 的数字是 `min_volume_ratio`、`min_volume_ratio_frame`、`max_volume_ratio`、`inverted_tets`、`frames_with_inverted_tets`）；`settled_shape`（含 `frame`：n，没有沉降形状时为 `null`）；`return_to_settled`（只报告，`{frames, max_mm, mean_mm}`，没有这样的帧时 `frames` 是空列表）；用时。没有速度预算的键：耗时只报告，不和别的数并排（ADR-38 第 5 条）。运行用的线程数记在溯源里（`febio_env`）。
+1. 场景文件夹里场景引用的每个文件，按原来的相对路径拷进来（所以运行文件夹里的 `scene.json` 能直接再跑），运动改名为 `trajectory.json`；
+2. `physics/positions.json` + `physics/positions.npy`：外壳写的，FEBio 的全部计算点，只有第 1 到 N−1 帧（坑 15）；
+3. `physics/display.json` + `physics/display.npy`：显示网格每帧的位置，第 0 帧是静止姿态；
+4. `physics/settled_frame{n}.json`（格式名 `asrp-settled/1`：`units`、`frame`、`time_s`、`tet_nodes`、`display`）和 `physics/settled_frame{n}.obj`（同一帧的显示网格，带面）。n 是运动文件的 `settle_until_frame`，原型机的代用运动 n = 14；
+5. 回放包：是显示网格本身（嘴唇 10,240 个顶点，不是四面体网格的表面，`node_ids` 为 null）；
+6. `run_report.json`。
 
-还没有的：`final/`（T-09）、应变能（T-26）、`compare/`（T-11）。FEBio 失败或取消时只写 `run_report.json`（检查 (a) 不通过），不写任何结果。生成器拒绝的场景（检查有错、显示顶点离四面体太远、一个点被两个刚体要走……）不建运行文件夹，`asrp run` 打印原因和 `run NOT STARTED`。
+**运行报告的内容**（`run_report.json`，格式名 `asrp-run-report/1`，07 第 3 节），每个键写一次：
+
+| 键 | 含义 |
+|---|---|
+| `run_id` | 这次运行的编号 |
+| `status` | `complete`、`failed`、`cancelled` 三个值之一 |
+| `frames` | 帧数 |
+| `passed` | 整次运行是否通过 |
+| `parameters` | 临时值和来源；运动那一行的来源取运动文件的 `source_tag`，没写记 `unstated` |
+| `simplifications` | 场景 `simplifications` 里的说明，原样照抄；场景没写就是空列表（取代原来的 `attachments_not_built`） |
+| `warnings` | 警告列表 |
+| `generator` | 生成器报告 |
+| `checks` | a、b、b2、c、d 五项，每项是 `name`、`passed`（`true`、`false` 或 `null`）、`message`、`numbers`；d 的数字是 `min_volume_ratio`、`min_volume_ratio_frame`、`max_volume_ratio`、`inverted_tets`、`frames_with_inverted_tets` |
+| `not_run` | 没运行的检查的汇总（属于 `checks`） |
+| `settled_shape` | `available`、`frame`（n，没有沉降形状时为 `null`）；不可用时多一个 `reason` |
+| `return_to_settled` | 只报告，`{frames, max_mm, mean_mm}`；没有这样的帧时 `frames` 是空列表 |
+| `motion` | 任一显示顶点离静止位置最远的距离 `max_display_distance_mm` 和出现的帧 `frame` |
+| `spring_slip` | 每个弹簧组的 max\|u\|、δ、比值和是否超过 0.1 |
+| `timing` | `generate_s`、`febio_s`、`febio_s_per_frame`、`post_s`；没有速度预算的键：耗时只报告，不和别的数并排（ADR-38 第 5 条） |
+| `reason` | 见 `settled_shape`：沉降形状不可用时的原因 |
+
+运行用的线程数记在溯源里（`febio_env`）。
+
+还没有的：`final/`（T-09）、应变能（T-26）、`compare/`（T-11）。
+
+**失败的运行不留结果**（ADR-37 第 4 条，T-25）：
+1. FEBio 失败或取消，或整段没有全部算完，只写 `run_report.json`（检查 (a) 不通过），不写任何结果；
+2. FEBio 跑完了但**我们自己的事后处理出错**（读位置、嵌入、写回放包、报告里有 NaN 等）：运行同样记为 `failed`，删掉 `physics/`、`playback.json`、`playback.pc2`，报告里去掉 `settled_shape`、`return_to_settled`、`spring_slip`、`motion`，检查 (a) 不通过，原因写 `post-processing failed after FEBio finished: …`（路径已抹掉）。不会出现"看起来算完了"的运行；
+3. 无论成功、失败还是取消，只删除 FEBio 写的 `positions.txt` 和 `model.xplt`（见下面）；别的名字的文件不碰。
+
+生成器拒绝的场景（检查有错、显示顶点离四面体太远、一个点被两个刚体要走……）不建运行文件夹，`asrp run` 打印原因和 `run NOT STARTED`。
 
 `runs/` 不进 git。`data/` 里提交的有 `lab_export/`、`preview/`、`briefing/`、`tetmesh/`（四面体网格是只读输入，ADR-19、ADR-20），其余不进。四面体网格是**显式生成一次、落盘并记哈希的输入**，运行时只读，不在运行中重新生成（fTetWild 同输入多次运行结果不同，见 ADR-20 和 [13](13-explanations.md) E-03）。需要分享某次运行时，把整个文件夹打包发送。
 
-**位置和显示网格存成数组，日志不装坐标**（T-25，ADR-38 第 10 条）。生成的 `.feb` 让 FEBio 把节点位置写进自己的文件 `positions.txt`（和 `.feb` 同目录，每条记录是 `*Step`、`*Time`、`*Data  = positions`，然后每行 `id,x,y,z`，12 位有效数字），不再写进 `model.log`。整段算完后外壳读它、存成数组，再把它删掉（和 `model.xplt` 一样；失败和取消的运行也删）。两个结果各由一个小的 JSON 表头和一个 `.npy` 组成，数字在 `.npy` 里：
+**位置和显示网格存成数组，日志不装坐标**（T-25，ADR-38 第 10 条）。生成的 `.feb` 让 FEBio 把节点位置写进自己的文件 `positions.txt`（和 `.feb` 同目录，每条记录是 `*Step`、`*Time`、`*Data  = positions`，然后每行 `id,x,y,z`，12 位有效数字），不再写进 `model.log`。整段算完后外壳读它、存成数组，再把它删掉（和 `model.xplt` 一样；失败和取消的运行也删；只删这个名字的文件，别的名字不碰）。两个结果各由一个小的 JSON 表头和一个 `.npy` 组成，数字在 `.npy` 里；表头里都有 `format`、`units`（`mm`）、`array`（`.npy` 的文件名）和 `shape`：
 
 | 文件 | 格式名 | 内容 |
 |---|---|---|
-| `physics/positions.json` | `asrp-positions/2` | 表头：单位、`times_s`、`node_ids`、`"array": "positions.npy"`、`shape` |
+| `physics/positions.json` | `asrp-positions/2` | 表头另有 `times_s`（每帧的时间）、`node_ids`（FEBio 的节点编号） |
 | `physics/positions.npy` | — | float64，帧 × 节点 × 3，几何毫米（已除以 k） |
-| `physics/display.json` | `asrp-display/2` | 表头，字段同上的写法 |
+| `physics/display.json` | `asrp-display/2` | 表头另有 `fps`、`frames`、`vertex_count`、`mesh`（显示网格的文件）、`note`；没有 `times_s` 和 `node_ids` |
 | `physics/display.npy` | — | float64，帧 × 显示顶点 × 3 |
 
-沉降形状（`settled_frame{n}.json` 和 `.obj`）、`playback.json`、`playback.pc2` 的格式没变，同一次运行的回放文件和以前逐字节相同。进度只读日志上次读过之后新增的部分，不再每次重读整个日志。运行外壳的 `provenance.json` 在 `outputs` 里同时列出每个结果的表头和数组。实测的大小和用时见 [10](10-decisions.md) ADR-38 第 10 条和 [15](15-prototype.md) 第 3 节。
+沉降形状（`settled_frame{n}.json`，格式名 `asrp-settled/1`，和 `.obj`）、`playback.json`、`playback.pc2` 的格式没变，同一次运行的回放文件和以前逐字节相同。进度只读日志上次读过之后新增的部分，不再每次重读整个日志。运行外壳的 `provenance.json` 在 `outputs` 里同时列出每个结果的表头和数组。实测的大小和用时见 [10](10-decisions.md) ADR-38 第 10 条和 [15](15-prototype.md) 第 3 节。
 
 替身模式（T-08）的运行文件夹只有 `model.feb`、`model.log`、`physics/positions.json` + `physics/positions.npy`（每帧每个节点的位置，几何毫米：已除以 k，ADR-36）、`provenance.json`，FEBio 的 `.xplt` 运行结束后删掉；替身 `.feb`（`asrp run --feb`）自己把位置记进日志，所以仍从 `model.log` 里读；失败和取消的运行没有 `physics/`；`provenance.json` 里不写任何本机绝对路径，输入按文件夹内的名字记哈希，所以整个文件夹复制到别处也能原样重跑。
 
 ## 5. 主要文件的内容
 
-格式细节（字段名、类型）写在代码的格式说明里：`src/asrp_core/scene.py`、`src/asrp_core/trajectory.py` 开头（T-05 定稿）。这里只规定**必须包含的信息**。
+格式细节（字段名、类型）写在代码的格式说明里：`src/asrp_core/scene.py`、`src/asrp_core/trajectory.py` 开头（T-05 定稿），运行结果的格式在 `src/asrp_core/run.py`、`simulate.py` 开头。这里只规定**必须包含的信息**，并给出每个键的名字（格式名：`asrp-scene/1`、`asrp-trajectory/1`）。
 
 两条通用规则：
 - **大数组不内嵌。** 网格、四面体网格、landmark 蒙皮权重都是被引用的文件，`scene.json` 里只写路径和 sha256。场景文件因此能用眼睛读，文件被改过也一查哈希就知道。例外是粘连权重：它是稀疏列表，直接写在 `scene.json` 里；单个粘连超过一万项时再改成引用文件（ADR-34）。
@@ -123,13 +158,13 @@ runs/2026-11-03_neutral-to-AA_001/
 |---|---|
 | 单位 | 固定为 mm、N、MPa、s；记录每个网格原来的变换、从原始资产换算过来的系数和坐标轴转换（顺序见 [03](03-asset.md) 第 10 节）。**几何单位和物理尺度分开**（ADR-22）：`units.mm_per_scene_unit`（几何，0.962，**必填**）；`units.physics_length_scale`（无量纲 k，**可以不写**，不写时取 1.0 并把来源标成"我们定的"；第一阶段按真人大小取 0.67，由导入写进场景，T-06a 实现，ADR-31）：求解器把模型当成几何尺寸的 k 倍大来算，几何和输出仍是毫米；实现是 FEBio 里节点坐标 = 几何毫米 × k、物理参数不缩放、读回除以 k（[05](05-ziva-to-febio.md) 第 2 节，ADR-36） |
 | 软组织 | 名字、网格文件、原始 OBJ 的文件名和 sha256、四面体网格文件及其内容哈希、材料（类型和参数）、每个参数的来源（实验室设置 / Ziva 默认值 / 我们定的） |
-| 骨头 | 名字、网格文件、原始 OBJ 的文件名和 sha256、质量、运动方式：**"固定"或"给定"**（ADR-21）。给定时写明**跟随哪个驱动源**，运动由 `trajectory.json` 里这个驱动源的每帧变换提供 |
-| 驱动源 | 名字（实验室资产里就是关节名，比如 `jaw01`），以及可选的铰链说明（枢轴、转轴），用来生成代用运动和做检查。一个驱动源可以带动几块骨头：下颌和下牙都跟随 `jaw01`，和 Maya 里一个关节同时带动两块骨头一样（[03](03-asset.md) 第 4 节）。**派生驱动源**（T-06a 补充，见本节末的"嘴角的锚"）：可以不带自己的运动，写成"驱动源 X 的 factor 倍"，由 X 的整个刚体运动算出来 |
+| 骨头 `bones` | 名字、网格文件、原始 OBJ 的文件名和 sha256、质量 `mass_t`（值可以是 `null`：未知，运动是固定或完全给定时用不到）、运动方式 `motion`：**`"fixed"`（固定）或 `"prescribed"`（给定）**（ADR-21）。给定时用 `driver` 写明**跟随哪个驱动源**，运动由 `trajectory.json` 里这个驱动源的每帧变换提供 |
+| 驱动源 `drivers` | 名字（实验室资产里就是关节名，比如 `jaw01`），以及可选的铰链说明 `hinge`（`pivot_mm`、`axis`、`source`、`note`），用来生成代用运动和做检查。一个驱动源可以带动几块骨头：下颌和下牙都跟随 `jaw01`，和 Maya 里一个关节同时带动两块骨头一样（[03](03-asset.md) 第 4 节）。**派生驱动源**（T-06a 补充，见本节末的"嘴角的锚"）：可以不带自己的运动，写成"驱动源 X 的 factor 倍"，由 X 的整个刚体运动算出来 |
 | 连接 | 连接的两样东西、每个顶点的权重（稀疏列表 `[[顶点, 权重], ...]`）、刚度、类型。类型是 [05](05-ziva-to-febio.md) 第 3 节的两种做法：硬绑定（`hard`，没有刚度）或弹簧（`spring`，刚度 × 权重）。第一阶段：上唇 `hard`、下唇 `spring`、嘴角 `spring` 连到"锚"（05 第 3 节，ADR-32）。粘连顶点怎么对应到计算点见 05 第 3 节。`to` 可以是骨头，也可以是下面的锚 |
 | 锚 | 可选。名字，以及它跟随哪个驱动源（`anchors` 一节，见本节末）。锚是不显示、不参与碰撞、没有网格的刚体 |
-| landmark | 名字、静止位置、对嘴唇顶点的蒙皮权重（被引用的文件；里面的矩阵导入时换算成毫米、Z 轴朝上，T-09） |
-| 求解设置 | 帧率、每帧子步数、阻尼、重力、分析类型（动力学）。场景不记帧数：运动的帧率必须等于这里的帧率，帧数由 `trajectory.json` 给出 |
-| 来源 | 从哪个资产文件、哪次导出生成的 |
+| landmark `landmarks` | 可为 `null`。`names`、静止位置 `rest_positions_mm`、对嘴唇顶点的蒙皮权重 `weights`（被引用的文件；里面的矩阵导入时换算成毫米、Z 轴朝上，T-09）、`note` |
+| 求解设置 `solver` | `fps`、`substeps_per_frame`、`damping`、`gravity_mm_per_s2`（物理方向）、分析类型 `analysis`（动力学）。场景不记帧数：运动的帧率必须等于这里的帧率，帧数由 `trajectory.json` 给出 |
+| 来源 `origin` | 从哪个资产文件、哪次导出生成的（`asset`、`export`、`tool`、`notes`） |
 | 简化说明 `simplifications` | 可选。字符串列表（非空字符串），写"这个场景没建什么、简化了什么"，由导入器写（嘴唇场景三句：嘴周 6 块肌肉没建、9 处皮肤粘连没建、嘴角到颅骨和下颌的那串组织换成了嘴角的锚；原文见 `asset/lab.py`）；空就不写。运行报告照抄到它的 `simplifications`；场景没写，报告里就是空列表（ADR-38 第 2 条） |
 
 **嘴角的锚（T-06a，05 第 3 节，ADR-32、ADR-36）。** 格式仍是 `asrp-scene/1`：只加了可选字段（`blend`、`anchors`，以及上表的 `simplifications`），旧文件原样可读，没有这些字段的场景写出来也和以前逐字节相同，所以不升版本号。
@@ -156,9 +191,9 @@ runs/2026-11-03_neutral-to-AA_001/
 ### 5.2 运动 `trajectory.json`
 - 每个驱动源，每一帧的 **4×4 刚体变换**（毫米、Z 轴朝上，包含平移和旋转，ADR-21；**列向量约定**，Maya 是行向量约定，转换时要转置，ADR-34），以驱动源的名字为键。跟随同一个驱动源的骨头都用这一份变换。骨头可平移也可旋转（论文 4.1.3），甩头实验里整个头在平移（4.4.6），只存关节角度表达不了；
 - `landmarks` 一节：每个 landmark 每帧相对静止位置的**平移**（毫米、Z 轴朝上）。实验室的运动数据里 landmark 只有平移（[03](03-asset.md) 第 7 节），所以这一版不存旋转。一节可以不写（没有 landmark 运动时）。代码里这一节的读取和校验由 T-09 加进 `trajectory.py`；
-- 帧率、总帧数、来源（实验室控制器的哪一次输出）；
+- `fps`、`frames`（总帧数）、`source`（自由文字：实验室控制器的哪一次输出，或哪个生成器）、`drivers`（驱动源名字 → 每帧 4×4 变换）；
 - 可选的 `source_tag`：`lab_setting`、`ziva_default`、`ours` 三个值之一（和场景参数的来源同一套），写别的值是错误。运行报告里运动那一行的来源取它，没写就记 `unstated`，不再从说明文字里猜；
-- 可选的 `settle_until_frame`：整数 n（0 ≤ n < 帧数），只有重力的沉降的最后一帧；第 0 到 n 帧所有被用到的驱动源都必须停在静止位置（单位变换）。写了而且满足，运行写 `physics/settled_frame{n}.*`，检查 (c) 用第 max(0, n−4) 到 n 帧；写了但驱动源在 n 帧之前就动了，(c) 没运行、不写沉降形状，并说明原因；**没写**，(c) 没运行、不写沉降形状，原因是"运动文件没说沉降到哪一帧"。两个键都不改变已有文件的有效性（ADR-38 第 1、3 条）。
+- 可选的 `settle_until_frame`：整数 n（0 ≤ n < 帧数），只有重力的沉降的最后一帧；第 0 到 n 帧所有被用到的驱动源都必须停在静止位置（单位变换）。写了、n ≥ 1 而且满足，运行写 `physics/settled_frame{n}.*`，检查 (c) 用第 max(1, n−4) 到 n 帧（不含第 0 帧，它是静止姿态）；n = 0 时没有沉降可言，(c) 没运行、不写沉降形状；写了但驱动源在 n 帧之前就动了，(c) 没运行、不写沉降形状，并说明原因；**没写**，(c) 没运行、不写沉降形状，原因是"运动文件没说沉降到哪一帧"。两个键都不改变已有文件的有效性（ADR-38 第 1、3 条）。
 
 铰链只在场景描述里作为驱动源的可选说明。没有实验室轨迹时，T-06a 用铰链生成一条代用运动（`tools/placeholder_jaw_motion.py`：51 帧，第 0–14 帧不动，第 32 帧张开到 12°，第 50 帧合上；张开的方向按"下颌的中心往下走"从几何判断），再写成同样的每帧刚体变换，所以求解器只有一种输入形式。代用运动工具在运动文件里写 `source_tag` 为 `ours`，`settle_until_frame` 为 14（5.2）。
 
@@ -210,6 +245,7 @@ Blender 插件的每个按钮都对应其中一条命令。界面能做的事，
 |---|---|
 | 场景设置有错（缺文件、单位不对、连接没有顶点） | 运行前就停下，用通俗的话说明是哪一项、怎么改 |
 | FEBio 计算不收敛 | 停止，报告出错的帧号和 FEBio 的原始提示，**不显示任何结果** |
+| FEBio 算完了，但我们自己的事后处理出错 | 运行记为失败，删掉 `physics/` 和回放包，不留任何结果，报告里写原因（第 4 节） |
 | FEBio 找不到 | 提示安装或设置 `ASRP_FEBIO` |
 | 研究员取消 | 停止 FEBio，运行文件夹标记为"已取消" |
 | 任何失败 | 运行文件夹保留，溯源记录写明失败原因，方便排查 |
@@ -225,24 +261,16 @@ Blender 插件的每个按钮都对应其中一条命令。界面能做的事，
 | 嘴唇 | 10,240（显示用）；计算用的四面体网格会粗一些 |
 | 下颌、颅骨、牙齿 | 7 千到 2.8 万，**只作为刚体**，不参与有限元计算，不影响速度 |
 
-速度主要取决于嘴唇四面体网格的大小和每帧子步数。S1 试验里 72 个计算点（有限元节点）、45 帧，用时约 0.3 秒（`uv run python spikes/s1_dynamic_jaw.py` 的输出）。T-04 定稿的嘴唇网格有 6,747 个计算点，只有重力的 15 帧本机 22 秒（11 的 A-18）。T-06a 实测：真实嘴唇（6,747 个计算点、1,428 根弹簧）51 帧（含第 0 帧，FEBio 算 50 步）的代用张嘴，没有重试；当时 FEBio 单线程（现在默认 4 线程，约快一倍，05 坑 17），同一份输入七次运行是 0.9–2.0 秒/帧，随本机负载变（各次的数和存档的那一次见 [15](15-prototype.md) 第 3 节：FEBio 102.3 秒，生成 `.feb` 5.7 秒，事后处理 4.7 秒）。T-06a 首次运行是 44.8 秒、0.90 秒/帧，那次还试过多线程，约 27 秒，但结果不逐位重复（05 坑 17）；这两个数没有存档。审计后重跑、存档在 `data/preview/` 的那一次是 4 线程：FEBio 28.6 秒，0.57 秒/帧，事后处理 1.0 秒（15 第 3 节；上面的七次是当时的单线程数，随后读结果改成数组，事后处理从 3.7 秒降到 1.0 秒，ADR-38 第 10 条）。七次都在暂定预算 2.5 秒/帧之内，暂时不用减子步或简化网格。速度要求来自正向推进（回放和钢琴界面的逐帧步进），不来自控制器训练：训练时不推进时间（ADR-30 及其修订）；暂定预算见 02 N-07。
+速度主要取决于嘴唇四面体网格的大小和每帧子步数。**当前的速度（用时、每帧用时、线程数）一律以 [15](15-prototype.md) 第 3 节为准**，这里不抄；速度预算见 [02](02-requirements.md) N-07。下面是各阶段规模的历史记录：
+
+1. S1 试验：72 个计算点、45 帧，用时约 0.3 秒（`uv run python spikes/s1_dynamic_jaw.py` 的输出）；
+2. T-04 定稿的嘴唇网格有 6,747 个计算点，只有重力的 15 帧在本机 22 秒（11 的 A-18）；
+3. T-06a：真实嘴唇（6,747 个计算点、1,428 根弹簧）51 帧（含第 0 帧，FEBio 算 50 步）的代用张嘴，没有重试。当时 FEBio 单线程，同一份输入七次运行是 0.9–2.0 秒/帧，随本机负载变；那是历史数字，现在默认 4 线程（05 坑 17，ADR-38），审计后重跑并存档的那一次见 15 第 3 节；
+4. 事后处理（读结果、嵌入、写回放包）后来改成读数组，快了不少：测量和前后对比见 ADR-38 第 10 条的证据；
+5. 速度要求来自正向推进（回放和钢琴界面的逐帧步进），不来自控制器训练：训练时不推进时间（ADR-30 及其修订）。当时的速度没有超出暂定预算，所以暂时不用减子步或简化网格。
 
 ## 11. 已有代码和这份设计的对应
 
-| 已有文件 | 在设计里的位置 |
-|---|---|
-| `src/asrp_core/doctor.py` | 环境检查 |
-| `src/asrp_core/febio.py` | FEBio 适配的"调用"和"读结果"部分 |
-| `src/asrp_core/run.py`、`provenance.py` | 运行外壳、溯源（T-08） |
-| `src/asrp_core/playback.py` | 回放包 |
-| `src/asrp_core/scene.py`、`trajectory.py` | 场景描述、运动（T-05） |
-| `src/asrp_core/generate.py`、`embed.py`、`plausibility.py`、`simulate.py` | 生成器、嵌入、合理性检查、场景运行（T-06a） |
-| `tools/placeholder_jaw_motion.py`、`tools/render_prototype.py` | T-06a 的代用下颌运动；在 Blender 里检查原型的回放并画图 |
-| `src/asrp_core/asset/` | 资产导入（T-02） |
-| `blender_addon/asrp_blender/__init__.py` | 插件：环境检查、加载结果 |
-| `spikes/s1_dynamic_jaw.py` | 试验代码，验证 FEBio 动力学；**不是产品代码**，不要在它上面直接扩展 |
-| `tools/mb_inventory.py`、`tools/asset_report.py`、`tools/lip_attachments.py` | 资产分析和粘连顶点集导出工具；**不是产品代码** |
-| `tools/maya_export.py`、`tools/ziva_machine_export.py`、`tools/rehearse_ziva_export.py` | 在 Maya 里运行的导出脚本和它的排练（T-19）；**不是产品代码** |
-| `spikes/` | 试验代码（S1–S3 和粘连重叠的检查）；**不是产品代码**，结论写进 05、10 |
-| `tools/verify.py` | 自动检查的总入口（"完成"的最低标准，见 08） |
-| `tools/check_*.py`、`tools/render_playback.py` | 自动检查和渲染工具 |
+文件和目录的清单见 [README](README.md) 里的目录树；每个模块负责什么见本文第 3 节的表。两处都没有的，才写在这里：
+
+- `spikes/` 和 `tools/mb_inventory.py`、`tools/asset_report.py`、`tools/lip_attachments.py`、`tools/maya_export.py`、`tools/ziva_machine_export.py`、`tools/rehearse_ziva_export.py` 是试验和资产分析、导出工具，**不是产品代码**，不要在它们上面直接扩展，结论写进 05、10。

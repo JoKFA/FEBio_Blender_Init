@@ -270,8 +270,8 @@ def import_asset(export: Path, out: Path, tet_mesh: Path,
     shutil.copyfile(skin_file, out / "landmarks" / SKIN)
     landmarks = scene.Landmarks(
         names, rest.tolist(), scene.FileRef(f"landmarks/{SKIN}", _sha256(out / "landmarks" / SKIN)),
-        f"weights index the lips' vertices; the file is a byte copy of the export, so its matrices are "
-        f"still in scene units, Maya order (T-09 reads them)",
+        "weights index the lips' vertices; the file is a byte copy of the export, so its matrices are "
+        "still in scene units, Maya order (T-09 reads them)",
     )
 
     # Folder and file names plus hashes, not the paths as typed: the same export imported on

@@ -5,7 +5,7 @@ tissue's Young's modulus E times 10, and E divided by 10 (the scene folder is co
 E in its scene.json is edited). For each variant it prints the verdict and the mean sag of check (c) (does the
 check's range follow the material?), and how far the display vertices are from the baseline's at the frame
 where the baseline moves most (largest distance of any display vertex from its rest position). docs/13 E-08
-and ADR-37 item 3 quote the numbers; it answers whether the placeholder E (15 kPa, a value we chose) matters.
+and ADR-38 item 4 quote the numbers; it answers whether the placeholder E (15 kPa, a value we chose) matters.
 
     uv run python spikes/audit_material.py <scene folder> <trajectory.json> <an empty work folder>
 

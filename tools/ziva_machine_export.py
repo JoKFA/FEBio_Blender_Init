@@ -579,7 +579,7 @@ def export_ziva_meshes(folder, path, geos=None, first=0):
         try:
             points, counts, connects, data_matrix = mesh_from_plug(geo, GEO_MESH)
             def plug_of(attr):
-                return geo + "." + attr if cmds.attributeQuery(attr, node=geo, exists=True) else None
+                return geo + "." + attr if cmds.attributeQuery(attr, node=geo, exists=True) else None  # noqa: B023 (called within this iteration)
 
             matrix_plug, out_plug = plug_of(GEO_MATRIX), plug_of(GEO_OUT)
             input_matrix = cmds.getAttr(matrix_plug) if matrix_plug else None

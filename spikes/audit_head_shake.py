@@ -7,15 +7,17 @@ had not been run. This runs it with what exists today, as a first number for T-2
 follows a new driver `head` and the lip-corner anchor follows it too (the jaw stays closed, so everything rigid
 moves alike).
 
-The solver settings are today's (the generator's numerical damping at its strongest), so fast motion is damped
-more than it would be in a tuned run: read the result as an order of magnitude. Each case is run twice, with the
-shake and with the head still, and the two are subtracted, so what is left is the shake's effect alone (the
-gravity settle is in both).
+Today's solver settings put the generator's numerical damping at its strongest (rhoi = 0), which damps fast
+motion more than a tuned run would. So it is run five ways: today's settings at 1 and 4 substeps per frame, and
+with less and less of that damping (rhoi = 0.5, 0.7, 0.9, set on the generator from here; there is no physical
+damping either way) at 4 substeps. A case whose run fails is reported and the next one goes on. Each case is run
+twice, with the shake and with the head still, and the two are
+subtracted, so what is left is the shake's effect alone (the gravity settle and its ringing are in both).
 
     uv run python spikes/audit_head_shake.py <scene folder> <an empty work folder>
 
-Prints, for 1 and for 4 substeps per frame: the largest and the mean distance of the free display vertices from
-where the head carries them, during the shake and after it. docs/13 E-09 quotes the numbers.
+Prints, per case: the largest and the mean distance of the free display vertices from where the head carries
+them, during the shake and after it. Ten runs, about half an hour. docs/13 E-09 quotes the numbers.
 """
 
 import json
@@ -26,9 +28,12 @@ from pathlib import Path
 
 import numpy as np
 
-from asrp_core import simulate, trajectory
+from asrp_core import febio, generate, run, simulate, trajectory
 from asrp_core.doctor import febio_exe
 
+# (substeps per frame, the generator's rhoi): today's settings first, then with less and less of the numerical
+# damping, to see whether the small number is the damping's doing. On 2026-11-12 the last case did not finish.
+CASES = ((1, 0.0), (4, 0.0), (4, 0.5), (4, 0.7), (4, 0.9))
 START, CYCLES, PERIOD, AFTER = 16, 3, 10, 40
 AMPLITUDE_UNITS = 5.0
 SETTLE = 14
@@ -79,20 +84,28 @@ def main() -> None:
         raise SystemExit(__doc__)
     source, work = Path(sys.argv[1]).resolve(), Path(sys.argv[2]).resolve()
     exe = febio_exe()
-    for substeps in (1, 4):
-        folder = work / f"scene_{substeps}"
+    for substeps, rhoi in CASES:
+        generate.RHOI = rhoi  # the generator's numerical damping: 0 is its strongest, 1 has none
+        folder = work / f"scene_{substeps}_{rhoi:g}"
         amplitude, fps, free = prepare(source, folder, substeps)
         jaw_drivers = [d["name"] for d in json.loads((folder / "scene.json").read_text(encoding="utf-8"))["drivers"]
                        if d.get("hinge")]
         shown = {}
         for case, a in (("shake", amplitude), ("still", 0.0)):
             xs = motion(folder / f"{case}.json", fps, a, [HEAD, *jaw_drivers])
-            r = simulate.run_scene(folder / "scene.json", folder / f"{case}.json", work / "runs", exe, f"{case}-{substeps}")
+            r = simulate.run_scene(folder / "scene.json", folder / f"{case}.json", work / "runs", exe,
+                                   f"{case}-{substeps}-{rhoi:g}")
             if r.status != "complete":
-                raise SystemExit(f"{case} with {substeps} substeps: run {r.status}: {r.report['checks']['a']['message']}")
+                failure = r.report.get("checks", {}).get("a", {}).get("message", "no message")
+                reached = febio.steps_done(r.run_dir / run.LOG_NAME) // substeps
+                print(f"  {case}, {substeps} substep(s) per frame, rhoi {rhoi:g}: run {r.status} after frame {reached}: "
+                      f"{failure}", flush=True)
+                break
             shown[case] = (simulate.read_display(r.run_dir / simulate.DISPLAY)["positions"], xs, r)
-            print(f"ran {case}, {substeps} substep(s) per frame: FEBio {r.report['timing']['febio_s']} s, "
+            print(f"ran {case}, {substeps} substep(s) per frame, rhoi {rhoi:g}: FEBio {r.report['timing']['febio_s']} s, "
                   f"plausibility {'passed' if r.passed else 'NOT passed'}", flush=True)
+        if len(shown) < 2:
+            continue
         (shake, xs, _), (still, _, _) = shown["shake"], shown["still"]
         carried = np.zeros_like(shake)
         carried[:, :, 0] = np.array(xs)[:, None]
@@ -100,7 +113,7 @@ def main() -> None:
         end = START + CYCLES * PERIOD
         peak_accel = amplitude * (2 * math.pi * fps / PERIOD) ** 2
         print(f"  head moves +-{amplitude:.2f} mm; peak acceleration {peak_accel:.0f} mm/s2 in geometric mm")
-        print(f"  free vertices against where the head carries them, {substeps} substep(s):")
+        print(f"  free vertices against where the head carries them, {substeps} substep(s), rhoi {rhoi:g}:")
         print(f"    during the shake (frames {START}-{end}): largest {relative[START:end + 1].max():.4f} mm, "
               f"mean {relative[START:end + 1].mean():.4f} mm")
         print(f"    after it (frames {end + 1}-{len(xs) - 1}): largest {relative[end + 1:].max():.4f} mm, "

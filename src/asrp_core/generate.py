@@ -14,7 +14,8 @@ What it writes, all in mm, N, MPa, s (mass in tonnes):
   pit 11) with its neo-Hookean material. Exactly one soft tissue in phase 1.
 - **Rigid bodies**: every attachment target becomes one. A fixed bone is fixed in all six degrees of
   freedom; a prescribed bone and an anchor follow their driver (`scene.driver_motion`, which also
-  computes derived drivers: the lip-corner anchor turns α × the jaw's angle about jaw01's hinge). The
+  computes derived drivers: the lip-corner anchor follows a fraction α of its source driver's whole rigid
+  motion, exp(α·log T), `trajectory.blend_transforms`). The
   per-frame transform T = [R | t] is written as the body's reference point moving by T(c) - c (times
   k) and a rotation vector log(R), six load curves, linear between frames; the reference point c is
   the driver's hinge pivot (the source's pivot for a derived driver), else the origin. FEBio reads the
@@ -59,7 +60,8 @@ from xml.sax.saxutils import escape
 
 import numpy as np
 
-from asrp_core import embed, febio, scene as scene_module, tetmesh
+from asrp_core import embed, febio, tetmesh
+from asrp_core import scene as scene_module
 from asrp_core.asset import coords
 
 FEBIO_GRAVITY_SIGN = -1.0  # docs/05 pit 1: FEBio's const body load acts opposite to the manual

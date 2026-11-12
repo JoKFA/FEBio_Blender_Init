@@ -408,10 +408,10 @@ def containing_tets(nodes, tets, points, tol=1e-9) -> np.ndarray:
     origin = lo.min(axis=0)
     first, last = np.floor((lo - origin) / size).astype(int), np.floor((hi - origin) / size).astype(int)
     grid: dict[tuple, list[int]] = {}
-    for t, (f, l) in enumerate(zip(first.tolist(), last.tolist())):
-        for i in range(f[0], l[0] + 1):
-            for j in range(f[1], l[1] + 1):
-                for k in range(f[2], l[2] + 1):
+    for t, (f, g) in enumerate(zip(first.tolist(), last.tolist())):
+        for i in range(f[0], g[0] + 1):
+            for j in range(f[1], g[1] + 1):
+                for k in range(f[2], g[2] + 1):
                     grid.setdefault((i, j, k), []).append(t)
     cells = np.floor((np.asarray(points) - origin) / size).astype(int)
     found = np.full(len(points), -1, dtype=np.int64)
@@ -473,10 +473,10 @@ def nearest_triangles(points, tri) -> tuple[np.ndarray, np.ndarray]:
     origin = lo.min(axis=0)
     first, last = np.floor((lo - origin) / size).astype(int), np.floor((hi - origin) / size).astype(int)
     grid: dict[tuple, list[int]] = {}
-    for t, (f, l) in enumerate(zip(first.tolist(), last.tolist())):
-        for i in range(f[0], l[0] + 1):
-            for j in range(f[1], l[1] + 1):
-                for k in range(f[2], l[2] + 1):
+    for t, (f, g) in enumerate(zip(first.tolist(), last.tolist())):
+        for i in range(f[0], g[0] + 1):
+            for j in range(f[1], g[1] + 1):
+                for k in range(f[2], g[2] + 1):
                     grid.setdefault((i, j, k), []).append(t)
     cells = np.floor((points - origin) / size).astype(int)
     around = [(i, j, k) for i in (-1, 0, 1) for j in (-1, 0, 1) for k in (-1, 0, 1)]

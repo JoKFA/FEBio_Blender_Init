@@ -1,9 +1,17 @@
 import math
 
 from check_lab_export import apply_matrix, health_problem, mesh_health, parse_obj, worst_distance
-from ziva_machine_export import IDENTITY, check_motion, check_simulation, file_name, mesh_mismatch, placing_matrix
+from ziva_machine_export import (
+    IDENTITY,
+    check_motion,
+    check_simulation,
+    file_name,
+    mesh_mismatch,
+    placing_matrix,
+    rotation_between,
+    split_accepted,
+)
 from ziva_machine_export import apply_matrix as ziva_apply_matrix
-from ziva_machine_export import rotation_between, split_accepted
 
 QUADS = [(0, 1, 2, 3), (4, 7, 6, 5), (0, 4, 5, 1), (1, 5, 6, 2), (2, 6, 7, 3), (3, 7, 4, 0)]  # closed box
 SCALE_2_MOVE_Z = [2, 0, 0, 0, 0, 2, 0, 0, 0, 0, 2, 0, 0, 0, 10, 1]

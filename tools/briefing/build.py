@@ -152,7 +152,7 @@ def main(out):
 
     page = re.sub(r"\{\{code:([^:}]+):(\w+)\}\}", code, page)
     for name, uri in images.items():
-        page = page.replace("{{img:%s}}" % name, uri)
+        page = page.replace(f"{{{{img:{name}}}}}", uri)
     payload = "window.ASRP_DATA=" + json.dumps(data, separators=(",", ":")) + ";"
     page = page.replace("/*{{data}}*/", payload.replace("</", "<\\/"))
     page = page.replace("/*{{app}}*/", script)

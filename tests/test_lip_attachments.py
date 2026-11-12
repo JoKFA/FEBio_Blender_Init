@@ -8,10 +8,10 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-from asrp_core.asset.coords import read_obj
 from lip_attachments import build
-
 from test_asset_report import ELEMENTWISE, inventory
+
+from asrp_core.asset.coords import read_obj
 
 REPO = Path(__file__).resolve().parents[1]
 LAB = REPO / "data" / "lab_export"

@@ -22,11 +22,10 @@ sys.dont_write_bytecode = True
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "blender_addon"))
 
+import asrp_blender  # noqa: E402
 import bpy  # noqa: E402
 import numpy as np  # noqa: E402  (Blender bundles it)
 from mathutils import Matrix  # noqa: E402
-
-import asrp_blender  # noqa: E402
 
 args = sys.argv[sys.argv.index("--") + 1:]
 run_dir = Path(args[0]).resolve()
