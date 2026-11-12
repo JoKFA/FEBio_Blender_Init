@@ -86,6 +86,8 @@ asrp/
 │  ├─ test_prototype.py       真实嘴唇整条运行（约 2 分钟；验证门每次都设 ASRP_SLOW=1 跑它，单独跑 pytest 时要自己设）
 │  ├─ test_prototype_page.py  15 里生成的数字表和存档的参考运行一致（tools/prototype_numbers.py）
 │  ├─ test_verify_gate.py     验证门本身：它必须带 ASRP_SLOW=1 跑真实嘴唇的测试，别的步骤不带
+│  ├─ test_docs_references.py 文档里的相对链接都指向存在的文件；引用的 T-、ADR-、E- 编号都有定义
+│  ├─ test_render_prototype.py 渲染工具遇到没有沉降形状的运行时给出明确的提示
 │  ├─ hinge.py                测试用的小工具：从铰链变换反推转角（不是测试）
 │  ├─ test_run.py             运行外壳（替身模式）
 │  ├─ test_lip_attachments.py test_s3_attachment.py
