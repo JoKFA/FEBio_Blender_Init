@@ -10,7 +10,7 @@ The conversion to mm, Z up happens inside, once, through asrp_core.asset.coords.
 
     from asrp_core import final_shape
 
-    model = final_shape.load("runs/<a completed lips run>")      # once
+    model = final_shape.rest_model("scene/scene.json")           # once; no FEBio run needed
     jaw = np.eye(3)
     for step in range(n_steps):
         jaw = relative_rotation(step) @ jaw      # the caller composes the per-step rotations; a turn about
@@ -19,16 +19,17 @@ The conversion to mm, Z up happens inside, once, through asrp_core.asset.coords.
         lips = final_shape.final_shape(model, jaw, positions)     # (10240, 3), the mesh's vertex order
         objective = ...
 
-Two bases. `load` takes the shape after the gravity-only settle from a completed run (base "settled",
-ADR-30). `rest_model` takes the rest (bind) lips from the scene's mesh (base "rest"): with it the
-function is the formula the lab's LBS proxy uses (bind pose + weights @ translations), which is what
-the tests compare against.
+Two bases. `rest_model` takes the rest (bind) lips from the scene's mesh (base "rest"). This is the
+entry for the lab's existing training: the 145 training results the lab saved (`deltaB_temp.pkl`,
+`s_next`) all sit on the rest shape, with no gravity settle, and this function reproduces them to
+0.000007 mm (measured 2026-11-13, docs/13 E-13). `load` takes the shape after the gravity-only settle
+from a completed run (base "settled"); it is for new experiments that ask for it, NOT for the lab's
+existing training: with it the AA result crosses the lab's lip convergence threshold.
 
-Not known yet (open question Q20, docs/11): whether Ziva re-solves within the same frame when the
-jaw turns. This first version reads it as "no": the base does not depend on the jaw rotation, so the
-jaw input is validated and then has no effect on the result (`jaw_changes_base="no"`). The other
-reading is an explicit option, `"resolve"`, which raises until Q20 has an answer; no third behaviour
-is guessed.
+Measured on the Ziva machine (Q20, docs/13 E-11): Ziva does not re-solve within the same frame when
+the jaw turns. So the base does not depend on the jaw rotation; the jaw input is validated and then
+has no effect on the result (`jaw_changes_base="no"`). The option `"resolve"` still raises; removing
+it is part of T-37.
 """
 
 import json
