@@ -229,7 +229,7 @@ M0 基础 ✅ ──► M1 原料就绪 ✅ ──► M2 物理段 ──► M3 
   - 搬过去的三个检查仍在验证门里跑；
   - `git grep -n "spikes/"` 在 `src/` 里没有结果；
   - `uv run python tools/verify.py` 通过（含 `tests/test_docs_references.py`）。
-- **不做**：改产品代码的行为；改 `AGENTS.md`、`CLAUDE.md` 的内容；改写 git 历史（旧提交里还留着的指针文件和这些 AI 开发文件要不要从历史里抹掉，是不可逆的操作，由项目负责人另外定）。
+- **不做**：改产品代码的行为；改 `AGENTS.md`、`CLAUDE.md` 的内容；改写 git 历史（旧提交里还留着的指针文件和这些 AI 开发文件2026-11-13 项目负责人定：现在不抹，等第一阶段做完或者整个产品做完时再说）。
 - **依赖**：T-36（15 的数字工具和存档等结果页改完再移）；T-37 的第 7 项。
 - **改动范围**：`tools/`、`spikes/`、`tests/`、`data/preview/`、`data/briefing/`、`pyproject.toml`、`.gitignore`、`README.md`、文档里的命令。
 - **规模**：中。
