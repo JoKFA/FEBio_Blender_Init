@@ -221,13 +221,15 @@ M0 基础 ✅ ──► M1 原料就绪 ✅ ──► M2 物理段 ──► M3 
   1. 先处理被验证门或测试用到的试验文件：`spikes/s1_dynamic_jaw.py`（`tools/check_playback.py` 运行它，`tests/test_febio.py`、`tests/test_run.py` 导入它）、`spikes/s2_lips_febio.py`（`tests/test_tetmesh.py` 导入）、`spikes/s3_attachment.py`（`tests/test_s3_attachment.py`）。这三个是检查，搬进 `tests/` 或 `tools/`。`tests/test_surface_health.py` 导入的 `spikes/audit_aa_folds.py` 同样先把用到的部分搬走；
   2. 其余的按 E-12 的清单移到仓库外的开发归档（和上机脚本同一个数据文件夹）。git 历史里仍然有；
   3. 指向它们的地方跟着改：`pyproject.toml` 的 `pythonpath` 和 `per-file-ignores`；`src/` 里引用试验脚本路径的注释改成引用 ADR 或 13 的条目；README 和文档里的命令；
-  4. `.local/ziva_trip_pointer.json` 不进仓库（里面有本机的绝对路径）：加进 `.gitignore`，或改成环境变量（像 `ASRP_LAB_DATA` 那样）。
+  4. 本机的路径不进仓库。**已做（2026-11-13）**：指针文件移到被 git 忽略的 `.local/`，位置由 `tools/local_paths.py` 从 `.local/` 或环境变量读，工具和测试里不再有写死的本机路径；验证门拦被跟踪的 `.local/` 文件，也拦任何写着本机文件夹的被跟踪文件（[08](08-engineering-standards.md) 第 6 节）；
+  5. **本机 AI 开发用的文件也是本机的，不进仓库**（2026-11-13 项目负责人定）：`AGENTS.md`、`CLAUDE.md`（如果有）和 `.claude/` 整个文件夹（现在被跟踪的是 `.claude/verify.json`）。做法：从 git 里取消跟踪，本机的文件留着不动、内容不改；加进 `.gitignore`；`tools/check_no_lab_files.py` 把它们列进"不许被跟踪"，同时去掉现在让 `AGENTS.md` 可以带本机路径的那条例外；`tests/test_docs_references.py` 不再把 `AGENTS.md` 当成仓库里的文档来查；[08](08-engineering-standards.md) 第 6 节和别处提到 `.claude/verify.json` 的地方改成"每台机器自己的设置"，验证命令本身（`uv run python tools/verify.py --level auto`）写在文档里。本机的 Stop 钩子照旧读本机的 `.claude/verify.json`，不受影响。
 - **验收**：
   - 一个列出 E-12 那 35 个路径的检查：`git ls-files` 里一个都不剩，剩一个就失败；
+  - `git ls-files` 里没有 `AGENTS.md`、`CLAUDE.md` 和 `.claude/` 下的任何文件；故意把其中一个加回去，验证门必须失败；取消跟踪前后本机这些文件的内容逐字节相同；
   - 搬过去的三个检查仍在验证门里跑；
   - `git grep -n "spikes/"` 在 `src/` 里没有结果；
   - `uv run python tools/verify.py` 通过（含 `tests/test_docs_references.py`）。
-- **不做**：改产品代码的行为；改写 git 历史。
+- **不做**：改产品代码的行为；改 `AGENTS.md`、`CLAUDE.md` 的内容；改写 git 历史（旧提交里还留着的指针文件和这些 AI 开发文件要不要从历史里抹掉，是不可逆的操作，由项目负责人另外定）。
 - **依赖**：T-36（15 的数字工具和存档等结果页改完再移）；T-37 的第 7 项。
 - **改动范围**：`tools/`、`spikes/`、`tests/`、`data/preview/`、`data/briefing/`、`pyproject.toml`、`.gitignore`、`README.md`、文档里的命令。
 - **规模**：中。
