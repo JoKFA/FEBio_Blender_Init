@@ -110,7 +110,7 @@ asrp/
 │  ├─ blender_import_preview.py            导出结果进 Blender，渲染预览
 │  ├─ ziva_machine_export.py               在 Ziva 机器上采集（12 第一部分）
 │  ├─ rehearse_ziva_export.py              在普通 Maya 上排练上面那个脚本
-│  └─ lab_trip_manifest.py                 给一趟上机取回的数据写清单和指向它的 `data/lab_export/ziva_trip_pointer.json`
+│  └─ lab_trip_manifest.py                 给一趟上机取回的数据写清单和指向它的 `.local/ziva_trip_pointer.json`
 │                              一次性的试验、数字脚本和讲解页的源文件还在 spikes/ 和 tools/ 下，由 T-38 移出仓库，这里不逐个列
 │
 ├─ data/                      导出和派生数据（ADR-19）

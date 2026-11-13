@@ -397,7 +397,7 @@ uv run asrp run <工作文件夹>/scene/scene.json <工作文件夹>/aa_a.json
 uv run asrp run <工作文件夹>/scene/scene.json <工作文件夹>/aa_b.json
 ```
 
-目标文件 `dataV22_phoneme_AA_for_d2.py` 默认在 `$ASRP_LAB_DATA`（没设就是 `E:/Codebase/_lab/data`）下，放在别处用 `--target <文件>`。工具用 `ast.literal_eval` 读它，不执行，也不把里面的坐标写进仓库；它写出的只有数字和判定（`--report` 换位置，默认会覆盖 `data/preview/aa_standin_report.json`）。第一条命令还会把两份运动文件 `aa_a.json`、`aa_b.json` 写在工作文件夹里，并对它们跑 `asrp check`。重跑后把两个运行文件夹里的 `run_report.json`、`provenance.json` 拷成 `data/preview/aa_a_run_report.json`、`aa_a_provenance.json`、`aa_b_run_report.json`、`aa_b_provenance.json`，再跑 `tools/prototype2_numbers.py --write`。landmark 层的核对是 `uv run python tools/landmark_layer_check.py`，同样要实验室的数据文件夹。
+目标文件 `dataV22_phoneme_AA_for_d2.py` 默认在 `$ASRP_LAB_DATA` 下（没设就读本机的 `.local/paths.json`，见 `tools/local_paths.py`；工具里不写死任何路径），放在别处用 `--target <文件>`。工具用 `ast.literal_eval` 读它，不执行，也不把里面的坐标写进仓库；它写出的只有数字和判定（`--report` 换位置，默认会覆盖 `data/preview/aa_standin_report.json`）。第一条命令还会把两份运动文件 `aa_a.json`、`aa_b.json` 写在工作文件夹里，并对它们跑 `asrp check`。重跑后把两个运行文件夹里的 `run_report.json`、`provenance.json` 拷成 `data/preview/aa_a_run_report.json`、`aa_a_provenance.json`、`aa_b_run_report.json`、`aa_b_provenance.json`，再跑 `tools/prototype2_numbers.py --write`。landmark 层的核对是 `uv run python tools/landmark_layer_check.py`，同样要实验室的数据文件夹。
 
 ### 8.6 我们自己定的值，和 2026-11-12 取回的数据
 

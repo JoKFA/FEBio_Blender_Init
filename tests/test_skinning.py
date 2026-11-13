@@ -1,8 +1,8 @@
 import importlib.util
 import json
-import os
 from pathlib import Path
 
+import local_paths
 import numpy as np
 import pytest
 
@@ -12,9 +12,10 @@ from asrp_core.asset import skin as skin_module
 
 REPO = Path(__file__).resolve().parents[1]
 EXPORT = REPO / "data" / "lab_export"
-LAB_DATA = Path(os.environ.get("ASRP_LAB_DATA", "E:/Codebase/_lab/data"))
+LAB_DATA = local_paths.lab_data()  # None when this machine does not say where the lab's files are
 HAVE_EXPORT = (EXPORT / "mesh_report.json").is_file() and (REPO / "data" / "tetmesh" / "lips.json").is_file()
-HAVE_LAB = (LAB_DATA / "oor_skin_weights.json").is_file() and (LAB_DATA / "oor_bind_pose.json").is_file()
+HAVE_LAB = LAB_DATA is not None and (LAB_DATA / "oor_skin_weights.json").is_file() and (
+    LAB_DATA / "oor_bind_pose.json").is_file()
 
 
 def small_skin(weights=((1.0, 0.0), (0.25, 0.75), (0.0, 1.0))) -> skinning.Skin:
@@ -152,7 +153,7 @@ def check(tmp_path_factory):
     if not HAVE_EXPORT:
         pytest.skip("needs data/lab_export and data/tetmesh/lips.json")
     if not HAVE_LAB:
-        pytest.skip(f"needs the lab's own files in {LAB_DATA} (set ASRP_LAB_DATA); they stay outside the repo")
+        pytest.skip("NOT VERIFIED: needs the lab's own files; " + local_paths.HOW_TO_SET)
     spec = importlib.util.spec_from_file_location("landmark_layer_check", REPO / "tools" / "landmark_layer_check.py")
     tool = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(tool)

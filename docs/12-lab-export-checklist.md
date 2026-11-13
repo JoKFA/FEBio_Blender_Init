@@ -2,7 +2,7 @@
 
 给谁看：要从实验室的机器上取数据的人，和想知道我们手里有哪些实验室数据的开发者。读完能知道：哪些数据已经拿到、怎么拿的，下次上机还要取什么，还有哪些问题要问实验室。不包括：这些数据里的数字，它们在 [13](13-explanations.md) E-11，资产本身在 [03](03-asset.md)。
 
-数据放在仓库外。`data/lab_export/ziva_trip_pointer.json` 指向 Ziva 机器那次取回的数据文件夹，文件夹里的 `README.md` 说明每一份是什么，上机用的一次性脚本在它的 `scripts/` 子文件夹。仓库里只留导出工具 `tools/ziva_machine_export.py` 和它在普通 Maya 上的排练 `tools/rehearse_ziva_export.py`。
+数据放在仓库外。`.local/ziva_trip_pointer.json` 指向 Ziva 机器那次取回的数据文件夹，文件夹里的 `README.md` 说明每一份是什么，上机用的一次性脚本在它的 `scripts/` 子文件夹。仓库里只留导出工具 `tools/ziva_machine_export.py` 和它在普通 Maya 上的排练 `tools/rehearse_ziva_export.py`。
 
 | 项 | 内容 | 从哪里拿 | 对应 [11](11-risks-and-questions.md) |
 |---|---|---|---|

@@ -82,7 +82,7 @@ def test_rigid_fit_recovers_a_known_turn():
 
 def test_the_recorded_command_line_has_no_local_path():
     cmd = aa.recorded_command(["--work", "C:/Users/someone/AppData/Local/Temp/aa_work",
-                               "--target=E:/Codebase/_lab/data/dataV22_phoneme_AA_for_d2.py",
+                               "--target=D:/lab/data/dataV22_phoneme_AA_for_d2.py",
                                "--report", str(aa.REPO / "data" / "preview" / "aa_standin_report.json"),
                                "--export", "D:/somewhere/else/lab_export"])
     assert cmd == ("uv run python tools/aa_standin.py --work <work> --target <lab data> "

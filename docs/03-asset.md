@@ -12,7 +12,7 @@
 | 项目 | 内容 |
 |---|---|
 | 文件名 | `v36 dev_proxy_jaw_oor V3 more aggressive delete done.mb` |
-| 存放位置 | `E:\Codebase\asrp\assets\`（已被 git 忽略，**绝不提交**） |
+| 存放位置 | 仓库根目录下的 `assets/`（已被 git 忽略，**绝不提交**） |
 | 大小 | 314 MB |
 | 软件 | Maya 2023，Ziva 插件 2.2.0-hotfix2 |
 | 保存时间 | 2026-07-09 |

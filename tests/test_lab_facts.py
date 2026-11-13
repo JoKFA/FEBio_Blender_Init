@@ -1,7 +1,7 @@
 """The facts about the lab's training and Ziva's playback that the documents state (docs/13 E-15), recomputed.
 
 Every number here is recomputed from the data fetched from the lab's Ziva machine on 2026-11-12. That data
-stays outside the repository; `data/lab_export/ziva_trip_pointer.json` says where it is. Without it these
+stays outside the repository; where it is on this machine comes from tools/local_paths.py. Without it these
 tests are skipped and say so. Each fact has a control: the same check with one thing deliberately wrong,
 which must then fail to match.
 
@@ -18,13 +18,13 @@ import subprocess
 import sys
 from pathlib import Path
 
+import local_paths
 import numpy as np
 import pytest
 
 from asrp_core.final_shape import final_shape, rest_model
 
 REPO = Path(__file__).resolve().parents[1]
-POINTER = REPO / "data" / "lab_export" / "ziva_trip_pointer.json"
 MM = 0.962  # mm per scene unit (ADR-31)
 AA_JOB = "lab_motions/results/job_251205-190350/251205-190358"
 ALLOWED = {("builtins", n) for n in ("list", "tuple", "dict", "float", "int", "complex", "set", "frozenset")} | {
@@ -47,11 +47,9 @@ def _unpickle(path: Path):
 
 @pytest.fixture(scope="module")
 def trip() -> Path:
-    if not POINTER.exists():
-        pytest.skip("NOT VERIFIED: data/lab_export/ziva_trip_pointer.json is missing")
-    root = Path(json.loads(POINTER.read_text(encoding="utf-8"))["manifest"]).parent
-    if not (root / "ziva_reference").is_dir() or not (root / "lab_motions").is_dir():
-        pytest.skip(f"NOT VERIFIED: the Ziva trip data is not on this machine ({root})")
+    root = local_paths.ziva_trip()
+    if root is None or not (root / "ziva_reference").is_dir() or not (root / "lab_motions").is_dir():
+        pytest.skip("NOT VERIFIED: the Ziva trip data is not on this machine; " + local_paths.HOW_TO_SET)
     return root
 
 

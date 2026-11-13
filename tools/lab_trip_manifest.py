@@ -3,7 +3,7 @@
     uv run python tools/lab_trip_manifest.py <folder outside the repo>
 
 The manifest lists every file with its size and SHA-256. tools/check_no_lab_files.py reads it, so none of
-these files can be committed by accident, whatever it is renamed to. Only the pointer goes into the repo.
+these files can be committed by accident, whatever it is renamed to. The pointer is written to .local/, which is this machine's and is never committed.
 """
 import hashlib
 import json
@@ -11,7 +11,7 @@ import sys
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
-POINTER = REPO / "data" / "lab_export" / "ziva_trip_pointer.json"
+POINTER = REPO / ".local" / "ziva_trip_pointer.json"  # this machine only; .local/ is git-ignored
 
 
 def sha256(path: Path) -> str:
@@ -38,6 +38,7 @@ def main(argv=None) -> int:
     target = folder / "manifest.json"
     target.write_text(json.dumps(manifest, indent=1), encoding="utf-8")
     total = sum(f["size"] for f in manifest["files"])
+    POINTER.parent.mkdir(exist_ok=True)
     POINTER.write_text(json.dumps({"manifest": str(target), "manifest_sha256": sha256(target),
                                    "files": len(manifest["files"]), "bytes": total,
                                    "note": "Data from the lab's Ziva machine. It stays outside the repo; "

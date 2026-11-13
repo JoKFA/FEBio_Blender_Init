@@ -9,7 +9,7 @@ tools/ and never moves into src/asrp_core/.
         [--target <dataV22_phoneme_AA_for_d2.py>] [--export data/lab_export] [--report data/preview/aa_standin_report.json]
 
 The target file is the lab's (read with ast.literal_eval, never executed, never copied into the repo, ADR-28);
-by default it is <ASRP_LAB_DATA or E:/Codebase/_lab/data>/dataV22_phoneme_AA_for_d2.py.
+by default it is <the lab data folder of this machine, tools/local_paths.py>/dataV22_phoneme_AA_for_d2.py.
 
 What it does, in order (docs/09 T-27, docs/13 E-09, ADR-39, ADR-40):
 1. reads the jaw and lip shapes of the target (`...0` rest, `...1` target), fits the jaw01 rotation;
@@ -33,13 +33,13 @@ import argparse
 import ast
 import json
 import math
-import os
 import re
 import shutil
 import subprocess
 import sys
 from pathlib import Path
 
+import local_paths
 import numpy as np
 
 from asrp_core import simulate, skinning, trajectory
@@ -237,7 +237,9 @@ def main() -> None:
     ap.add_argument("--report", default=str(REPO / "data" / "preview" / "aa_standin_report.json"))
     args = ap.parse_args()
     work = Path(args.work).resolve()
-    target_file = Path(args.target) if args.target else Path(os.environ.get("ASRP_LAB_DATA", "E:/Codebase/_lab/data")) / TARGET_NAME
+    if not args.target and local_paths.lab_data() is None:
+        sys.exit("--target is needed: the lab data folder is not known on this machine (" + local_paths.HOW_TO_SET + ")")
+    target_file = Path(args.target) if args.target else local_paths.lab_data() / TARGET_NAME
     work.mkdir(parents=True, exist_ok=True)
 
     # 3a. the default scene

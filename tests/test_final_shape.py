@@ -9,9 +9,9 @@ re-solve within the same frame when the jaw turns), both in docs/11.
 
 import dataclasses
 import json
-import os
 from pathlib import Path
 
+import local_paths
 import numpy as np
 import pytest
 
@@ -23,10 +23,11 @@ from asrp_core.asset import coords, lab
 pytestmark = pytest.mark.filterwarnings("ignore::asrp_core.final_shape.SettledBaseWarning")
 
 REPO = Path(__file__).resolve().parents[1]
-LAB_DATA = Path(os.environ.get("ASRP_LAB_DATA", "E:/Codebase/_lab/data"))
+LAB_DATA = local_paths.lab_data()  # None when this machine does not say where the lab's files are
 HAVE_EXPORT = (REPO / "data" / "lab_export" / "mesh_report.json").is_file() and (
     REPO / "data" / "tetmesh" / "lips.json").is_file()
-HAVE_LAB = (LAB_DATA / "oor_skin_weights.json").is_file() and (LAB_DATA / "oor_bind_pose.json").is_file()
+HAVE_LAB = LAB_DATA is not None and (LAB_DATA / "oor_skin_weights.json").is_file() and (
+    LAB_DATA / "oor_bind_pose.json").is_file()
 SCALE = 0.962
 
 
@@ -262,7 +263,7 @@ def real(tmp_path_factory):
     if not HAVE_EXPORT:
         pytest.skip("needs data/lab_export and data/tetmesh/lips.json (the committed export)")
     if not HAVE_LAB:
-        pytest.skip(f"needs the lab's own files in {LAB_DATA} (set ASRP_LAB_DATA); they stay outside the repo")
+        pytest.skip("NOT VERIFIED: needs the lab's own files; " + local_paths.HOW_TO_SET)
     out = tmp_path_factory.mktemp("asset")
     result = lab.import_asset(REPO / "data" / "lab_export", out, REPO / "data" / "tetmesh" / "lips.json")
     return fs.rest_model(result.scene_path)

@@ -3,7 +3,8 @@
     uv run python tools/landmark_layer_check.py [lab data folder]
 
 The lab data folder holds the lab's own files (oor_bind_pose.json, oor_skin_weights.json); the default
-is $ASRP_LAB_DATA, else E:/Codebase/_lab/data. It stays outside the repo (ADR-28): this tool reads it
+is $ASRP_LAB_DATA, else the folder named in .local/paths.json (tools/local_paths.py); there is no built-in
+path. It stays outside the repo (ADR-28): this tool reads it
 and writes only distances and counts to data/preview/landmark_layer_check.json.
 
 It imports data/lab_export into a temporary folder (the real entry point), then checks:
@@ -18,7 +19,6 @@ It imports data/lab_export into a temporary folder (the real entry point), then 
 """
 
 import json
-import os
 import sys
 import tempfile
 from pathlib import Path
@@ -28,10 +28,11 @@ import numpy as np
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "src"))
 
+import local_paths  # noqa: E402
+
 from asrp_core import scene, skinning  # noqa: E402
 from asrp_core.asset import coords, lab  # noqa: E402
 
-DEFAULT_LAB_DATA = "E:/Codebase/_lab/data"
 LAB_COMMIT = "506cd69"
 LIMIT_MM = 1e-4  # the comparison with the lab's formula must stay under this
 CONVERSION_LIMIT_MM = 1e-3  # landmarks at rest must give the rest lips back within this
@@ -40,7 +41,10 @@ SEED = 0
 
 
 def lab_data_folder(arg=None) -> Path:
-    return Path(arg or os.environ.get("ASRP_LAB_DATA") or DEFAULT_LAB_DATA)
+    folder = Path(arg) if arg else local_paths.lab_data()
+    if folder is None:
+        sys.exit("the lab data folder is not known on this machine: pass it, or " + local_paths.HOW_TO_SET)
+    return folder
 
 
 def import_lab_asset(out: Path):
