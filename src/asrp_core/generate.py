@@ -285,8 +285,13 @@ def build(scene_path, trajectory_path, *, delta: float | None = None,
             transforms = motions[driver]
             rest = np.array(transforms[0], dtype=float)
             if np.abs(rest - np.eye(4).ravel()).max() > REST_TOLERANCE:
-                raise GenerateError(f"driver {driver!r}: frame 0 is not the rest pose (identity); the model starts "
-                                    "at rest, so a trajectory must too")
+                raise GenerateError(
+                    f"driver {driver!r}: frame 0 is not the rest pose (identity). A run always starts from the rest "
+                    "shape with nothing moving, so a motion must start there too. A motion segment that starts from "
+                    "another pose (for example the lab's AA-to-neutral transition) cannot be run on its own: put it "
+                    "after the segment that leads to its start, in ONE trajectory that begins at rest (for example "
+                    "neutral to AA, then AA to neutral). Continuing a run from a saved state is not supported yet "
+                    "(docs/09 T-10 and T-30)")
         bodies[a.target] = Body(a.target, "fixed" if driver is None else "prescribed", driver,
                                 _reference(s, driver), transforms)
 

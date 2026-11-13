@@ -13,8 +13,9 @@ Writes into an output folder:
 Roles follow docs/03 sections 3 and 4: the lips are the soft tissue; skull and upper teeth follow
 the driver head (T-28), which is at rest whenever a trajectory leaves it out, so they are then
 fixed; jaw and lower teeth both follow the driver jaw01, the joint that moves them in Maya. The
-Ziva attribute list has not arrived (docs/12 item 2), so material, solver settings and bone masses
-are placeholders marked "ours". The four lip attachments come from T-03's lip_attachments.json
+Ziva attribute list was fetched on 2026-11-12 (docs/03 section 5), but this import does not use it yet:
+material, solver settings and bone masses are still our own values, marked "ours" (they change in T-37,
+after the T-34 baseline). The four lip attachments come from T-03's lip_attachments.json
 (docs/05 section 3): upper lip hard on the skull, lower lip a spring to the jaw, the two lip
 corners springs to an anchor that moves half as far as the jaw relative to the head (T-06a, T-28).
 Their stiffness and the
@@ -77,18 +78,18 @@ SOLVER_FPS = 30  # the lab's zSolver frame rate (docs/03 section 5)
 TISSUE_E_MPA = 0.015
 TISSUE_NU = 0.45
 TISSUE_DENSITY = 1.06e-9  # t/mm^3
-TISSUE_NOTE = ("T-06a's temporary value: guessed to be close to Ziva's default, not checked, waits for D6 "
-               "(the Ziva attribute list, docs/12 item 2, Q4)")
+TISSUE_NOTE = ("our own value, NOT Ziva's. Measured in the lab's scene on 2026-11-12: E 12 kPa, Poisson 0.4, "
+               "density 1060, material model StVK (docs/03 section 5). This default changes in T-37")
 
 # Data the import cannot fill yet, said once here so the report and the docs agree.
 STILL_MISSING = [
-    "Ziva attribute list (docs/12 item 2, Q4): material, solver substeps, damping and gravity are "
-    "placeholders marked 'ours'; re-import when it arrives",
-    "Motion (D2): no lab trajectory; T-06a uses a stand-in hinge motion for driver jaw01",
-    "Attachments (A-33): the four lip attachments are present but provisional. The vertex sets come from "
-    "T-03's lip_attachments.json (a strong inference, waiting for ziva_maps.json); the spring base "
-    "stiffness (T-07's 100 x E x h) and the lip corner blend factor 0.5 are values we chose, not "
-    "Ziva's. The lower lip's follow ratio waits for Ziva's physics-only result (Q17)",
+    "Ziva's settings were measured on 2026-11-12 (docs/03 section 5) but are not used by this import yet: "
+    "material, solver substeps, damping and gravity are our own values marked 'ours' (T-37)",
+    "Motion: the lab's motion files were fetched (docs/13 E-11) but this import carries none; the converter "
+    "is T-34 / T-10, until then a stand-in hinge motion drives jaw01",
+    "Attachments: the vertex sets are confirmed (A-33: the map default is 1.0). Their type and stiffness are "
+    "ours, not Ziva's: upper lip hard, the others springs of 100 x E x h, lip corner blend factor 0.5; Ziva "
+    "has 140 soft attachments of 1e8 N/m^3 (docs/03 section 5, T-37)",
     "Physical scale (ADR-31): geometry is settled (0.962 mm per scene unit); physics_length_scale k "
     "is 0.67, real-person size, a value we chose from the meeting conclusion, not Ziva's scale",
 ]
@@ -188,7 +189,7 @@ def import_asset(export: Path, out: Path, tet_mesh: Path,
 
     lips_mesh, lips_source = convert("lips", LIPS, "soft tissue")
     shutil.copyfile(tet_mesh, out / "meshes" / "lips_tet.json")
-    no_attribute_list = "placeholder: the Ziva attribute list has not arrived (docs/12 item 2, Q4)"
+    no_attribute_list = "our own value: Ziva's measured settings (docs/03 section 5) are not used yet (T-37)"
     tissue_vertex_count = len(coords.read_obj(export / f"mesh_{LIPS}.obj")[0])
     tissue = scene.SoftTissue(
         "lips", lips_mesh, lips_source,
@@ -240,8 +241,8 @@ def import_asset(export: Path, out: Path, tet_mesh: Path,
     stiffness = float(f"{STIFFNESS_OVER_EH * e_mpa * h:.3g}")
     stiffness_note = (
         f"provisional (T-07 rule): 100 x E x h = 100 x {e_mpa} MPa x {h:.3f} mm, h = median tet edge "
-        f"{h / k:.3f} mm x k {k}; to be set from the first run's force and the lower lip's follow "
-        "ratio (docs/05 section 3, Q17)"
+        f"{h / k:.3f} mm x k {k}; ours, not Ziva's (Ziva: soft attachments of 1e8 N/m^3, which need an "
+        "area to become a spring stiffness; docs/05 section 3, T-37)"
     )
     groups = {g.get("attachment"): g for g in attachments_json.get("groups", [])}
     attachments = []
@@ -303,8 +304,8 @@ def import_asset(export: Path, out: Path, tet_mesh: Path,
             "tool": f"asrp import-asset {__version__}",
             "notes": f"OBJ files are scene coordinates (ADR-18): scaled and turned, no world matrix applied. "
                      f"meshes/lips_tet.json is a byte copy of {tet_origin}. "
-                     f"Attachments are from {ATTACHMENTS} (sha256 {attachments_sha}, a strong inference awaiting "
-                     "ziva_maps.json)",
+                     f"Attachments are from {ATTACHMENTS} (sha256 {attachments_sha}; the vertex sets are "
+                     "confirmed, A-33)",
         },
         units=scene.Units(
             scene.Param(mm_per_scene_unit, "ours", mm_note),

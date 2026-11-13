@@ -104,7 +104,7 @@ def test_the_page_says_what_the_task_requires():
         assert stale not in text, stale
     assert "不证明物理对" in text
     # the measured result that retired variant B (Ziva, the lab's real neutral-to-AA motion, 2026-11-12)
-    assert "平均 11.80 mm" in text and "平均 1.06 mm" in text and "不重新求解" in text
+    assert "平均 11.80 mm" in text and "平均 1.06 mm" in text and "读出来的嘴唇没有变" in text
     # the two numbers the prose states by hand are the archive's
     assert f"{st['counts']['ramp_frames']} 帧半余弦过渡" in text
     assert f"第 {st['counts']['frames'] - 1} 帧（最后一帧）" in text

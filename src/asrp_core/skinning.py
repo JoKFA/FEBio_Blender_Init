@@ -68,6 +68,10 @@ def load(path) -> Skin:
             if not 0 <= i < k:
                 raise SkinError(f"{path}: vertex {v} names landmark {i}, but there are {k}; re-run the asset import")
             dense[v, i] += w
+    if not np.isfinite(dense).all():  # NaN would slip through the sum check below: abs(nan - 1) > tol is False
+        raise SkinError(f"{path}: a weight is not a finite number; re-run the asset import")
+    if (dense < 0).any():  # a negative weight can still sum to 1 with the others
+        raise SkinError(f"{path}: a weight is negative; re-run the asset import")
     sums = dense.sum(axis=1)
     bad = np.flatnonzero(np.abs(sums - 1.0) > SUM_TOLERANCE)
     if len(bad):

@@ -28,8 +28,7 @@ existing training: with it the AA result crosses the lab's lip convergence thres
 
 Measured on the Ziva machine (Q20, docs/13 E-11): Ziva does not re-solve within the same frame when
 the jaw turns. So the base does not depend on the jaw rotation; the jaw input is validated and then
-has no effect on the result (`jaw_changes_base="no"`). The option `"resolve"` still raises; removing
-it is part of T-37.
+has no effect on the result. `jaw_changes_base` accepts only "no"; there is no re-solve mode.
 """
 
 import json
@@ -53,8 +52,8 @@ class FinalShapeError(ValueError):
     """The inputs or the run folder cannot be used; the message says what is wrong and what to do."""
 
 
-class JawIgnoredWarning(UserWarning):
-    """A jaw rotation was passed that this version does not use (Q20). Python shows it once per call site."""
+class SettledBaseWarning(UserWarning):
+    """`load` was used: its base is the settled shape, which is NOT the base of the lab's existing training."""
 
 
 @dataclass(frozen=True)
@@ -115,7 +114,16 @@ def load(run_dir, *, allow_failed_checks: bool = False, allow_unsettled: bool = 
     """Load the model from a COMPLETED run folder: its scene.json (landmarks, units), the skin file the
     scene references, and the shape after the gravity-only settle (physics/settled_frame<n>.json).
     The model's base is "settled". A run whose plausibility checks did not all pass is refused unless
-    allow_failed_checks=True: its settled shape may be wrong, and nothing downstream would show it."""
+    allow_failed_checks=True: its settled shape may be wrong, and nothing downstream would show it.
+
+    NOT for the lab's existing training: the results the lab's training saved sit on the rest shape
+    (`rest_model`). This entry is for new experiments that ask for a settled base, and it says so with a
+    SettledBaseWarning. A run report without a `tissue_settled` field (an older run) is accepted: whether
+    the tissue had stopped is then not known."""
+    warnings.warn(
+        "final_shape.load: the base is the shape after the gravity-only settle. The lab's saved training results "
+        "sit on the REST shape; for the lab's existing training use final_shape.rest_model(scene.json) "
+        "(docs/13 E-13)", SettledBaseWarning, stacklevel=2)
     run_dir = Path(run_dir)
     if not run_dir.is_dir():
         raise FinalShapeError(f"{run_dir} is not a folder; give the folder of a run made by asrp run")
@@ -165,8 +173,13 @@ def load(run_dir, *, allow_failed_checks: bool = False, allow_unsettled: bool = 
 
 
 def rest_model(scene_json_path) -> LipModel:
-    """The model with the rest (bind) lips as the base, read from the scene's own lip mesh (the surface mesh the scene lists, mm, Z up). For checking
-    against the lab's formula (bind pose + weights @ translations); the model's base is "rest"."""
+    """The model for the lab's existing training: the rest (bind) lips as the base, read from the scene's
+    own lip mesh (the surface mesh the scene lists, mm, Z up). No FEBio run is needed. With it the function
+    is the lab's formula (bind pose + weights @ translations) and reproduces the 145 lip results the lab's
+    training program saved (worst 0.000007 mm, tests/test_lab_facts.py). The model's base is "rest".
+
+    The mesh is the scene's first soft tissue; it is accepted only if its vertex count equals the skin
+    weights' (checked below), which is what ties it to the lips."""
     scene_path = Path(scene_json_path)
     scene, skin, rest_scene = _scene_parts(scene_path)
     if not scene.soft_tissues:
@@ -227,28 +240,24 @@ def final_shape(model: LipModel, jaw_rotation, landmark_positions, *, jaw_change
 
     model: from `load` or `rest_model`.
     jaw_rotation: 3x3 rotation matrix (world axes), the jaw's rotation relative to rest; None is identity.
-        It is validated. With jaw_changes_base="no" it does not change the result.
+        It is validated and does not change the result (see jaw_changes_base).
     landmark_positions: (K, 3) ABSOLUTE world positions, scene units, Y up, in the model's order
         (oor_01 .. oor_300).
-    jaw_changes_base: "no" (default): the base shape does not depend on the jaw rotation. This is the
-        reading "Ziva does not re-solve within the same frame", which is NOT verified (open question Q20
-        in docs/11). "resolve": the base would be recomputed for the jaw angle; not supported yet, raises.
+    jaw_changes_base: only "no": the base shape does not depend on the jaw rotation. Measured on the
+        Ziva machine (Q20, docs/13 E-11): turning the jaw within a frame does not make Ziva re-solve.
+        "resolve" raises: there is no such mode.
 
     Returns (V, 3) float64: the world position (scene units, Y up) of every lip vertex, in the mesh's
     vertex order. Stateless and deterministic; the inputs are not modified and nothing is written."""
     if jaw_changes_base == "resolve":
         raise FinalShapeError(
-            "jaw_changes_base='resolve' is not supported yet: whether Ziva re-solves when the jaw turns within "
-            "a frame is open question Q20 (docs/11), and the answer decides what the base shape depends on. "
-            "Use jaw_changes_base='no' (the base does not depend on the jaw) until Q20 is answered"
+            "jaw_changes_base='resolve' does not exist: Q20 was measured on the Ziva machine (docs/13 E-11), "
+            "Ziva does not re-solve when the jaw turns within a frame, so the base shape does not depend on the "
+            "jaw. Use jaw_changes_base='no' (the default)"
         )
     if jaw_changes_base not in JAW_CHANGES_BASE:
         raise FinalShapeError(f"jaw_changes_base must be one of {JAW_CHANGES_BASE}, got {jaw_changes_base!r}")
-    if _check_rotation(jaw_rotation):  # a real turn that will change nothing: say so, once per process
-        warnings.warn(
-            "final_shape: the jaw rotation is checked but does not change the result (jaw_changes_base='no'): "
-            "whether Ziva re-solves when the jaw turns within a frame is open question Q20 (docs/11)",
-            JawIgnoredWarning, stacklevel=2)
+    _check_rotation(jaw_rotation)  # validated; it does not change the result (Q20, measured)
     k = len(model.names)
     try:
         positions = np.asarray(landmark_positions, dtype=np.float64)

@@ -37,7 +37,8 @@ def step(name: str, cmd: list[str], extra_env: dict | None = None) -> None:
         sys.exit(f"verify FAILED at: {name}")
 
 
-DOC_TESTS = ["tests/test_docs_references.py", "tests/test_verify_gate.py", "tests/test_no_lab_files.py"]
+DOC_TESTS = ["tests/test_docs_references.py", "tests/test_verify_gate.py", "tests/test_no_lab_files.py",
+             "tests/test_prototype_page.py", "tests/test_prototype2_page.py"]  # the results page is a document too
 LEVELS = ("docs", "core", "full")
 
 
@@ -72,7 +73,7 @@ def main(argv: list[str] | None = None) -> None:
     if level == "auto":
         level = pick_level(changed_files())
     print(f"verify level: {level}", flush=True)
-    pytest = [sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider"]
+    pytest = [sys.executable, "-m", "pytest", "-q", "-rs", "-p", "no:cacheprovider"]  # -rs: say why a test was skipped
     step("lint", [sys.executable, "-m", "ruff", "check", "."])
     step("no lab or vendor files in git", [sys.executable, str(REPO / "tools" / "check_no_lab_files.py")])
     if level == "docs":

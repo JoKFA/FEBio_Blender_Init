@@ -19,6 +19,9 @@ from asrp_core import final_shape as fs
 from asrp_core import scene, skinning
 from asrp_core.asset import coords, lab
 
+# `load` warns that its base is not the lab's training base; one test asserts that, the others need not repeat it.
+pytestmark = pytest.mark.filterwarnings("ignore::asrp_core.final_shape.SettledBaseWarning")
+
 REPO = Path(__file__).resolve().parents[1]
 LAB_DATA = Path(os.environ.get("ASRP_LAB_DATA", "E:/Codebase/_lab/data"))
 HAVE_EXPORT = (REPO / "data" / "lab_export" / "mesh_report.json").is_file() and (
@@ -103,11 +106,11 @@ def test_any_valid_jaw_rotation_leaves_the_result_unchanged():
         assert fs.final_shape(model, r, positions, jaw_changes_base="no").tobytes() == plain.tobytes()
 
 
-def test_resolve_is_not_supported_and_names_q20():
+def test_there_is_no_resolve_mode_and_the_error_says_q20_was_measured():
     model = synthetic()
     with pytest.raises(fs.FinalShapeError, match="Q20") as e:
         fs.final_shape(model, np.eye(3), moved(model), jaw_changes_base="resolve")
-    assert "not supported yet" in str(e.value)
+    assert "does not exist" in str(e.value) and "measured" in str(e.value)
 
 
 def test_another_jaw_option_is_an_error():
@@ -339,15 +342,15 @@ def test_a_loaded_model_cannot_be_edited_in_place(tmp_path):
     assert isinstance(model.names, tuple)
 
 
-def test_a_real_jaw_turn_warns_that_it_changes_nothing_and_the_identity_does_not():
+def test_a_jaw_turn_changes_nothing_and_does_not_warn():
+    """Q20 was measured (docs/13 E-11): Ziva does not re-solve within a frame, so there is nothing to warn about."""
     model = synthetic()
-    with pytest.warns(fs.JawIgnoredWarning, match="Q20"):
-        fs.final_shape(model, rotation(), moved(model))
     import warnings
     with warnings.catch_warnings():
         warnings.simplefilter("error")
-        fs.final_shape(model, np.eye(3), moved(model))
-        fs.final_shape(model, None, moved(model))
+        turned = fs.final_shape(model, rotation(), moved(model))
+        assert turned.tobytes() == fs.final_shape(model, np.eye(3), moved(model)).tobytes()
+        assert turned.tobytes() == fs.final_shape(model, None, moved(model)).tobytes()
 
 
 def test_importing_the_module_needs_neither_blender_nor_a_subprocess():
@@ -368,4 +371,5 @@ def test_a_base_whose_tissue_was_still_moving_is_refused_unless_asked_for(tmp_pa
         fs.load(folder)
     assert fs.load(folder, allow_unsettled=True).base == "settled"
     still, _ = make_run(tmp_path / "still", settled={**moving, "tissue_settled": True, "tissue_step_max_mm": 4e-7})
-    assert fs.load(still).base == "settled"  # and a run report from before the key existed is accepted (other tests)
+    with pytest.warns(fs.SettledBaseWarning, match="REST shape"):  # load says it is not the lab's training base
+        assert fs.load(still).base == "settled"  # a run report from before the key existed is accepted too (other tests)

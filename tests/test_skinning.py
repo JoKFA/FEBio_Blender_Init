@@ -136,6 +136,10 @@ def test_load_refuses_a_wrong_format_wrong_shapes_and_weights_that_do_not_sum_to
         skinning.load(write(weights=[[[0, 0.5], [1, 0.4]]]))
     with pytest.raises(skinning.SkinError, match="landmark 2"):
         skinning.load(write(weights=[[[2, 1.0]]]))
+    with pytest.raises(skinning.SkinError, match="negative"):
+        skinning.load(write(weights=[[[0, 1.5], [1, -0.5]]]))
+    with pytest.raises(skinning.SkinError, match="not a finite number"):  # json.dumps writes NaN, json.loads reads it
+        skinning.load(write(weights=[[[0, float("nan")], [1, 0.5]]]))
     with pytest.raises(skinning.SkinError, match="does not exist"):
         skinning.load(tmp_path / "nope.json")
 

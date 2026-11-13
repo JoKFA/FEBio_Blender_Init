@@ -11,8 +11,8 @@
     physics/display.json          the display mesh at every frame, carried by the tet mesh (`embed`): a small
     physics/display.npy           header and the numbers (float64, frames x vertices x 3); `read_display`
     physics/settled_frame<n>.json the shape after the gravity-only settle, at the trajectory's
-    physics/settled_frame<n>.obj  settle_until_frame n (14 for the lab's controller, ADR-30: its starting
-                                  point): tet nodes and display mesh, and the display mesh as an OBJ with
+    physics/settled_frame<n>.obj  settle_until_frame n (14 for the lab's motions; playback starts from it,
+                                  the lab's training does not): tet nodes and display mesh, and the display mesh as an OBJ with
                                   its faces. Written only when the trajectory names n >= 1 and every
                                   driver in use is at rest through frame n
     playback.json, playback.pc2   the display mesh and its point cache for Blender (`playback`)
@@ -484,7 +484,8 @@ def _write_results(run_dir: Path, model: generate.Model, node_frames: np.ndarray
         f = settle
         (run_dir / f"{settled_path(f)}.json").write_text(json.dumps({
             "format": "asrp-settled/1", "units": "mm", "frame": f, "time_s": f / model.fps,
-            "note": "the shape after the gravity-only settle, the controller's starting point (ADR-30)",
+            "note": "the shape after the gravity-only settle; playback starts here. NOT the base of the lab's saved "
+            "training results, which sit on the rest shape (docs/13 E-13)",
             "tet_nodes": node_frames[f].tolist(), "display": display[f].tolist(),
         }), encoding="utf-8", newline="\n")
         _write_obj(run_dir / f"{settled_path(f)}.obj", display[f], model.faces,

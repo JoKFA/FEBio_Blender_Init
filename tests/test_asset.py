@@ -182,7 +182,9 @@ def test_the_four_lip_attachments_are_in_the_scene_as_docs_05_section_3_says(imp
         "name": "lip_attachments.json",
         "sha256": hashlib.sha256((EXPORT / "lip_attachments.json").read_bytes()).hexdigest()}
     assert [a["kind"] for a in result.report["attachments"]] == ["hard", "spring", "spring", "spring"]
-    assert any(m.startswith("Attachments (A-33)") and "provisional" in m for m in result.report["missing"])
+    assert any(m.startswith("Attachments") and "confirmed" in m and "ours, not Ziva's" in m
+               for m in result.report["missing"])  # the vertex sets are settled; type and stiffness are ours
+    assert not any("has not arrived" in m or "waiting for" in m for m in result.report["missing"])
 
 
 @needs_export

@@ -117,6 +117,19 @@ def test_k_one_is_the_unscaled_model_byte_for_byte(tmp_path):
     assert all(nodes2[i + 1].tolist() == (2 * p).tolist() for i, p in enumerate(a["nodes"]))
 
 
+def test_a_motion_that_does_not_start_at_rest_is_refused_and_the_error_says_what_to_do(tmp_path):
+    """A segment that starts from another pose (the lab's AA-to-neutral, say) cannot run on its own: the error
+    must tell the user to put it after the segment that leads to its start, so nobody has to read the code."""
+    c = cs.write(tmp_path / "box", attachments=[("top", "plate", "spring", 1.0, at_z(10.0))])
+    whole = cs.turn(8, 4, -0.2, (5, -10, 10), (1, 0, 0))
+    generate.build(c["scene"], cs.motion(tmp_path / "box", whole))  # from rest: accepted
+    with pytest.raises(generate.GenerateError) as e:
+        generate.build(c["scene"], cs.motion(tmp_path / "box", whole[4:], name="tail.json"))  # starts turned
+    message = str(e.value)
+    assert "frame 0 is not the rest pose" in message and "cannot be run on its own" in message
+    assert "ONE trajectory that begins at rest" in message and "T-10" in message
+
+
 def test_a_numpy_repr_in_the_feb_text_stops_the_generator(tmp_path, monkeypatch):
     c = cs.write(tmp_path / "box", attachments=[("top", "plate", "spring", 1.0, at_z(10.0))])
     traj = cs.motion(tmp_path / "box", cs.turn(5, 4, -0.2, (5, -10, 10), (1, 0, 0)))
