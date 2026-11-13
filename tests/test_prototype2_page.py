@@ -96,9 +96,15 @@ def test_the_page_says_what_the_task_requires():
     tool = load_tool()
     st = tool.load_all()["standin"]
     text = section8(tool)
-    assert "拿到 D2 后由 T-10 的转换取代" in text
-    assert "P-07" in text and "不说哪一种对" in text
-    assert "不是缺陷" in text and "不证明物理对" in text
+    # the stand-in motion is named as ours, the retirement of both variants is stated (ADR-42), nothing waits on a decision
+    assert "是我们从实验室的 AA 目标姿态文件拟合出来的替身，不是实验室的真实运动" in text
+    assert "T-10 的转换读它" in text and "下颌 −5.16°" in text
+    assert "甲、乙两种拼法已作废（ADR-42）" in text and "正式的 AA 用实验室真实的下颌角和真实的 landmark 偏移" in text
+    for stale in ("项目负责人还没定的 P-07", "拿到 D2 后由 T-10 的转换取代", "不说哪一种对、哪一种更好", "这是预期的结果，不是缺陷"):
+        assert stale not in text, stale
+    assert "不证明物理对" in text
+    # the measured result that retired variant B (Ziva, the lab's real neutral-to-AA motion, 2026-11-12)
+    assert "平均 11.80 mm" in text and "平均 1.06 mm" in text and "不重新求解" in text
     # the two numbers the prose states by hand are the archive's
     assert f"{st['counts']['ramp_frames']} 帧半余弦过渡" in text
     assert f"第 {st['counts']['frames'] - 1} 帧（最后一帧）" in text
@@ -207,7 +213,8 @@ def test_the_cycle_page_says_what_the_card_requires():
     sub = text[text.index("### 8.8 来回 10 次"):]
     assert "几乎是按构造通过" in sub and "绝对量" in sub and "不是一段段累加" in sub
     assert "不回答实验室的观察" in sub and "P-06" in sub and "A-39" in sub
-    assert "不说哪一种对" in sub and "P-07" in sub
+    assert "甲、乙已作废（ADR-42）" in sub and "P-07" not in sub
+    assert "0.049 mm" in sub and "0.52 mm" in sub  # the lab-side numbers measured in Ziva (E-11)
 
 
 def test_the_archived_cycle_files_agree_with_each_other():

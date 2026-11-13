@@ -1,6 +1,6 @@
 # 08 开发规范
 
-所有参与开发的人，包括 AI 开发会话，都要遵守这份规范。规范的目的只有一个：**几个人同时开发时，代码不乱、结果可信、谁都能接手。**
+给谁看：所有参与开发的人，包括 AI 开发会话，和审查者。读完能知道：代码和文档放哪、怎么开发和提交、怎么检查、什么叫"完成"。不包括：设计本身（见 04、05）。规范的目的只有一个：**几个人同时开发时，代码不乱、结果可信、谁都能接手。**
 
 ## 1. 仓库结构
 
@@ -10,13 +10,15 @@ asrp/
   blender_addon/        Blender 插件（只管界面）。不能用第三方库
   tests/                自动测试
   tools/                检查、分析、渲染用的小工具（不是产品代码）
-  spikes/               一次性试验代码（不是产品代码，不要在上面继续开发）
+  spikes/               试验代码（不是产品代码，不要在上面继续开发；一次性的由 T-38 移出仓库）
   docs/                 设计文档（本目录）
   assets/  runs/        实验室原始场景、运行结果 —— 被 git 忽略
   data/                 导出和派生数据 —— lab_export、preview、briefing、tetmesh 提交，其余忽略（ADR-19）
 ```
 
 逐个文件夹、主要文件的说明见 [README](README.md) 的"仓库目录"。新功能放进哪个目录，以 [04 系统设计](04-architecture.md) 第 3 节为准。拿不准时先问，不要自己新建顶层目录。
+
+**什么进仓库**：仓库放项目本身，不放开发过程。进仓库的是产品代码、测试、检查和导出工具（`tools/`）、设计文档，以及 `data/` 里提交的几个文件夹（ADR-19）。**一次性脚本和带日期的工作计划不进仓库**：一次性脚本（只为一次测量或一趟上机写的）放在数据旁边，仓库外；工作计划写进 09 的任务卡或 13 的解释，不单独存文件。
 
 ## 2. 开发环境
 
@@ -39,7 +41,7 @@ asrp/
 - 合并之前：先把最新的 `main` 合进自己的分支，自动检查通过，至少一个人审查通过。
 - 不允许直接往 `main` 推代码，也不允许强制推送覆盖 `main`。
 - **远程仓库**：GitHub 私有仓库 `JoKFA/FEBio_Blender_Init`（ADR-14）。每个任务在自己的分支上开发，推送后在 GitHub 上开合并请求（GitHub 叫 Pull Request），审查通过后再合并。
-- **现状**：`main` 的分支保护还没开（T-16）。在那之前，技术上可以直接推送到 `main`，但规矩不变：**不许直接推，一律走合并请求**。
+- 分支保护是否开启见 09 的 T-16。不管开没开，规矩不变：**不许直接推，一律走合并请求**。
 
 ## 4. 提交信息
 
@@ -58,10 +60,10 @@ asrp/
 5. **错误信息说人话**，并且说清楚怎么办：写"找不到 FEBio。请安装 FEBio Studio，或设置 ASRP_FEBIO 指向 febio4.exe"，不要写 "FileNotFoundError"。
 6. **注释解释"为什么"**，不要复述代码在做什么。坑和反直觉的地方一定要写注释，比如重力反号。
 7. **新增依赖要说明理由**，写在合并请求里，用 `uv add` 添加。插件不能有第三方依赖，因为 Blender 自带的 Python 装不了。
-8. 代码风格：用 ruff 检查（T-15，2026-11-12 完成）。`ruff check`，规则 E、F、I、UP、B，是 `tools/verify.py` 的第一步，以工具检查结果为准。**和原来任务卡的写法不同的地方**（2026-11-12 决定）：
+8. 代码风格：用 ruff 检查。`ruff check`，规则 E、F、I、UP、B，是 `tools/verify.py` 的第一步，以工具检查结果为准。规则的例外：
    1. **行宽不检查**（E501 忽略）：现有代码写在约 150 列，全部重排会把真正的改动埋掉；
    2. **不加 `ruff format --check`**，原因同上。下次整个重写某个文件时再回头看；
-   3. **规则 B905（`zip()` 不带 `strict=`）整个仓库忽略**：54 处 `zip()` 全是把一起造出来的序列配对，加 `strict=` 只会添噪音；
+   3. **规则 B905（`zip()` 不带 `strict=`）整个仓库忽略**：`zip()` 都是把一起造出来的序列配对，加 `strict=` 只会添噪音；
    4. **三个由 Maya 自带的 Python 运行的脚本**（`tools/maya_export.py`、`tools/rehearse_ziva_export.py`、`tools/ziva_machine_export.py`）在 `pyproject.toml` 里各关了几条规则（老式字符串格式化和三条风格规则），保持原样。具体清单只看 `pyproject.toml`，这里不抄。
 
 ## 6. 测试的规矩
@@ -77,7 +79,17 @@ asrp/
    uv run python tools/verify.py
    ```
 
-   它会依次运行 `ruff check`（第一步）、全部测试、`asrp doctor`、Blender 官方的插件 manifest 校验、Blender 插件检查和回放检查，任何一步失败就停下并报错。它用和 `asrp doctor` 一样的方法找 Blender，所以在任何装好环境的电脑上都能跑。`.claude/verify.json` 也是调用这条命令，Claude 会话结束时会自动运行它。
+   不带参数就是全量，是"能合并"的定义：`ruff check`（第一步）、不许实验室和厂商文件进 git 的检查、全部测试（含真实嘴唇的慢测试）、`asrp doctor`、Blender 官方的插件 manifest 校验、Blender 插件检查、回放检查、面板检查，任何一步失败就停下并报错。它用和 `asrp doctor` 一样的方法找 Blender，所以在任何装好环境的电脑上都能跑。
+
+   开发过程中不必每一步都跑全量，分三级，后一级包含前一级：
+
+   | 级 | 跑什么 | 大约多久 | 什么时候用 |
+   |---|---|---|---|
+   | `--level docs` | 排版检查、防误提交检查、文档和验证门自己的测试 | 10 秒 | 只改了文档 |
+   | `--level core` | 加上全部单元测试（不含真实嘴唇的慢测试） | 3 分钟 | 改了代码或测试 |
+   | 不带参数（`full`） | 加上慢测试、`asrp doctor` 和 Blender 的四项 | 6 分钟以上 | 提合并请求之前；改了 `blender_addon/` |
+
+   `--level auto` 按未提交的文件和最近一次提交的文件自己选级。`.claude/verify.json` 调用的就是它，Claude 每一轮结束时自动运行。它不能代替合并前的全量。
 
 ## 7. 什么叫"完成"
 
@@ -125,7 +137,7 @@ asrp/
 ## 10. 数据和安全
 
 - 实验室的原始场景文件（`assets/`）、论文、演示视频、实验室的控制器源码和运行结果（`runs/`）**永远不进 git**。`data/` 里的 `lab_export/`、`preview/`、`briefing/`、`tetmesh/` 提交到私有仓库，其余不提交（ADR-19）。这些都不发到仓库以外的地方。实验室源码只读，用 `git show` 查，不运行（ADR-28）。
-- **被哈希的文件按字节检出**：`data/` 和 `tests/fixtures/` 下的文件由 sha256 识别（`scene.json`、`data/tetmesh/lips.json` 和 S1 示例都记着哈希）。Git for Windows 默认 `core.autocrlf=true`，会在检出时改换行符，哈希就全对不上。仓库根目录的 `.gitattributes` 把这两个目录设成 `-text`，检出的字节等于仓库里的字节，不管各人怎么设。往这两个目录加新的文本文件时不用另外处理；要在别的目录放被哈希的文件，先把目录加进 `.gitattributes`。证明：用 `git clone --config core.autocrlf=true` 克隆，跑 `tests/test_scene.py`、`test_asset.py`、`test_tetmesh.py`、`test_trajectory.py`：没有 `.gitattributes` 时 14 个失败，有了以后全部通过（2026-11-10）。
+- **被哈希的文件按字节检出**：`data/` 和 `tests/fixtures/` 下的文件由 sha256 识别（`scene.json`、`data/tetmesh/lips.json` 和 S1 示例都记着哈希）。Git for Windows 默认 `core.autocrlf=true`，会在检出时改换行符，哈希就全对不上。仓库根目录的 `.gitattributes` 把这两个目录设成 `-text`，检出的字节等于仓库里的字节，不管各人怎么设。往这两个目录加新的文本文件时不用另外处理；要在别的目录放被哈希的文件，先把目录加进 `.gitattributes`。验证办法：用 `git clone --config core.autocrlf=true` 克隆，跑 `tests/test_scene.py`、`test_asset.py`、`test_tetmesh.py`、`test_trajectory.py`，应全部通过。
 - 实验室的论文还在审稿，不对外引用其中的内容和图表。
 - FEBio 的安装包和程序文件不能放进仓库，也不能转发（许可规定）。每个人自己去官网下载。
 - FEBio 启动时会向犹他大学发送一个匿名编号，用于统计使用情况（许可协议里写明了）。除此之外，软件不联网。
