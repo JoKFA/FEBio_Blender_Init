@@ -1,0 +1,7 @@
+{
+ "manifest": "E:\\Codebase\\3D\u6a21\u62df\\ziva_trip_2026-11-12\\manifest.json",
+ "manifest_sha256": "ac5c146819de16c9669b1ea05f01228543f3d7aa95b0eed768b148d6ba2877f9",
+ "files": 4930,
+ "bytes": 6706352710,
+ "note": "Data from the lab's Ziva machine. It stays outside the repo; tools/check_no_lab_files.py refuses any tracked file with one of these hashes."
+}

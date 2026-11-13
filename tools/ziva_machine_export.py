@@ -747,8 +747,12 @@ class CaptureSampler:
             for entry in self.streams:
                 fn = self.functions[entry["id"]]
                 counts, indices = fn.getVertices()
-                if fn.numVertices != entry["vertices"] or topology_digest(counts, indices) != entry["topology"]:
-                    raise ValueError("topology changed: " + entry["id"])
+                if fn.numVertices != entry["vertices"]:
+                    raise ValueError("vertex count changed: " + entry["id"])
+                if topology_digest(counts, indices) != entry["topology"]:
+                    # Seen on the lab's scene (2026-11-12): a polyTriangulate after zEmbedder picks new
+                    # diagonals every frame. Vertex identity and order stay, so the positions are valid.
+                    entry["topology_varies"] = True
                 coords = array.array("f", (c for p in fn.getPoints(om.MSpace.kWorld) for c in tuple(p)[:3]))
                 if not all(math.isfinite(c) for c in coords):
                     raise ValueError("non-finite coordinates: " + entry["id"])
@@ -824,9 +828,12 @@ def check_alembic(entry, folder, times):
             selector = Abc.ISampleSelector(float(t))
             sample = schema.getValue(selector)
             counts = sample.getFaceCounts()
-            if topology_digest(counts, maya_indices(counts, sample.getFaceIndices())) != entry["topology"]:
+            if (not entry.get("topology_varies") and
+                    topology_digest(counts, maya_indices(counts, sample.getFaceIndices())) != entry["topology"]):
                 raise ValueError("Alembic topology changed: " + entry["id"])
             points = [tuple(p) for p in sample.getPositions()]
+            if len(points) != entry["vertices"]:
+                raise ValueError("Alembic vertex count changed: " + entry["id"])
             for parent in reversed(parents):
                 matrix = parent.getValue(selector).getMatrix()
                 points = apply_matrix(points, [matrix[i][j] for i in range(4) for j in range(4)])
