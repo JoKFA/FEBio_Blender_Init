@@ -77,6 +77,29 @@ uv run python tools/check_lab_export.py data/lab_export "assets/w64 from v36 pro
 
 **验证边界**：普通 Maya 排练使用真实 10,240 顶点的嘴唇 OBJ、合成的 300 关节蒙皮与物理替身、第二组织、带命名空间的整体平移。它验证采集和文件链路；实际 Ziva 节点空间、许可证、缓存和求值行为仍需现场短跑确认（A-28）。
 
+### 一趟做完的顺序（2026-11-12 定；项目负责人自己远程登录操作）
+
+这一节是总顺序，A 到 E 节是每一步的细节。顺序按"越靠前越不容易失败、越早能带走东西"排：前三步不需要 Ziva 解算。每一步做完看它的成功标志；没出现就把 Script Editor 的报错截图带回来，**不要现场改脚本**，直接做下一步能做的。**全程不保存场景。**
+
+带两个文件上机：`tools/ziva_machine_export.py`（面板，A 节）和 `tools/ziva_trip_probe.py`（探查，只读）。没有文件通道时，两个都可以整份粘贴进 Script Editor 的 Python 页执行。
+
+| 步 | 做什么 | 成功标志 | 带回什么 | 解决什么 |
+|---|---|---|---|---|
+| 0 | 进机器：别人没关的场景先帮存再关；建输出文件夹（下面写作 `<输出>`）；试一次把一个小文件传回本机 | 小文件在本机能打开 | 传文件的方法 | 后面每一步都靠它 |
+| 1 | **不开 Maya**。从网络盘复制 AA 的 `combined_checkpoints.pkl` 和同一文件夹里的 `overlap_metadata.pkl`（文件夹路径见实验室仓库 `automation/deformation_path_db.json` 的键 `dataV22_AU0_neutral to dataV22_phoneme_AA`），连同那个文件夹的文件清单截图；实验室甩头脚本以前的输出 `passive_dynamics_results_V5.csv` 如果在，也复制 | 两个文件传回本机；本机运行 `uv run python tools/lab_motion_lower_lip.py <那个 .pkl>` 打印出下唇那一组的毫米数 | `.pkl` 两个、清单截图、CSV | D2；E 节第 17 条（P-07 的第一条证据）；甩头的实验室数字 |
+| 2 | 打开 Maya 和场景，关掉 Ziva 的 playback（14 第 1 节第 5 步）。Script Editor 执行探查脚本，然后 `start_log("<输出>")`、`probe("<输出>")` | 最后一行 `PROBE OK`；`ziva_counts` 里 `zTissue` 大于 0；`lips` 里列出 skinCluster 和它的影响数 | `probe_*.json`、打印内容的截图 | Maya 和 Ziva 的版本；节点名对不对（不对就在面板的 `nodes` 里填，A 节）；求解器全部数值；带 `amp` 字样的属性（阻尼）；landmark 的世界位置 |
+| 3 | 面板 **1 Preflight**，再 **2 Rescue static data**（B 节） | 四项都是 `complete` | `ziva_attributes.json`、`ziva_maps.json`、`ziva_setup.zBuilder`、`ziva_meshes/` | D6（材料、阻尼的数值）、A-33（`default` 是不是 1.0）、D8 |
+| 4 | 用钢琴界面加载 AA 并跑满 36 步（启动方法见 [14](14-ziva-demo-walkthrough.md) 第 1 节第 18 到 20 步和第 6 节第 1 条）。然后 `dump_keys("<输出>", "neutral_to_AA")` | `KEYS OK`，`keyed` 大于 300 | `keys_neutral_to_AA_*.json` | D2 的另一个出口（不经过 `.pkl`）；landmark 是不是真的打了关键帧 |
+| 5 | 面板 **3 Pilot**，核对后 **4 Export full**（C 节） | `problems` 为空、`readback.ok = true` | 一个完整运动文件夹；报告里的 `seconds_per_frame`；日志里 Ziva 自己的每步耗时 | D3（同一次解算里蒙皮前、后的嘴唇）、D11、速度 |
+| 6 | 重新打开场景，面板 **5 Same-frame diagnostic**（D 节第 9 步） | 报告里 `channel_restored` 为 true | 诊断报告 | Q20 |
+| 7 | 重新打开场景，执行 `head_shake_keys()`（它给两块骨头打实验室甩头脚本的那组关键帧，会改场景），`dump_keys("<输出>", "head_shake")`，面板把 `Motion name` 改成 `head_shake`、`Motion kind` 改成 `head_translation`，再做 Pilot 和 Export full | 同第 5 步；`bone_translation` 大于 0 | 甩头的完整运动文件夹、`keys_head_shake_*.json` | 甩头的 Ziva 参考；头的逐帧位置（Maya 的 `auto` 切线） |
+| 8 | 有时间再做：E 节第 16 条（来回多次，每次回到起点后 `dump_keys`）、第 15 条（只留嘴唇） | — | 每次一个 `keys_*.json` | A-39 |
+| 9 | 面板 **6 Check entire collection**；把 `<输出>` 整个传回；关 Maya 时选不保存 | `COLLECTION COMPLETE`，或者一份写明缺什么的报告 | 整个文件夹，含 `script_editor_*.log` | 收货核对 |
+
+**做到哪一步算有收获**：第 1 步就够回答 P-07 的第一条证据；第 3 步够确认 A-33 和拿到材料、阻尼的数值；第 5 步拿到蒙皮前后的嘴唇，这是最要紧的一样。第 6 步以后的每一步都可以留到下一次。
+
+**这一节里还没验证的**：两个脚本都没有在真正的 Ziva 上跑过（A-28）。`ziva_trip_probe.py` 在本机普通 Maya 2027 上对实验室的非 Ziva 场景跑过（2026-11-12：1,200 个 landmark，301 个关节的世界位置和 `data/lab_export/joints.json` 完全相同；甩头关键帧逐帧取样最远 4.64 个场景单位）；`start_log` 只在有界面的 Maya 里可用，没有试过。钢琴界面用哪个场景：它的脚本开头写的是 `experiment_files` 下的 `g10-10 rest pose 1200 landmarks v9.mb`，演示录像里完整可算的是 `neutral 260825 v15 made the teeth MESH.mb`；先用前者，界面起不来再换，用了哪个记在面板的 `How this motion was loaded` 里。
+
 ### 去之前：带什么、请研究员准备什么
 
 - □ 带上 `tools/ziva_machine_export.py` 和本清单；脚本是独立文件，不需要复制整个仓库或安装 uv。

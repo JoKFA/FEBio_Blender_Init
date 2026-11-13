@@ -133,7 +133,7 @@
 
 ## 6. 没看清、要再问的
 
-1. 钢琴界面的启动快捷键（12:00–13:00 语音失败，画面里快捷键没拍到）。
+1. 钢琴界面的启动快捷键（12:00–13:00 语音失败，画面里快捷键没拍到）。🔍 2026-11-12：界面脚本自己的注释写的是 `Shift+Alt+M`（经 commandPort 从 VS Code 送进 Maya；实验室仓库 `h99-UI-mayascipt-V1.py` 第 37 行），还没有在机器上试过。
 2. 运动文件（`combined_checkpoints.pkl`）在哪个目录或网络盘；钢琴界面选 AA 时读的是哪个路径。
 3. Ziva 版本；zSolver、zMaterial、zAttachment 的数值（Attribute Editor 没打开）。
 4. "playback"是 Ziva 的哪个开关，关掉等于清缓存吗。

@@ -48,3 +48,4 @@ ignore = [
 "tools/maya_export.py" = ["UP031", "E741"]
 "tools/rehearse_ziva_export.py" = ["UP031", "E702"]
 "tools/ziva_machine_export.py" = ["UP031", "E731"]
+"tools/ziva_trip_probe.py" = ["UP031"]
