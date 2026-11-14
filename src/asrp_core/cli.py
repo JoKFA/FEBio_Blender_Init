@@ -64,7 +64,8 @@ def cmd_import_asset(args: argparse.Namespace) -> int:
 
     tet = Path(args.tetmesh) if args.tetmesh else Path(args.export) / ".." / "tetmesh" / "lips.json"
     try:
-        result = lab.import_asset(Path(args.export), Path(args.out), tet, args.mm_per_scene_unit)
+        result = lab.import_asset(Path(args.export), Path(args.out), tet, args.mm_per_scene_unit,
+                                  tissue_settings=args.tissue_settings)
     except lab.AssetError as e:
         print(f"ERROR  {e}")
         print("import FAILED")
@@ -98,6 +99,63 @@ def cmd_import_asset(args: argparse.Namespace) -> int:
     verdict = "PASSED" if result.check.ok else "FAILED"
     print(f"import {verdict}: scene check {len(result.check.errors)} errors, {len(result.check.warnings)} warnings")
     return 0 if result.check.ok else 1
+
+
+def cmd_convert_motion(args: argparse.Namespace) -> int:
+    """A lab motion file (combined_checkpoints.pkl) of a segment that starts at rest -> trajectory.json."""
+    import hashlib
+    from pathlib import Path
+
+    from asrp_core import scene, trajectory
+
+    def fail(message: str) -> int:
+        print(f"ERROR  {message}")
+        print("convert FAILED")
+        return 1
+
+    if not args.starts_at_rest:
+        return fail(
+            "a lab motion file holds offsets from the start of its segment and does not say where that start is. "
+            "If this segment starts at the rest pose (a transition FROM neutral), say so with --starts-at-rest. "
+            "A segment that starts from another pose (AA back to neutral, say) cannot be converted on its own: "
+            "it has to follow the segment that leads to its start, in one trajectory that begins at rest "
+            "(docs/09 T-10)")
+    try:
+        s = scene.load(args.scene)
+    except ValueError as e:
+        return fail(f"{args.scene} cannot be read as a scene: {e}")
+    jaw = next((d for d in s.drivers if d.name == args.driver), None)
+    if jaw is None or jaw.hinge is None:
+        return fail(f"{args.scene} has no driver {args.driver!r} with a hinge; the jaw's pivot comes from it. "
+                    "Import the lab asset again (asrp import-asset)")
+    if max(abs(a - b) for a, b in zip(jaw.hinge.axis, trajectory.LAB_WORLD_AXIS)) > 1e-6:
+        return fail(f"driver {args.driver!r} has hinge axis {list(jaw.hinge.axis)}, but the lab's interface turns the "
+                    "jaw about world X; this scene is not the lab asset the motion was made for")
+    if s.landmarks is None:
+        return fail(f"{args.scene} has no landmarks; import the lab asset (asrp import-asset), which carries them")
+    motion_path = Path(args.motion)
+    try:
+        steps = trajectory.read_lab_motion(motion_path)
+        digest = hashlib.sha256(motion_path.read_bytes()).hexdigest()
+        # the file's own name and its two folders (job and run), never the path on this machine
+        origin = "/".join(motion_path.resolve().parts[-3:])
+        motion = trajectory.from_lab_motion(
+            steps, driver=args.driver, pivot_mm=jaw.hinge.pivot_mm, landmark_names=s.landmarks.names,
+            mm_per_scene_unit=s.units.mm_per_scene_unit.value, fps=s.solver.fps.value,
+            hold_frames=args.hold_frames, source=f"{origin} (sha256 {digest})")
+    except trajectory.TrajectoryError as e:
+        return fail(str(e))
+    trajectory.write(args.out, motion)
+    report = scene.check(args.scene, args.out)
+    moved = max(max(sum(c * c for c in t) ** 0.5 for t in row) for row in motion.landmarks["translations_mm"])
+    print(f"motion     {origin}: {len(steps)} steps, sha256 {digest}")
+    print(f"trajectory {args.out}: {motion.frames} frames at {motion.fps} fps, settle until frame "
+          f"{motion.settle_until_frame}, {args.driver} turns to {steps[-1, 900]:.5f} degrees about world X, "
+          f"{len(motion.landmarks['names'])} landmarks move at most {moved:.3f} mm")
+    print_check(report)
+    verdict = "PASSED" if report.ok else "FAILED"
+    print(f"convert {verdict}: scene and trajectory check {len(report.errors)} errors, {len(report.warnings)} warnings")
+    return 0 if report.ok else 1
 
 
 def cmd_run(args: argparse.Namespace) -> int:
@@ -238,7 +296,23 @@ def main(argv: list[str] | None = None) -> int:
     imp.add_argument("--mm-per-scene-unit", type=float, default=0.962,
                      help="geometry scale, mm per scene unit (default 0.962, the lab controller's conversion, ADR-31)")
     imp.add_argument("--tetmesh", help="the lip tet mesh (default: <export>/../tetmesh/lips.json)")
+    imp.add_argument("--tissue-settings", choices=("ours", "lab"), default="ours",
+                     help="ours (default): our own material values. lab: the Young's modulus, Poisson's ratio, "
+                          "density and substeps measured in the lab's Ziva scene (docs/03 section 5); the material "
+                          "model, attachments, damping, gravity and physical scale stay ours")
     imp.set_defaults(func=cmd_import_asset)
+
+    conv = sub.add_parser("convert-motion",
+                          help="turn a lab motion file (combined_checkpoints.pkl) that starts at rest into a trajectory.json")
+    conv.add_argument("motion", help="the lab's motion file, as fetched (read as data; nothing in it is run)")
+    conv.add_argument("scene", help="path of scene.json (the jaw's pivot, the landmark names and the units come from it)")
+    conv.add_argument("out", help="where to write trajectory.json")
+    conv.add_argument("--starts-at-rest", action="store_true",
+                      help="required: confirms that this segment starts at the rest pose (the file does not say)")
+    conv.add_argument("--driver", default="jaw01", help="the scene's jaw driver (default jaw01)")
+    conv.add_argument("--hold-frames", type=int, default=10,
+                      help="frames the last pose is held (default 10, as in the Ziva reference runs)")
+    conv.set_defaults(func=cmd_convert_motion)
 
     r = sub.add_parser("run", help="run a scene with a motion (or a ready .feb) once, everything in a run folder")
     r.add_argument("scene", nargs="?", help="path of scene.json")

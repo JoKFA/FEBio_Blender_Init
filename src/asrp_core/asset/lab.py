@@ -80,13 +80,29 @@ TISSUE_NU = 0.45
 TISSUE_DENSITY = 1.06e-9  # t/mm^3
 TISSUE_NOTE = ("our own value, NOT Ziva's. Measured in the lab's scene on 2026-11-12: E 12 kPa, Poisson 0.4, "
                "density 1060, material model StVK (docs/03 section 5). This default changes in T-37")
+# The values measured in the lab's Ziva scene on 2026-11-12 (docs/03 section 5; tests/test_lab_facts.py), used
+# only when the import is asked for them (tissue_settings="lab", T-34). The default stays ours until T-37.
+TISSUE_SETTINGS = ("ours", "lab")
+LAB_TISSUE_E_MPA = 0.012
+LAB_TISSUE_NU = 0.4
+LAB_TISSUE_NOTE = ("measured in the lab's Ziva scene on 2026-11-12 (docs/03 section 5). Only the number is "
+                   "Ziva's: the material model here is neo-Hookean, Ziva's is StVK with compression resistance "
+                   "20000, so the two answer differently under compression")
+LAB_SUBSTEPS_NOTE = ("Ziva's zSolver in the lab's scene: 1 substep per frame (docs/03 section 5). Ziva's integrator "
+                     "(BackwardEuler), its Newton limit (5) and its stiffness damping have no setting here")
 
 # Data the import cannot fill yet, said once here so the report and the docs agree.
+SETTINGS_MISSING = {
+    "ours": "Ziva's settings were measured on 2026-11-12 (docs/03 section 5) but this import was not asked for them: "
+            "material, solver substeps, damping and gravity are our own values marked 'ours'. Ask for the "
+            "measured values with --tissue-settings lab; the default changes in T-37",
+    "lab": "Ziva's Young's modulus, Poisson's ratio, density and substeps are used (--tissue-settings lab). Still "
+           "ours, because nothing here can be set to Ziva's: the material model (neo-Hookean, Ziva's is StVK), the "
+           "integrator and its Newton limit, stiffness damping, gravity and the physical scale (docs/09 T-34, T-37)",
+}
 STILL_MISSING = [
-    "Ziva's settings were measured on 2026-11-12 (docs/03 section 5) but are not used by this import yet: "
-    "material, solver substeps, damping and gravity are our own values marked 'ours' (T-37)",
-    "Motion: the lab's motion files were fetched (docs/13 E-11) but this import carries none; the converter "
-    "is T-34 / T-10, until then a stand-in hinge motion drives jaw01",
+    "Motion: this import carries none. A lab motion file that starts at rest is converted with "
+    "`asrp convert-motion` (docs/09 T-34); segments that start from another pose are T-10",
     "Attachments: the vertex sets are confirmed (A-33: the map default is 1.0). Their type and stiffness are "
     "ours, not Ziva's: upper lip hard, the others springs of 100 x E x h, lip corner blend factor 0.5; Ziva "
     "has 140 soft attachments of 1e8 N/m^3 (docs/03 section 5, T-37)",
@@ -124,8 +140,14 @@ def _write_obj(path: Path, header: list[str], vertices: np.ndarray, faces) -> No
 
 
 def import_asset(export: Path, out: Path, tet_mesh: Path,
-                 mm_per_scene_unit: float = DEFAULT_MM_PER_SCENE_UNIT) -> ImportResult:
+                 mm_per_scene_unit: float = DEFAULT_MM_PER_SCENE_UNIT, tissue_settings: str = "ours") -> ImportResult:
+    """tissue_settings "ours" (the default) writes our own material values; "lab" writes the Young's modulus,
+    Poisson's ratio, density and substeps measured in the lab's Ziva scene, marked `lab_setting`. Everything
+    else is the same in both: the material model, the attachments' kinds and the spring rule 100 x E x h (which
+    follows the Young's modulus that is written), the damping, gravity and the physical scale stay ours."""
     export, out, tet_mesh = Path(export), Path(out), Path(tet_mesh)
+    if tissue_settings not in TISSUE_SETTINGS:
+        raise AssetError(f"tissue_settings is {tissue_settings!r}; it must be one of {', '.join(TISSUE_SETTINGS)}")
     report_json = json.loads(_need(export / "mesh_report.json").read_text(encoding="utf-8"))
     # ADR-18: the export already applied each mesh's world matrix. Applying it again would scale
     # everything by 2.54 a second time without any error, so refuse anything else.
@@ -198,6 +220,10 @@ def import_asset(export: Path, out: Path, tet_mesh: Path,
             "E_mpa": ours(TISSUE_E_MPA, f"15 kPa; {TISSUE_NOTE}"),
             "nu": ours(TISSUE_NU, TISSUE_NOTE),
             "density_t_per_mm3": ours(TISSUE_DENSITY, f"1060 kg/m3; {TISSUE_NOTE}"),
+        } if tissue_settings == "ours" else {
+            "E_mpa": scene.Param(LAB_TISSUE_E_MPA, "lab_setting", f"12 kPa; {LAB_TISSUE_NOTE}"),
+            "nu": scene.Param(LAB_TISSUE_NU, "lab_setting", LAB_TISSUE_NOTE),
+            "density_t_per_mm3": scene.Param(TISSUE_DENSITY, "lab_setting", f"1060 kg/m3; {LAB_TISSUE_NOTE}"),
         }),
     )
 
@@ -324,7 +350,8 @@ def import_asset(export: Path, out: Path, tet_mesh: Path,
         solver=scene.Solver(
             "dynamic",
             scene.Param(SOLVER_FPS, "lab_setting", "the lab's zSolver runs at 30 frames per second (docs/03 section 5)"),
-            ours(1, f"one step per frame; {no_attribute_list}"),
+            (ours(1, f"one step per frame; {no_attribute_list}") if tissue_settings == "ours"
+             else scene.Param(1, "lab_setting", LAB_SUBSTEPS_NOTE)),
             ours(0.0, f"none, FEBio's default (docs/05 pit 2); {no_attribute_list}"),
             ours([0.0, 0.0, -9810.0], f"9.81 m/s2 down, physical direction; {no_attribute_list}"),
         ),
@@ -351,7 +378,7 @@ def import_asset(export: Path, out: Path, tet_mesh: Path,
                     HEAD_DRIVER: {"absent_means_rest": True,
                                   "moves": [b.name for b in bones if b.driver == HEAD_DRIVER]}},
         "parameters": [{"where": w, **p} for w, p in scene.parameters(model.to_json())],
-        "missing": [*check.warnings, *STILL_MISSING],
+        "missing": [*check.warnings, SETTINGS_MISSING[tissue_settings], *STILL_MISSING],
         "check": {"errors": check.errors, "warnings": check.warnings},
     }
     (out / "import_report.json").write_text(json.dumps(report, indent=2, ensure_ascii=False) + "\n",

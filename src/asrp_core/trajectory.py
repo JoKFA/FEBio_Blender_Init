@@ -33,12 +33,16 @@ indices 3, 7 and 11. Maya stores its matrices the other way (row vectors, transl
 convert before writing one here (ADR-21).
 """
 
+import io
 import json
 import math
+import pickle
 from dataclasses import dataclass, field
 from pathlib import Path
 
 import numpy as np
+
+from asrp_core.asset import coords
 
 FORMAT_VERSION = "asrp-trajectory/1"
 SOURCE_TAGS = ("lab_setting", "ziva_default", "ours")  # the same three values as scene.SOURCES
@@ -354,3 +358,251 @@ def write(path, trajectory: Trajectory) -> None:
     lines.append("}")
     Path(path).parent.mkdir(parents=True, exist_ok=True)
     Path(path).write_text("\n".join(lines) + "\n", encoding="utf-8", newline="\n")
+
+
+# --- the lab's motion files (T-34; docs/03 section 7) ----------------------------------------------------------
+#
+# A lab motion file (combined_checkpoints.pkl) is a list of steps. Each step is 3603 numbers: the translations of
+# the 300 lip landmarks (900), the jaw joint's Euler angles in degrees (3), then 900 each for the left eye, the
+# right eye and the forehead. The numbers are offsets from the START of that segment; the file does not hold the
+# starting pose. Only a segment that starts at rest can therefore be turned into a trajectory on its own.
+
+LAB_STEP_NUMBERS = 3603
+LAB_LIP_LANDMARKS = 300
+LAB_FIRST_MOTION_FRAME = 15  # frames 0-14 are the gravity-only settle; step i falls on frame 15 + i
+LAB_HOLD_FRAMES = 10  # the last pose is held this long, as in the Ziva reference runs (frames 37-46 for 22 steps)
+LAB_WORLD_AXIS = (1.0, 0.0, 0.0)  # the lab's interface turns the jaw about world X by the file's pitch
+# A pickle can name any callable and Python would call it on load. Letting numpy's own names through is not enough
+# either: with numpy.dtype and numpy's _reconstruct a file can build an array whose bytes numpy then treats as
+# pointers to Python objects, and reading it crashes the process (found by an outside review, 2026-11-13). So
+# NOTHING of numpy runs while the file is unpickled. The five names an array or a number in a pickle needs are
+# answered by the small stand-ins below, which only record what the file says; the arrays are then built here, from
+# the file's raw bytes, and only for plain number types.
+_NUMBER_TYPES = frozenset({"f2", "f4", "f8", "i1", "i2", "i4", "i8", "u1", "u2", "u4", "u8", "b1"})
+_BYTE_ORDERS = frozenset({"<", ">", "=", "|"})
+_MAX_ARRAY_BYTES = 1 << 30
+
+
+class _NotData(pickle.UnpicklingError):
+    """The file holds something other than plain containers and arrays of numbers."""
+
+
+class _DtypeNote:
+    """What the file says where a numpy.dtype would be: a number type and a byte order, nothing else."""
+
+    def __init__(self, code=None, *_):
+        if not isinstance(code, str) or code not in _NUMBER_TYPES:
+            raise _NotData(f"an array of type {code!r}; only plain number types are read")
+        self.code, self.order = code, "="
+
+    def __setstate__(self, state):
+        # numpy's dtype state: (version, byte order, subarray, names, fields, item size, alignment, flags[, metadata])
+        if (not isinstance(state, tuple) or len(state) < 8 or state[1] not in _BYTE_ORDERS
+                or any(part is not None for part in state[2:5])):
+            raise _NotData("an array type with fields, a subarray or an unknown byte order; only plain numbers are read")
+        self.order = state[1]
+
+    def numpy(self) -> np.dtype:
+        return np.dtype(self.code).newbyteorder(self.order)
+
+
+def _array_from(raw, dtype, shape, fortran=False) -> np.ndarray:
+    """A numeric array from the file's own bytes; every size is checked before numpy touches them."""
+    if not isinstance(dtype, _DtypeNote):
+        raise _NotData("an array without a plain number type")
+    if not isinstance(raw, (bytes, bytearray, memoryview, pickle.PickleBuffer)):
+        raise _NotData(f"an array whose content is a {type(raw).__name__}, not bytes")
+    if (not isinstance(shape, tuple) or len(shape) > 8
+            or not all(isinstance(n, int) and not isinstance(n, bool) and n >= 0 for n in shape)):
+        raise _NotData(f"an array of shape {shape!r}")
+    raw, kind = bytes(raw), dtype.numpy()
+    count = math.prod(shape)
+    if len(raw) > _MAX_ARRAY_BYTES or count * kind.itemsize != len(raw):
+        raise _NotData(f"an array that says shape {shape} of {kind} but holds {len(raw)} bytes")
+    return np.frombuffer(raw, dtype=kind).reshape(shape, order="F" if fortran else "C").astype(kind.newbyteorder("="))
+
+
+class _ArrayNote:
+    """What the file says where a numpy.ndarray would be; `value` is the array once its state has been read."""
+
+    value = None
+
+    def __setstate__(self, state):
+        # numpy's array state: (version, shape, dtype, is Fortran order, raw bytes)
+        if not isinstance(state, tuple) or len(state) != 5:
+            raise _NotData("an array in a form this reader does not know")
+        _, shape, dtype, fortran, raw = state
+        self.value = _array_from(raw, dtype, shape, bool(fortran))
+
+
+def _note_reconstruct(cls=None, *_):  # stands in for numpy's _reconstruct(ndarray, (0,), b"b")
+    if cls is not _ArrayNote:
+        raise _NotData("a numpy object that is not a plain array")
+    return _ArrayNote()
+
+
+def _note_frombuffer(raw=None, dtype=None, shape=None, order="C", *_):  # numpy's _frombuffer (pickle protocol 5)
+    note = _ArrayNote()
+    note.value = _array_from(raw, dtype, tuple(shape) if isinstance(shape, (tuple, list)) else shape, order == "F")
+    return note
+
+
+def _note_scalar(dtype=None, raw=None, *_):  # numpy's scalar(dtype, bytes): one number
+    return _array_from(raw, dtype, (1,))[0].item()
+
+
+def _note_latin1(text=None, encoding="latin1", *_):  # _codecs.encode: how pickle protocol 2 writes an array's bytes
+    if not isinstance(text, str) or encoding not in ("latin1", "latin-1"):
+        raise _NotData("bytes written in a form this reader does not know")
+    return text.encode("latin1")
+
+
+def _note_empty_bytes(*args):  # bytes(): how pickle protocol 2 writes an empty array's bytes
+    if args:
+        raise _NotData("bytes written in a form this reader does not know")
+    return b""
+
+
+_PICKLE_STAND_INS = {
+    ("_codecs", "encode"): _note_latin1,
+    ("__builtin__", "bytes"): _note_empty_bytes,
+    ("builtins", "bytes"): _note_empty_bytes,
+    **{(m, "_reconstruct"): _note_reconstruct for m in ("numpy.core.multiarray", "numpy._core.multiarray")},
+    **{(m, "scalar"): _note_scalar for m in ("numpy.core.multiarray", "numpy._core.multiarray")},
+    **{(m, "_frombuffer"): _note_frombuffer for m in ("numpy.core.numeric", "numpy._core.numeric")},
+    ("numpy", "ndarray"): _ArrayNote,
+    ("numpy", "dtype"): _DtypeNote,
+}
+
+
+class _DataOnlyUnpickler(pickle.Unpickler):
+    """Lists, tuples, dicts, numbers, strings and arrays of numbers; anything else in the file is refused. No
+    name in the file is ever looked up in a module: the few numpy names get the stand-ins above."""
+
+    def find_class(self, module, name):
+        try:
+            return _PICKLE_STAND_INS[(module, name)]
+        except KeyError:
+            raise _NotData(f"the file asks Python to load {module}.{name}") from None
+
+
+def _plain(value, depth: int = 0):
+    """The unpickled structure with every array note replaced by its array."""
+    if depth > 16:
+        raise _NotData("containers nested deeper than any lab file")
+    if isinstance(value, _ArrayNote):
+        if value.value is None:
+            raise _NotData("an array without content")
+        return value.value
+    if isinstance(value, (_DtypeNote, type)) or callable(value):
+        raise _NotData("a type or a function where data should be")
+    if isinstance(value, (list, tuple)):
+        return type(value)(_plain(v, depth + 1) for v in value)
+    if isinstance(value, dict):
+        return {_plain(k, depth + 1): _plain(v, depth + 1) for k, v in value.items()}
+    if value is None or isinstance(value, (bool, int, float, complex, str, bytes)):
+        return value
+    raise _NotData(f"a {type(value).__name__} where data should be")
+
+
+def read_lab_data(path, what: str = "lab data file"):
+    """One of the lab's pickle files as plain Python data: lists, tuples, dicts, numbers, strings and numeric
+    numpy arrays. The file is read as DATA: nothing it names is imported or called, numpy does not take part in
+    unpickling it, and an array is built only from a plain number type and bytes of exactly the right length.
+    Anything else in the file is refused with a TrajectoryError. Use it only on files that come straight from the
+    lab."""
+    path = Path(path)
+    if not path.is_file():
+        raise TrajectoryError(f"{path} does not exist; give the path of a {what}")
+    return lab_data_from_bytes(path.read_bytes(), path, what)
+
+
+def lab_data_from_bytes(data: bytes, path="the file", what: str = "lab data file"):
+    """`read_lab_data` for bytes already in memory (for a caller that hashes the bytes it reads); `path` is only
+    used in the error message."""
+    try:
+        return _plain(_DataOnlyUnpickler(io.BytesIO(data)).load())
+    except _NotData as e:
+        raise TrajectoryError(
+            f"{path} is not a plain {what} ({e}); only lists and numpy arrays of numbers are read. "
+            "Nothing from the file was run. If the lab changed the file's format, the reader has to be extended "
+            "on purpose (src/asrp_core/trajectory.py)") from None
+    except Exception as e:  # a damaged or truncated file: EOFError, ValueError, ... depending on where it breaks
+        raise TrajectoryError(f"{path} cannot be read as a {what} ({type(e).__name__}: {e}); "
+                              "fetch the file again") from None
+
+
+def read_lab_motion(path) -> np.ndarray:
+    """A lab motion file as a (steps, 3603) float64 array, read as data through `read_lab_data`. Once a motion is
+    written as trajectory.json nothing reads the pickle again."""
+    path = Path(path)
+    data = read_lab_data(path, "lab motion file (combined_checkpoints.pkl)")
+    if not isinstance(data, (list, tuple)) or not data:
+        raise TrajectoryError(f"{path} holds a {type(data).__name__}, not a list of steps; a lab motion file is a "
+                              "list with one vector per step")
+    try:
+        steps = np.stack([np.asarray(step, dtype=np.float64).ravel() for step in data])
+    except (ValueError, TypeError):
+        raise TrajectoryError(f"{path}: the steps are not vectors of numbers of one length; a lab motion file has "
+                              f"{LAB_STEP_NUMBERS} numbers per step") from None
+    if steps.shape[1] != LAB_STEP_NUMBERS:
+        raise TrajectoryError(
+            f"{path}: each step has {steps.shape[1]} numbers, a lab motion file has {LAB_STEP_NUMBERS} "
+            "(300 lip landmarks x 3, 3 jaw angles, then 900 each for the two eyes and the forehead)")
+    if not np.isfinite(steps).all():
+        raise TrajectoryError(f"{path} holds a number that is not finite; fetch the file again")
+    return steps
+
+
+def from_lab_motion(steps, *, driver: str, pivot_mm, landmark_names, mm_per_scene_unit: float, fps,
+                    hold_frames: int = LAB_HOLD_FRAMES, source: str = "") -> Trajectory:
+    """One lab segment THAT STARTS AT REST as a trajectory: frames 0-14 at rest (the gravity-only settle), step i
+    on frame 15 + i, then the last pose held for `hold_frames` frames (22 steps give the 47 frames of the Ziva
+    reference runs).
+
+    The jaw: the lab's interface turns the jaw joint about world X by the file's pitch, the first of the three jaw
+    angles, in degrees (this is also how the motion was played into Ziva on 2026-11-12). World X is the same
+    line before and after the change of axes, so the driver is a right-handed turn by that signed angle about
+    +X through `pivot_mm` (the joint's position, mm, Z up). A file that turns the jaw about another axis is
+    refused rather than read partly.
+
+    The landmarks: columns 0-899 are the translations of the 300 lip landmarks from their rest positions, scene
+    units, Y up; they become mm, Z up through asset.coords and nothing else. `landmark_names` are the scene's 300
+    names in the file's column order. The other 2700 numbers belong to tissues this scene does not have; they are
+    not read.
+
+    The file does not say where its segment starts, so the caller must know that it starts at rest: a segment
+    from another pose (AA back to neutral, say) would be played from the wrong start without any error here."""
+    steps = np.asarray(steps, dtype=np.float64)
+    if steps.ndim != 2 or steps.shape[1] != LAB_STEP_NUMBERS or not len(steps):
+        raise TrajectoryError(f"expected (steps, {LAB_STEP_NUMBERS}) numbers, got shape {steps.shape}; "
+                              "read the file with read_lab_motion")
+    names = list(landmark_names)
+    if len(names) != LAB_LIP_LANDMARKS:
+        raise TrajectoryError(f"the scene lists {len(names)} landmarks, the lab motion moves {LAB_LIP_LANDMARKS}; "
+                              "import the lab asset again so the scene carries the lab's 300 lip landmarks")
+    if not isinstance(hold_frames, int) or isinstance(hold_frames, bool) or hold_frames < 0:
+        raise TrajectoryError(f"hold_frames is {hold_frames!r}; it must be a whole number of frames, 0 or more")
+    jaw = steps[:, 3 * LAB_LIP_LANDMARKS:3 * LAB_LIP_LANDMARKS + 3]
+    if np.abs(jaw[:, 1:]).max() != 0.0:
+        raise TrajectoryError(
+            "this lab motion turns the jaw about more than its pitch (the second or third jaw angle is not 0). "
+            "Only the pitch about world X is converted so far; a motion like this is not converted partly "
+            "(docs/09 T-10)")
+    rest = [0.0] * LAB_FIRST_MOTION_FRAME
+    angles = rest + [math.radians(a) for a in jaw[:, 0]] + [math.radians(jaw[-1, 0])] * hold_frames
+    zero = np.zeros((LAB_FIRST_MOTION_FRAME, LAB_LIP_LANDMARKS, 3))
+    moved = np.stack([coords.to_mm_zup(step[:3 * LAB_LIP_LANDMARKS].reshape(LAB_LIP_LANDMARKS, 3), mm_per_scene_unit)
+                      for step in steps])
+    translations = np.concatenate([zero, moved, np.repeat(moved[-1:], hold_frames, axis=0)])
+    return Trajectory(
+        fps=fps, frames=len(angles),
+        drivers={driver: hinge_transforms(pivot_mm, LAB_WORLD_AXIS, angles)},
+        landmarks={"names": names, "translations_mm": translations.tolist()},
+        source_tag="lab_setting", settle_until_frame=LAB_FIRST_MOTION_FRAME - 1,
+        source=(f"{source + ': ' if source else ''}a lab motion of {len(steps)} steps that starts at rest; frames 0-"
+                f"{LAB_FIRST_MOTION_FRAME - 1} at rest, step i on frame {LAB_FIRST_MOTION_FRAME} + i, the last pose "
+                f"held {hold_frames} frames; {driver} turns about world X by the file's pitch (last "
+                f"{jaw[-1, 0]:.5f} degrees); the {LAB_LIP_LANDMARKS} lip landmarks move by the file's offsets; the "
+                "eyes' and the forehead's offsets are not used"),
+    )

@@ -60,13 +60,14 @@ asrp/
 │
 ├─ src/
 │  ├─ asrp_core/              核心程序，不能 import bpy
-│  │  ├─ cli.py               命令行 asrp（doctor、check、import-asset、run）
+│  │  ├─ cli.py               命令行 asrp（doctor、check、import-asset、convert-motion、run）
 │  │  ├─ doctor.py            找 FEBio、Blender，查路径
 │  │  ├─ febio.py             调用 FEBio、读日志
 │  │  ├─ playback.py          回放包（表面网格 + PC2 点缓存）
 │  │  ├─ tetmesh.py           四面体网格的检查和读写（ADR-20）
 │  │  ├─ scene.py             场景描述 scene.json 的格式和校验（asrp check）
-│  │  ├─ trajectory.py        运动 trajectory.json 的格式、铰链运动生成
+│  │  ├─ trajectory.py        运动 trajectory.json 的格式、铰链运动生成；实验室运动文件的受限读取和转换（asrp convert-motion）
+│  │  ├─ compare.py           两份结果差多少：逐帧的平均、P95、最大，下垂，晃动，翻转的面（T-34）
 │  │  ├─ generate.py          生成器：scene + trajectory → FEBio 输入 .feb（真实大小、× k，粘连）
 │  │  ├─ embed.py             把显示网格嵌进四面体网格，算出每帧显示顶点位置
 │  │  ├─ simulate.py          asrp run 的整条流程：生成 → FEBio → ÷ k → 嵌入 → 检查 → 回放包
@@ -79,7 +80,6 @@ asrp/
 │  │     ├─ lab.py            读实验室导出，写 scene.json 和检查报告
 │  │     ├─ coords.py         唯一的一份坐标换算
 │  │     └─ skin.py           把 landmark 蒙皮换算成毫米、Z 轴朝上，写 landmarks/skin_mm.json
-│  │                          待开发：compare.py……
 │
 ├─ blender_addon/asrp_blender/  Blender 插件，只管界面，不用第三方库
 │  ├─ __init__.py             面板（英文）：Load result、Check backend、Run、Results、Checks
@@ -101,6 +101,7 @@ asrp/
 │  ├─ build_tetmesh.py        生成嘴唇四面体网格 data/tetmesh/lips.json，只显式跑一次（ADR-20）
 │  ├─ lip_attachments.py      导出嘴唇的四组粘连顶点集 data/lab_export/lip_attachments.json（T-03）
 │  ├─ placeholder_jaw_motion.py   写测试用的下颌铰链运动 trajectory.json（张开 12°）。它只是测试输入，实验室的真实运动由 T-10 转换
+│  ├─ ziva_comparison.py      我们的嘴唇对 Ziva 的两次运行：导入、转换、运行、逐帧比，写 data/preview/ziva_comparison.json（T-34；需要仓库外的数据）
 │  ├─ landmark_layer_check.py 我们的 landmark 层对实验室自己的公式和数据（需要实验室自己的文件）
 │  ├─ render_prototype.py     在 Blender 里加载回放包、逐帧核对、渲染
 │  ├─ check_blender_addon.py  check_playback.py  check_panel.py   插件、回放、面板的检查（验证门会跑）

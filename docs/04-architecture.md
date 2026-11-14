@@ -53,11 +53,12 @@ landmark 段是物理之后的**可替换层**：先物理，后 landmark 蒙皮
 | 环境检查 `asrp_core/doctor.py` | 找到 FEBio、Blender，检查路径和 Python 版本 | — |
 | 资产导入 `asrp_core/asset/` | 把从 Maya 导出的网格、landmark 蒙皮和 Ziva 设置读进来，换算单位和坐标轴（全项目唯一的一份换算，`asset/coords.py`），生成场景描述和 `import_report.json`（换算系数、坐标轴、网格、每个参数的来源、"缺了什么"、场景检查结果）；把四组粘连、k 和材料写进场景（材料现在的默认值和 Ziva 实测值的差别见 [05](05-ziva-to-febio.md) 第 4 节）；把 landmark 蒙皮矩阵换算成毫米、Z 轴朝上、列向量，写成 `landmarks/skin_mm.json`（`asset/skin.py`，格式 `asrp-skin/1`，ADR-34） | 解析 .mb 的网格几何 |
 | 场景描述 `asrp_core/scene.py` | 定义场景描述文件的格式，提供校验（缺什么、单位对不对） | 求解 |
-| 运动 `asrp_core/trajectory.py` | 运动文件的格式和读写、铰链运动生成（代用运动）、`landmarks` 一节的校验和读成数组 | 转换实验室的运动文件（T-10 在同一个文件里加） |
+| 运动 `asrp_core/trajectory.py` | 运动文件的格式和读写、铰链运动生成（代用运动）、`landmarks` 一节的校验和读成数组 | 实验室运动文件的受限读取和从中性出发的单段转换已在这个文件里（T-34）；其余的转换是 T-10 |
 | 四面体化 `asrp_core/tetmesh.py` | 把嘴唇的表面网格变成计算用的四面体网格，检查质量（连通、流形、亏格、上下唇分开、左右对称），写成 `data/tetmesh/` 下的文件，读回时校验哈希（为什么需要，见 [13](13-explanations.md) E-02） | 嵌入显示网格；运行时重新生成网格（只由 `tools/build_tetmesh.py` 显式生成，ADR-20） |
 | FEBio 适配 `asrp_core/febio.py` | 调用 FEBio（默认 4 线程，可用 `--threads` 改，[05](05-ziva-to-febio.md) 坑 17，ADR-38；含结束整个进程树），读回结果 | 决定材料参数（参数从场景描述里来） |
 | 生成器 `asrp_core/generate.py` | 场景描述 + 运动 → `.feb`：坐标 × k、重力反号、刚体（固定、给定、锚）、粘连的对应（05 第 3 节）、动力学设置；生成器报告 | 运行 FEBio；读结果 |
 | 嵌入 `asrp_core/embed.py` | 显示网格跟着四面体网格动（zEmbedder 的替代）：每个显示顶点的四面体和重心坐标，粘连也用同一套 | — |
+| 对比 `asrp_core/compare.py` | 同一个网格的两份结果差多少：逐帧的平均、P95、最大，下垂，相对刚体的晃动和停下后的衰减，哪些面翻转（T-34）。只算数，不判 | 读 Ziva 的文件、热力图、`asrp compare` 命令（T-11） |
 | 合理性检查 `asrp_core/plausibility.py` | [07](07-validation.md) 第 3 节的五项检查 (a)(b)(b2)(c)(d)；"没运行"（`passed` 为 `null`）不算失败，只有明确的 `false` 才算（ADR-37） | — |
 | 场景运行 `asrp_core/simulate.py` | `asrp run <scene.json> <trajectory.json>`：生成器 → 运行外壳 → 嵌入、沉降后的形状、landmark 层（运动文件有 `landmarks` 一节时）、回放包、合理性检查、运行报告 | 运行文件夹的外壳（`run.py`） |
 | 运行外壳 `asrp_core/run.py` | 一次运行 = 一个文件夹：拷入输入、启动 FEBio、进度（只读日志新增的部分）、取消、出错处理、读 FEBio 写的 `positions.txt`、把位置除以 k 后存成 `physics/positions.json` + `positions.npy`、写溯源；也能直接跑现成的 `.feb`（替身模式） | 生成 FEBio 输入（`simulate.py` 通过 `run.Prepared` 接入） |
@@ -229,7 +230,8 @@ FEBio 是第一个实现。Ziva 不在我们的软件里运行：它的结果在
 | 命令 | 作用 | 对应需求 |
 |---|---|---|
 | `asrp doctor` | 检查环境 | — |
-| `asrp import-asset <导出文件夹> <输出文件夹>` | 导入资产，生成场景描述和检查报告 | R-01 |
+| `asrp import-asset <导出文件夹> <输出文件夹> [--tissue-settings lab]` | 导入资产，生成场景描述和检查报告。默认写我们自己的材料值；`--tissue-settings lab` 把杨氏模量、泊松比、密度和子步数写成 Ziva 实测的值（来源标 `lab_setting`），本构、粘连、阻尼、重力和物理尺度不变（T-34） | R-01 |
+| `asrp convert-motion <实验室的运动文件> <scene.json> <输出的 trajectory.json> --starts-at-rest` | 把实验室的 `combined_checkpoints.pkl` 转成运动文件：第 0 到 14 帧不动，第 i 步落在第 15 + i 帧，最后的姿态再停 10 帧。文件当数据读，不执行其中任何东西。文件不带起始姿态，所以要明说 `--starts-at-rest`；从别的姿态出发的段不能单独转（T-34、T-10） | R-03 |
 | `asrp check <scene.json> [<trajectory.json>]` | 检查场景设置；带上运动时，再查运动和场景对不对得上。有错误才失败，提醒照样通过 | R-02 |
 | `asrp run <scene.json> <trajectory.json> [--threads N]` | 运行一次，生成运行文件夹；运行文件夹一建好就先打印 `run folder <路径>`（结束时再打一次）；之后打印生成器报告、max\|u\|÷δ、五项检查（a、b、b2、c、d）、一行 `landmarks`（叠上了：移动的个数、最大平移、最终形状离物理结果最远多少；没叠上：原因）和每帧用时，检查有不通过的就以 1 退出。`--threads N`：FEBio 的线程数，默认 4（取 N 和本机核数中小的），1 时回放文件逐位相同（ADR-38） | R-03、R-06 |
 | `asrp run --feb <现成的 .feb> [--threads N]` | 替身模式：不生成输入，直接跑现成的 `.feb`，做运行文件夹、溯源、进度、取消、出错处理这层外壳 | R-03、R-06 |

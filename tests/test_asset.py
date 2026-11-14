@@ -292,3 +292,35 @@ def test_the_scene_does_not_depend_on_where_it_was_written(imported, tmp_path):
     out, _ = imported
     lab.import_asset(EXPORT.resolve(), tmp_path / "elsewhere", TET.resolve())
     assert (tmp_path / "elsewhere" / "scene.json").read_bytes() == (out / "scene.json").read_bytes()
+
+
+@needs_export
+def test_the_labs_measured_tissue_values_are_written_only_when_asked_for(imported, tmp_path):
+    """--tissue-settings lab (T-34): Young's modulus, Poisson's ratio, density and substeps are Ziva's measured
+    values and say so; everything else is as in the default import, and the default import is unchanged."""
+    default_out, default = imported
+    ours, lab_scene = scene.load(default_out / "scene.json"), scene.load(
+        lab.import_asset(EXPORT, tmp_path / "lab", TET, tissue_settings="lab").scene_path)
+    mine, theirs = ours.soft_tissues[0].material, lab_scene.soft_tissues[0].material
+    assert {k: (p.value, p.source) for k, p in mine.params.items()} == {
+        "E_mpa": (0.015, "ours"), "nu": (0.45, "ours"), "density_t_per_mm3": (1.06e-9, "ours")}
+    assert {k: (p.value, p.source) for k, p in theirs.params.items()} == {
+        "E_mpa": (0.012, "lab_setting"), "nu": (0.4, "lab_setting"), "density_t_per_mm3": (1.06e-9, "lab_setting")}
+    assert mine.model == theirs.model == "neo-Hookean" and "StVK" in theirs.params["E_mpa"].note  # the model is NOT Ziva's
+    assert (ours.solver.substeps_per_frame.value, ours.solver.substeps_per_frame.source) == (1, "ours")
+    assert (lab_scene.solver.substeps_per_frame.value, lab_scene.solver.substeps_per_frame.source) == (1, "lab_setting")
+    for name in ("damping", "gravity_mm_per_s2"):  # nothing here can be set to Ziva's: still ours, the same values
+        assert getattr(lab_scene.solver, name).source == "ours"
+        assert getattr(lab_scene.solver, name).value == getattr(ours.solver, name).value
+    assert lab_scene.units.physics_length_scale.value == ours.units.physics_length_scale.value == 0.67
+    # The spring rule (100 x E x h) is unchanged and follows the Young's modulus that was written.
+    springs = {a.name: a.stiffness.value for a in ours.attachments if a.kind == "spring"}
+    lab_springs = {a.name: a.stiffness.value for a in lab_scene.attachments if a.kind == "spring"}
+    assert springs.keys() == lab_springs.keys() and len(springs) == 3
+    assert all(abs(lab_springs[n] / springs[n] - 0.012 / 0.015) < 0.01 for n in springs)
+    assert [(a.name, a.kind) for a in lab_scene.attachments] == [(a.name, a.kind) for a in ours.attachments]
+    report = json.loads((tmp_path / "lab" / "import_report.json").read_text(encoding="utf-8"))
+    assert any("--tissue-settings lab" in m and "StVK" in m for m in report["missing"])
+    assert any("not asked for them" in m for m in default.report["missing"])
+    with pytest.raises(lab.AssetError, match="tissue_settings"):
+        lab.import_asset(EXPORT, tmp_path / "bad", TET, tissue_settings="ziva")

@@ -165,7 +165,7 @@ zTissue3 ──394（按默认值）──▶ 颅骨    zTissue3 ──561（按
 | 帧 | 第 i 个元素对应第 `start_frame_offset + 1 + i` 帧，第一段从第 15 帧开始（第 0 到 14 帧是重力沉降）。界面把每个 landmark 移到"初始位置 + 偏移"并打关键帧；下颌只用俯仰的相对转动（`UI:1343-1360`） |
 | 怎么来的 | 训练日志里的 `final_epoch_action_list*.pkl` 逐步累加，再按收敛步数均匀取检查点（`UI:3023-3134`）。取多少个不是一个固定的数：取回的文件有 3、10、22、25、36、43、46 步，中性到 AA 是 22 步；界面源码对从中性出发的过渡要 22 个，长度不符会重新生成（[13](13-explanations.md) E-14）。另有 `overlap_metadata.pkl` 记录帧边界和音素 |
 
-实验室的中性到 AA 运动：22 步，下颌转 −5.16°，landmark 最多移动 12.1 mm（E-11）。T-10 按这个格式把运动文件转成我们的 `trajectory.json`（[09](09-roadmap-and-tasks.md)）。
+实验室的中性到 AA 运动：22 步，下颌转 −5.16°，landmark 最多移动 12.1 mm（E-11）。从中性出发的单段由 `asrp convert-motion` 转成我们的 `trajectory.json`（T-34，转换的证明见 [13](13-explanations.md) E-19）；转好的中性到 AA 在 `data/lab_export/trajectories/neutral_to_AA.json`。其余的段是 T-10（[09](09-roadmap-and-tasks.md)）。
 
 ## 8. 能读出来的和读不出来的
 

@@ -12,9 +12,7 @@ coming back unnoticed.
 
 import ast
 import hashlib
-import io
 import json
-import pickle
 import subprocess
 import sys
 from pathlib import Path
@@ -24,26 +22,15 @@ import numpy as np
 import pytest
 
 from asrp_core.final_shape import final_shape, rest_model
+from asrp_core.trajectory import lab_data_from_bytes, read_lab_data
 
 REPO = Path(__file__).resolve().parents[1]
 MM = 0.962  # mm per scene unit (ADR-31)
 AA_JOB = "lab_motions/results/job_251205-190350/251205-190358"
-ALLOWED = {("builtins", n) for n in ("list", "tuple", "dict", "float", "int", "complex", "set", "frozenset")} | {
-    (m, n) for m in ("numpy.core.multiarray", "numpy._core.multiarray") for n in ("_reconstruct", "scalar")} | {
-    ("numpy", "ndarray"), ("numpy", "dtype"), ("numpy.core.numeric", "_frombuffer"), ("numpy._core.numeric", "_frombuffer")}
-
-
-class _Restricted(pickle.Unpickler):
-    """Plain containers and numpy arrays only: the lab's files are data, never code."""
-
-    def find_class(self, module, name):
-        if (module, name) not in ALLOWED:
-            raise pickle.UnpicklingError(f"refused {module}.{name}")
-        return super().find_class(module, name)
-
 
 def _unpickle(path: Path):
-    return _Restricted(io.BytesIO(path.read_bytes())).load()
+    """The lab's files are data, never code: read with the product's data-only reader (asrp_core.trajectory)."""
+    return read_lab_data(path)
 
 
 @pytest.fixture(scope="module")
@@ -120,7 +107,7 @@ def test_training_results_sit_on_the_rest_shape(trip, model):
         digest = hashlib.sha256(data).hexdigest()
         assert manifest[path.relative_to(trip).as_posix()] == digest, f"{path} is not the file that was fetched"
         seen.add(digest)
-        saved = _Restricted(io.BytesIO(data)).load()
+        saved = lab_data_from_bytes(data, path)
         lips = np.asarray(saved["s_next"], dtype=np.float64).reshape(-1, 3)
         landmarks = np.asarray(saved["x_joint_"], dtype=np.float64).reshape(-1, 3)
         assert lips.shape == (10240, 3) and landmarks.shape == (300, 3)
@@ -359,7 +346,7 @@ def test_aa_convergence_by_the_labs_own_measure(trip, model, aa_target):
     manifest = {f["path"]: f["sha256"] for f in json.loads((trip / "manifest.json").read_text(encoding="utf-8"))["files"]}
     archive = (trip / AA_JOB / "deltaB_temp.pkl").read_bytes()  # the bytes that are checked are the bytes that are read
     assert manifest[f"{AA_JOB}/deltaB_temp.pkl"] == hashlib.sha256(archive).hexdigest(), "not the archive that was fetched"
-    saved = _Restricted(io.BytesIO(archive)).load()
+    saved = lab_data_from_bytes(archive)
     lips = np.asarray(saved["s_next"], dtype=np.float64).reshape(-1, 3)
     landmarks = np.asarray(saved["x_joint_"], dtype=np.float64).reshape(-1, 3)
     ours = final_shape(model, None, landmarks)
