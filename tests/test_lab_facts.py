@@ -199,6 +199,17 @@ def test_flipped_faces_come_from_the_landmark_layer_and_ziva_has_them_too(trip):
     assert int(training["flipped"][0]) == 5 and int(training["short"][0]) == 121
 
 
+def test_the_ziva_machine_is_another_machine_with_other_thread_settings(trip):
+    """Speeds from the Ziva machine are from 16 logical processors with Maya set to 16 threads and no OMP or MKL
+    limit; ours are FEBio with 4 threads on the developer's machine. A side-by-side of speeds is across machines."""
+    machine = json.loads((trip / "probes" / "machine.json").read_text(encoding="utf-8"))
+    assert machine["cpu_count"] == 16 and machine["maya_threads"] == 16
+    assert machine["env"]["OMP_NUM_THREADS"] is None and machine["env"]["MKL_NUM_THREADS"] is None
+    from asrp_core import febio
+
+    assert febio.DEFAULT_THREADS == 4
+
+
 def test_ziva_settings(trip):
     nodes = json.loads((trip / "ziva_static" / "ziva_attributes.json").read_text(encoding="utf-8"))
 
