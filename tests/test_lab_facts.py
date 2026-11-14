@@ -10,6 +10,7 @@ and an outside audit found it by comparing with the lab's own saved results. The
 coming back unnoticed.
 """
 
+import ast
 import hashlib
 import io
 import json
@@ -298,3 +299,94 @@ def test_round_trips_and_jawless_phonemes(trip, model):
         assert np.abs(_jaw_degrees(export["motion"])).max() < 1e-4
         assert (np.linalg.norm(p[14:] - p[14], axis=-1) * MM).max() < 0.06
         assert abs(_max_mm(f[-1], p[-1]) - layer_mm) < 0.01
+
+
+@pytest.fixture(scope="module")
+def aa_target() -> dict:
+    """The lab's target file for neutral to AA: the start shapes (`...0`) and the target shapes (`...1`) of the
+    lips and the jaw. Read with ast, so nothing in the lab's file is run."""
+    folder = local_paths.lab_data()
+    path = None if folder is None else folder / "dataV22_phoneme_AA_for_d2.py"
+    if path is None or not path.is_file():
+        pytest.skip("NOT VERIFIED: the lab's AA target file is not on this machine; " + local_paths.HOW_TO_SET)
+    wanted = {f"x_middleres_{mesh}{group}" for mesh in ("OrbicularisOris", "Jaw") for group in (0, 1)}
+    out = {}
+    for node in ast.parse(path.read_text(encoding="utf-8")).body:
+        if isinstance(node, ast.Assign) and isinstance(node.targets[0], ast.Name) and node.targets[0].id in wanted:
+            out[node.targets[0].id] = np.asarray(ast.literal_eval(node.value), dtype=np.float64)
+    assert set(out) == wanted, f"the target file lacks {sorted(wanted - set(out))}"
+    return out
+
+
+def _lab_distance(a, b) -> float:
+    """The lab's `euclidean_distance`: the root of the SUM of squares over every sampled vertex and axis. One
+    norm over the whole sample; not a mean, not the largest vertex."""
+    return float(np.sqrt(np.sum((np.asarray(a, dtype=np.float64) - np.asarray(b, dtype=np.float64)) ** 2)))
+
+
+def test_aa_convergence_by_the_labs_own_measure(trip, model, aa_target):
+    """Neutral to AA by the lab's own rule: on the lab's 300 sampled lip vertices the saved training result is
+    at 9.018 % of the starting distance to the target, under the task's threshold (10 % + 0.01 scene units =
+    10.020 %). A gravity-settled base is over it. The jaw is at 9.999 % of its own, under 10 % by a hair.
+
+    The anchor is the lab's own number: the starting distances the lab's run saved in config.json. Reproducing
+    them shows that the sampled vertices, the target and the formula are the lab's."""
+    sample = json.loads((REPO / "tests" / "fixtures" / "lab_training_sample.json").read_text(encoding="utf-8"))
+    lips_at, jaw_at = sample["lips"], sample["jaw"]
+    assert len(lips_at) == 300 and len(set(lips_at)) == 299 and jaw_at == [29, 177, 350]
+    config = json.loads((trip / AA_JOB / "config.json").read_text(encoding="utf-8"))
+    start, target = aa_target["x_middleres_OrbicularisOris0"], aa_target["x_middleres_OrbicularisOris1"]
+    jaw_start, jaw_target = aa_target["x_middleres_Jaw0"], aa_target["x_middleres_Jaw1"]
+    assert start.shape == target.shape == (10240, 3) and jaw_start.shape == jaw_target.shape == (7426, 3)
+    assert _max_mm(start, final_shape(model, None, model.landmark_rest_scene)) < 1e-4  # the start is our rest shape
+
+    initial, initial_jaw = config["initial_distance"], config["initial_jaw_distance"]
+    assert abs(_lab_distance(target[lips_at], start[lips_at]) - initial) < 1e-6 and 48.9 < initial < 49.0
+    assert abs(_lab_distance(jaw_target[jaw_at], jaw_start[jaw_at]) - initial_jaw) < 1e-6 and 24.4 < initial_jaw < 24.5
+    shifted, distinct = [i + 1 for i in lips_at], sorted(set(lips_at))
+    assert abs(_lab_distance(target[shifted], start[shifted]) - initial) > 0.5  # control: the neighbouring vertices
+    assert abs(_lab_distance(target[distinct], start[distinct]) - initial) > 0.05  # control: the duplicate dropped
+    assert abs(_lab_distance(jaw_target[[30, 177, 350]], jaw_start[[30, 177, 350]]) - initial_jaw) > 0.5
+
+    assert config["distance_threshold_percentage"] == 0.1 and config["distance_jaw_threshold_percentage"] == 0.1
+    limit = 0.1 * initial + 0.01  # the lab's success test for the lips: distance <= distance_min + epsilon_min
+    limit_jaw = 0.1 * initial_jaw  # for the jaw: distance_jaw <= distance_jaw_min, no epsilon
+    assert abs(100 * limit / initial - 10.0204) < 0.0001
+
+    def percent(lips) -> float:
+        return 100 * _lab_distance(target[lips_at], np.asarray(lips)[lips_at]) / initial
+
+    manifest = {f["path"]: f["sha256"] for f in json.loads((trip / "manifest.json").read_text(encoding="utf-8"))["files"]}
+    archive = (trip / AA_JOB / "deltaB_temp.pkl").read_bytes()  # the bytes that are checked are the bytes that are read
+    assert manifest[f"{AA_JOB}/deltaB_temp.pkl"] == hashlib.sha256(archive).hexdigest(), "not the archive that was fetched"
+    saved = _Restricted(io.BytesIO(archive)).load()
+    lips = np.asarray(saved["s_next"], dtype=np.float64).reshape(-1, 3)
+    landmarks = np.asarray(saved["x_joint_"], dtype=np.float64).reshape(-1, 3)
+    ours = final_shape(model, None, landmarks)
+    assert _max_mm(ours, lips) < 1e-4  # every vertex, not only the sampled ones
+    layer = ours - final_shape(model, None, model.landmark_rest_scene)
+    full = _export(trip, "neutral_to_AA_export_*")["lips_physics"]
+    lips_only = _export(trip, "AA_lips_only_export_*")["lips_physics"]
+    assert abs(percent(lips) - 9.018) < 0.001 and abs(percent(ours) - 9.018) < 0.001  # under the threshold
+    assert abs(percent(full[0] + layer) - 9.018) < 0.001  # Ziva's frame 0 is the rest shape
+    assert abs(percent(full[14] + layer) - 15.404) < 0.001  # full face, settled: over the threshold
+    assert abs(percent(lips_only[14] + layer) - 71.198) < 0.01  # lips only, still falling at frame 14: far over
+    assert abs(percent(start) - 100.0) < 1e-6
+    assert percent(lips) < 100 * limit / initial < percent(full[14] + layer)
+
+    jaw = np.asarray(saved["s_jaw_next"], dtype=np.float64).reshape(-1, 3)
+    assert jaw.shape == (7426, 3)
+    jaw_distance = _lab_distance(jaw_target[jaw_at], jaw[jaw_at])
+    assert abs(100 * jaw_distance / initial_jaw - 9.9994) < 0.0005
+    assert 0 < limit_jaw - jaw_distance < 0.001  # it passes with 0.00015 scene units to spare, no more
+    # Every jaw vertex, not only the three: the saved jaw is the start jaw turned rigidly, by the motion's last
+    # jaw angle, about world X (the best rigid fit, Kabsch, leaves less than 0.0001 scene units anywhere).
+    centre, centre_saved = jaw_start.mean(axis=0), jaw.mean(axis=0)
+    u, _, vt = np.linalg.svd((jaw_start - centre).T @ (jaw - centre_saved))
+    turn = vt.T @ np.diag([1.0, 1.0, np.sign(np.linalg.det(vt.T @ u.T))]) @ u.T
+    assert np.linalg.norm((jaw_start - centre) @ turn.T + centre_saved - jaw, axis=1).max() < 1e-4
+    sines = np.array([turn[2, 1] - turn[1, 2], turn[0, 2] - turn[2, 0], turn[1, 0] - turn[0, 1]]) / 2
+    assert abs(sines[1]) < 1e-6 and abs(sines[2]) < 1e-6, "the saved jaw turns about an axis other than world X"
+    _, jaw_steps = _aa_motion(trip)
+    assert abs(np.degrees(np.arctan2(sines[0], (np.trace(turn) - 1) / 2)) - jaw_steps[-1, 0]) < 1e-4  # signed
+    assert abs(jaw_steps[-1, 0] + 5.16416) < 1e-4
