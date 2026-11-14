@@ -1,0 +1,375 @@
+"""The three-step flow of the panel: Open asset, pick a motion, Run, and the result plays on the same five objects.
+
+Still no computation (ADR-03): the asset is made by `asrp import-asset`, the list of motions by `asrp list-motions`,
+the result by `asrp run`. This module reads the files those commands wrote and puts them on Blender objects:
+- Open asset: builds one mesh object per mesh of the imported scene (the soft tissue and the bones), from the OBJ
+  files in the scene folder (mm, Z up: the same numbers the solver reads);
+- a finished run: the lips object gets a Mesh Cache modifier on the run's point cache (the layer asked for), each bone
+  object gets one keyframe per frame from the run folder's trajectory.json (the transform of the driver it follows,
+  as written in the file, nothing derived); the timeline gets the motion's frame count and fps.
+Objects keep their identity: a second run replaces the modifier and the keyframes, never the objects.
+"""
+
+import json
+import os
+import subprocess
+from datetime import datetime
+from pathlib import Path
+
+import bpy
+from mathutils import Matrix
+
+from .session import core_command, core_project
+
+MM_TO_BLENDER = 0.001  # the meshes stay in mm; only the objects' scale shows them in metres
+ASSET_PREFIX = "ASRP "
+ROLE_KEY = "asrp_role"  # custom property on each of the five objects
+LAYER_WORDS = {"physics": "Physics only", "final": "Final shape"}
+IMPORT_TIMEOUT_S = 900  # the first import after installing may have to build the Python environment
+
+
+def export_folder() -> Path:
+    """The lab export the asset is imported from: $ASRP_EXPORT, else data/lab_export of the project."""
+    override = os.environ.get("ASRP_EXPORT")
+    if override:
+        return Path(override)
+    project = core_project()
+    if project is None:
+        raise ValueError("ASRP project not found; set ASRP_PROJECT")
+    return project / "data" / "lab_export"
+
+
+def runs_folder() -> Path:
+    """Where run folders go: $ASRP_RUNS_DIR, else the runs folder of the project."""
+    override = os.environ.get("ASRP_RUNS_DIR")
+    if override:
+        return Path(override)
+    project = core_project()
+    if project is None:
+        raise ValueError("ASRP project not found; set ASRP_PROJECT")
+    return project / "runs"
+
+
+def scenes_folder() -> Path:
+    return runs_folder() / "_asset"
+
+
+def run_core_quiet(*args: str, timeout: float = 120) -> subprocess.CompletedProcess:
+    kw = {"creationflags": subprocess.CREATE_NO_WINDOW} if os.name == "nt" else {}
+    env = {**os.environ, "PYTHONIOENCODING": "utf-8"}
+    return subprocess.run(core_command(*args), capture_output=True, text=True, encoding="utf-8", errors="replace",
+                          timeout=timeout, env=env, stdin=subprocess.DEVNULL, **kw)
+
+
+def last_error(proc: subprocess.CompletedProcess) -> str:
+    """The text a failed command printed for the researcher: its ERROR lines, else the last line it printed."""
+    lines = [x.strip() for x in (proc.stdout + "\n" + proc.stderr).splitlines() if x.strip()]
+    errors = [x[len("ERROR"):].strip() for x in lines if x.startswith("ERROR")]
+    return " ".join(errors) if errors else (lines[-1] if lines else f"the command ended with exit code {proc.returncode} and printed nothing")
+
+
+# --- the motion list ----------------------------------------------------------------------------------------------------
+
+
+def read_motions(export: Path) -> list[dict]:
+    """The motions of an export folder, from `asrp list-motions` (one JSON object per line). Raises ValueError."""
+    proc = run_core_quiet("list-motions", str(export))
+    if proc.returncode != 0:
+        raise ValueError(f"The list of motions could not be read: {last_error(proc)}")
+    out = []
+    for line in proc.stdout.splitlines():
+        line = line.strip()
+        if line.startswith("{"):
+            out.append(json.loads(line))
+    if not out:
+        raise ValueError(f"No motion files were found in {export / 'trajectories'}")
+    return out
+
+
+def fill_motions(scene, motions: list[dict]) -> None:
+    scene.asrp_motions.clear()
+    for m in motions:
+        item = scene.asrp_motions.add()
+        item.file = m["file"]
+        item.error = str(m.get("error") or "")
+        item.frames = int(m.get("frames") or 0)
+        item.fps = float(m.get("fps") or 0.0)
+        item.source_tag = str(m.get("source_tag") or "")
+        item.has_landmarks = bool(m.get("landmarks"))
+    first = next((i for i, m in enumerate(scene.asrp_motions) if not m.error), -1)
+    scene.asrp_motion_index = first
+
+
+def motion_label(item) -> str:
+    if item.error:
+        return f"{item.file} (cannot be used)"
+    fps = f"{item.fps:g}"
+    return f"{Path(item.file).stem}: {item.frames} frames, {fps} fps, {item.source_tag}" + (", landmarks" if item.has_landmarks else "")
+
+
+def picked_motion(scene):
+    index = scene.asrp_motion_index
+    return scene.asrp_motions[index] if 0 <= index < len(scene.asrp_motions) else None
+
+
+# --- the five objects ----------------------------------------------------------------------------------------------------
+
+
+def read_obj(path: Path) -> tuple[list, list]:
+    """Vertices and faces of an OBJ as the solver reads it (asrp_core.asset.coords.read_obj): 0-based vertex lists,
+    no texture or normal indices, file order."""
+    vertices, faces = [], []
+    with open(path, encoding="utf-8") as f:
+        for line in f:
+            if line.startswith("v "):
+                vertices.append([float(c) for c in line.split()[1:4]])
+            elif line.startswith("f "):
+                faces.append([int(c.split("/")[0]) - 1 for c in line.split()[1:]])
+    return vertices, faces
+
+
+def read_scene_json(scene_json: Path) -> dict:
+    try:
+        data = json.loads(Path(scene_json).read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        raise ValueError(f"Cannot read {scene_json}: {exc}") from exc
+    if not isinstance(data, dict):
+        raise ValueError(f"{scene_json} is not a scene description")
+    return data
+
+
+def asset_meshes(data: dict) -> list[tuple[str, str, str]]:
+    """(role, mesh file relative to the scene folder, kind) for every mesh of the scene: its soft tissues, then its bones."""
+    out = [(t["name"], t["mesh"]["path"], "tissue") for t in data.get("soft_tissues", [])]
+    out += [(b["name"], b["mesh"]["path"], "bone") for b in data.get("bones", [])]
+    return out
+
+
+def material(kind: str):
+    name = "ASRP " + ("lips" if kind == "tissue" else "bone")
+    mat = bpy.data.materials.get(name) or bpy.data.materials.new(name)
+    mat.diffuse_color = (0.8, 0.25, 0.2, 1.0) if kind == "tissue" else (0.9, 0.88, 0.8, 1.0)
+    return mat
+
+
+def create_objects(context, scene_json: Path) -> dict:
+    """One mesh object per mesh of the scene, in the collection of the context; returns {role: object}."""
+    scene_json = Path(scene_json)
+    data = read_scene_json(scene_json)
+    made: dict = {}
+    try:
+        for role, rel, kind in asset_meshes(data):
+            vertices, faces = read_obj(scene_json.parent / rel)
+            mesh = bpy.data.meshes.new(f"{ASSET_PREFIX}{role}")
+            mesh.from_pydata(vertices, [], faces)  # keeps the vertex order the point cache relies on
+            mesh.materials.append(material(kind))
+            mesh.update()
+            obj = bpy.data.objects.new(f"{ASSET_PREFIX}{role}", mesh)
+            obj[ROLE_KEY] = role
+            context.collection.objects.link(obj)
+            obj.scale = (MM_TO_BLENDER,) * 3
+            made[role] = obj
+    except Exception:
+        remove_objects(list(made.values()))
+        raise
+    return made
+
+
+def remove_objects(objects) -> None:
+    for obj in objects:
+        mesh = obj.data
+        bpy.data.objects.remove(obj, do_unlink=True)
+        if mesh is not None and mesh.users == 0:
+            bpy.data.meshes.remove(mesh)
+
+
+def register_objects(scene, made: dict, scene_json: Path) -> None:
+    scene.asrp_asset_objects.clear()
+    for role, obj in made.items():
+        item = scene.asrp_asset_objects.add()
+        item.role, item.obj = role, obj
+    scene.asrp_asset_scene = str(scene_json)
+    scene.asrp_asset_run = ""
+    scene.asrp_asset_layer = ""
+
+
+def is_live(obj) -> bool:
+    return obj is not None and len(obj.users_collection) > 0
+
+
+def asset_objects(scene) -> dict:
+    """{role: object} of the five objects Open asset made; ValueError when there are none or one was deleted."""
+    items = list(scene.asrp_asset_objects)
+    if not items:
+        raise ValueError("No asset is open. Press Open asset first.")
+    gone = [i.role for i in items if not is_live(i.obj)]
+    if gone:
+        raise ValueError(f"The asset object(s) {', '.join(gone)} were deleted. Press Open asset again.")
+    return {i.role: i.obj for i in items}
+
+
+def open_asset(context) -> dict:
+    """Step 1: import the lab export into a new scene folder (`asrp import-asset`), read the motion list
+    (`asrp list-motions`), build the objects. Replaces the objects of an asset opened before. Raises ValueError."""
+    scene = context.scene
+    export = export_folder()
+    if not export.is_dir():
+        raise ValueError(f"The export folder {export} does not exist")
+    out = scenes_folder() / datetime.now().strftime("%Y%m%d-%H%M%S-%f")
+    out.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        proc = run_core_quiet("import-asset", str(export), str(out), timeout=IMPORT_TIMEOUT_S)
+    except (RuntimeError, OSError, subprocess.TimeoutExpired) as exc:
+        raise ValueError(f"The asset could not be imported: {exc}") from exc
+    if proc.returncode != 0:
+        raise ValueError(f"The asset could not be imported: {last_error(proc)}")
+    scene_json = out / "scene.json"
+    motions = read_motions(export)
+    made = create_objects(context, scene_json)
+    for item in list(scene.asrp_asset_objects):  # the objects of an asset opened before
+        if is_live(item.obj):
+            remove_objects([item.obj])
+    register_objects(scene, made, scene_json)
+    fill_motions(scene, motions)
+    for other in context.selected_objects:
+        other.select_set(False)
+    return made
+
+
+# --- putting a finished run on the objects --------------------------------------------------------------------------------
+
+
+def clear_motion(obj) -> None:
+    if obj.animation_data is not None:
+        obj.animation_data_clear()
+    obj.location = (0.0, 0.0, 0.0)
+    obj.rotation_mode = "QUATERNION"
+    obj.rotation_quaternion = (1.0, 0.0, 0.0, 0.0)
+    obj.scale = (MM_TO_BLENDER,) * 3
+
+
+def clear_result(scene) -> None:
+    """The asset back at rest: no point cache on the lips, no keyframes on the bones. Done when a new run starts, so
+    the previous result does not stay on screen as if it were this run's."""
+    for item in scene.asrp_asset_objects:
+        obj = item.obj
+        if not is_live(obj):
+            continue
+        for mod in [m for m in obj.modifiers if m.name == "ASRP result"]:
+            obj.modifiers.remove(mod)
+        clear_motion(obj)
+    scene.asrp_asset_run = ""
+    scene.asrp_asset_layer = ""
+
+
+def set_cache(obj, cache_file: Path) -> None:
+    for mod in [m for m in obj.modifiers if m.name == "ASRP result"]:
+        obj.modifiers.remove(mod)
+    cache = obj.modifiers.new("ASRP result", "MESH_CACHE")
+    cache.cache_format = "PC2"
+    cache.filepath = str(cache_file)
+    cache.deform_mode = "OVERWRITE"
+    cache.time_mode = "FRAME"
+    cache.play_mode = "SCENE"
+    cache.frame_start = 0.0  # scene frame 0 = solver frame 0
+    cache.frame_scale = 1.0
+    cache.forward_axis = "POS_Y"  # solver and Blender are both Z-up
+    cache.up_axis = "POS_Z"
+
+
+def default_layer(manifest: dict) -> str:
+    """Final shape when the run produced one (the motion had a landmark layer), else Physics only."""
+    return "final" if "final" in (manifest.get("versions") or {}) else "physics"
+
+
+def lips_object(scene, run_dir: Path):
+    """The object of the soft tissue the run's point cache belongs to (the run folder's scene.json names it)."""
+    tissues = read_scene_json(Path(run_dir) / "scene.json").get("soft_tissues", [])
+    objs = asset_objects(scene)
+    if len(tissues) != 1 or tissues[0]["name"] not in objs:
+        raise ValueError("The run's soft tissue is not one of the asset's objects. Press Open asset again.")
+    return objs[tissues[0]["name"]]
+
+
+def show_layer(scene, run_dir: Path, layer: str) -> None:
+    """Point the lips at the cache of `layer` ("physics" or "final") of the run folder."""
+    from . import playback_cache, read_manifest
+
+    manifest = read_manifest(run_dir)
+    cache_file = Path(run_dir) / playback_cache(manifest, layer)
+    obj = lips_object(scene, run_dir)
+    if len(obj.data.vertices) != len(manifest["vertices"]):
+        raise ValueError(f"The lips object has {len(obj.data.vertices)} vertices but the run's point cache has "
+                         f"{len(manifest['vertices'])}: the run was made from another asset. Press Open asset again.")
+    set_cache(obj, cache_file)
+    scene.asrp_asset_layer = layer
+
+
+def key_bone(obj, rows: list) -> None:
+    """One keyframe per frame (location, rotation) from the 16-number transforms of the motion file, linear in between."""
+    clear_motion(obj)
+    edit = bpy.context.preferences.edit
+    before = edit.keyframe_new_interpolation_type
+    edit.keyframe_new_interpolation_type = "LINEAR"
+    try:
+        previous = None
+        for frame, m in enumerate(rows):
+            mat = Matrix(((m[0], m[1], m[2], m[3]), (m[4], m[5], m[6], m[7]), (m[8], m[9], m[10], m[11]), (0.0, 0.0, 0.0, 1.0)))
+            quat = mat.to_3x3().to_quaternion()
+            if previous is not None:
+                quat.make_compatible(previous)  # q and -q are the same turn; keep the keys on one side
+            previous = quat
+            obj.location = mat.translation * MM_TO_BLENDER
+            obj.rotation_quaternion = quat
+            obj.keyframe_insert("location", frame=frame)
+            obj.keyframe_insert("rotation_quaternion", frame=frame)
+    finally:
+        edit.keyframe_new_interpolation_type = before
+
+
+def apply_result(context, run_dir) -> str:
+    """A finished run onto the asset's objects: the lips' point cache (the default layer), the bones' keyframes, the
+    timeline. Returns the layer shown. Raises ValueError (nothing is half-applied: the asset is put back at rest)."""
+    from . import hide_object, read_manifest, show_entry
+
+    scene, run_dir = context.scene, Path(run_dir)
+    objs = asset_objects(scene)
+    try:
+        manifest = read_manifest(run_dir)
+        run_scene = read_scene_json(run_dir / "scene.json")
+        traj = json.loads((run_dir / "trajectory.json").read_text(encoding="utf-8"))
+        frames = int(manifest["frame_count"])
+        if int(traj["frames"]) != frames:
+            raise ValueError(f"The run's motion has {traj['frames']} frames but its point cache has {frames}")
+        drivers = {d["name"]: d for d in run_scene.get("drivers", [])}
+        clear_result(scene)
+        for bone in run_scene.get("bones", []):
+            obj = objs.get(bone["name"])
+            if obj is None:
+                raise ValueError(f"The run has a bone {bone['name']!r} that the asset does not have. Press Open asset again.")
+            if bone.get("motion") != "prescribed":
+                continue  # fixed: stays where it is
+            driver = bone["driver"]
+            if drivers.get(driver, {}).get("blend") is not None:
+                raise ValueError(f"The bone {bone['name']!r} follows the derived driver {driver!r}; the panel plays only the "
+                                 "motion file's own drivers")
+            rows = traj["drivers"].get(driver)
+            if rows is None:
+                if drivers.get(driver, {}).get("absent_means_rest"):
+                    continue  # the motion leaves this driver out: the bone does not move
+                raise ValueError(f"The motion has no transforms for {driver!r}, which the bone {bone['name']!r} follows")
+            key_bone(obj, rows)
+        layer = default_layer(manifest)
+        show_layer(scene, run_dir, layer)
+    except Exception:
+        clear_result(scene)
+        raise
+    scene.asrp_asset_run = str(run_dir)
+    render = scene.render
+    render.fps, render.fps_base = int(manifest["fps"]), 1.0
+    scene.frame_start, scene.frame_end = 0, frames - 1
+    scene.frame_set(0)
+    show_entry(scene, -1)  # an older result of the results list is not shown with this one
+    for obj in objs.values():
+        hide_object(obj, False)
+    return layer

@@ -3,6 +3,13 @@
     "<blender.exe>" --factory-startup --python tools/panel_windowed_check.py -- \
         --scene <scene.json> --motion-a <a.json> --motion-b <b.json> --work <folder>
 
+Third mode, `--three-steps` (needs only `--work <folder>`; UNTESTED: written for the T-35 flow and never run, because no
+windowed Blender was started for it): the three steps as a researcher does them, through the panel's operators and the
+add-on's own timer, no path typed: Open asset, pick neutral_to_AA, Run, wait; then it sets the timeline to a middle frame,
+takes a viewport render, draws the Asset, Motion, Run, Results and Checks panels as popups with their draw errors asserted
+absent, and presses the Physics only button. It prints what it saw; a person still has to look at the screenshots and at the
+side bar's width.
+
 Blender quits itself at the end. `--work` receives the runs, the screenshots (one viewport render per shown entry, at the last
 frame) and `windowed_check.json`. The scene should be the lab lips (`asrp import-asset data/lab_export <dir>`),
 the two motions two different landmark motions on the same scene, so that the final shapes differ.
@@ -61,7 +68,9 @@ def opt(name):
     return argv[argv.index(name) + 1]
 
 
-SCENE, MOTION_A, MOTION_B, WORK = opt("--scene"), opt("--motion-a"), opt("--motion-b"), Path(opt("--work"))
+THREE_STEPS = "--three-steps" in argv
+SCENE, MOTION_A, MOTION_B = (None, None, None) if THREE_STEPS else (opt("--scene"), opt("--motion-a"), opt("--motion-b"))
+WORK = Path(opt("--work"))
 WORK.mkdir(parents=True, exist_ok=True)
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 SESSION = asrp_blender.SESSION
@@ -338,6 +347,36 @@ def script():
     result.update(ok=True, largest_timer_gap_s=max(gaps), positions=pos, screenshots={t: points[t + " shots"] for t in wanted})
 
 
+def three_steps_script():
+    """Open asset, pick neutral_to_AA, Run, look: the T-35 flow with the add-on's own timer and a real window."""
+    import os
+
+    sc = bpy.context.scene
+    os.environ.setdefault("ASRP_RUNS_DIR", str(WORK / "runs"))
+    yield 1.0
+    assert bpy.ops.asrp.open_asset() == {"FINISHED"}
+    say(f"Open asset: {[(i.role, len(i.obj.data.vertices)) for i in sc.asrp_asset_objects]}")
+    index = next(i for i, m in enumerate(sc.asrp_motions) if m.file == "neutral_to_AA.json")
+    assert bpy.ops.asrp.pick_motion(index=index) == {"FINISHED"}
+    for name in ("ASRP_PT_asset", "ASRP_PT_motion", "ASRP_PT_run"):
+        yield from draw_panel(name)
+    assert bpy.ops.asrp.run_motion() == {"FINISHED"}
+    yield from draw_panel("ASRP_PT_run")  # drawn while the run is going
+    yield from wait_for_end()
+    assert SESSION.state == "complete" and not SESSION.load_error, (SESSION.state, SESSION.error, SESSION.load_error)
+    say(f"run: {SESSION.state}, passed {SESSION.passed}, layer on the lips: {sc.asrp_asset_layer}, timeline 0..{sc.frame_end} at {sc.render.fps} fps")
+    lips = next(i.obj for i in sc.asrp_asset_objects if i.role == "lips")
+    sc.frame_set(25)
+    yield 0.6
+    say(f"viewport render at frame 25, final shape: {screenshots('three_steps_final', lips)}")
+    assert bpy.ops.asrp.set_layer(layer="physics") == {"FINISHED"}
+    yield 0.6
+    say(f"viewport render at frame 25, physics only: {screenshots('three_steps_physics', lips)}")
+    for name in ("ASRP_PT_results", "ASRP_PT_checks"):
+        yield from draw_panel(name)
+    result["ok"] = True
+
+
 def drive():
     try:
         return next(generator)
@@ -359,5 +398,5 @@ def drive():
 
 if not INSTALLED:
     asrp_blender.register()
-generator = quit_midrun() if QUIT_MIDRUN else script()
+generator = three_steps_script() if THREE_STEPS else quit_midrun() if QUIT_MIDRUN else script()
 bpy.app.timers.register(drive, first_interval=1.0, persistent=True)  # File > Open must not end the script

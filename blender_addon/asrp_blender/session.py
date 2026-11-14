@@ -72,6 +72,7 @@ class RunSession:
         self.cancel_requested = False
         self.cancel_requested_at = 0.0
         self.handled = False  # the UI has taken the outcome (loaded the results)
+        self.target = "files"  # where a complete run's results go: "asset" (the five objects of Open asset) or "files" (new objects)
         self.load_error = ""
         self.started_at = 0.0
         self.ended_at = 0.0

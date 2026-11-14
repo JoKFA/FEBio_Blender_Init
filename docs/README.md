@@ -60,13 +60,14 @@ asrp/
 │
 ├─ src/
 │  ├─ asrp_core/              核心程序，不能 import bpy
-│  │  ├─ cli.py               命令行 asrp（doctor、check、import-asset、convert-motion、run）
+│  │  ├─ cli.py               命令行 asrp（doctor、check、import-asset、convert-motion、list-motions、run）
 │  │  ├─ doctor.py            找 FEBio、Blender，查路径
 │  │  ├─ febio.py             调用 FEBio、读日志
 │  │  ├─ playback.py          回放包（表面网格 + PC2 点缓存）
 │  │  ├─ tetmesh.py           四面体网格的检查和读写（ADR-20）
 │  │  ├─ scene.py             场景描述 scene.json 的格式和校验（asrp check）
 │  │  ├─ trajectory.py        运动 trajectory.json 的格式、铰链运动生成；实验室运动文件的受限读取和转换（asrp convert-motion）
+│  │  ├─ motions.py           导出文件夹里有哪些运动（asrp list-motions，面板的运动列表）
 │  │  ├─ compare.py           两份结果差多少：逐帧的平均、P95、最大，下垂，晃动，翻转的面（T-34）
 │  │  ├─ generate.py          生成器：scene + trajectory → FEBio 输入 .feb（真实大小、× k，粘连）
 │  │  ├─ embed.py             把显示网格嵌进四面体网格，算出每帧显示顶点位置
@@ -83,6 +84,7 @@ asrp/
 │
 ├─ blender_addon/asrp_blender/  Blender 插件，只管界面，不用第三方库
 │  ├─ __init__.py             面板（英文）：Load result、Check backend、Run、Results、Checks
+│  ├─ asset.py                三步流程：Open asset 建五个物体，把一次运行的结果放回这五个物体上（T-35）
 │  └─ session.py              一次 asrp run 的子进程：读输出、进度、取消（不含 bpy）
 │
 ├─ tests/                     自动测试（pytest）

@@ -276,6 +276,19 @@ def run_scene(args: argparse.Namespace, show) -> int:
     return 1
 
 
+def cmd_list_motions(args: argparse.Namespace) -> int:
+    from asrp_core import motions
+
+    try:
+        found = motions.list_motions(args.folder)
+    except motions.MotionsError as e:
+        print(f"ERROR  {e}")
+        return 1
+    for line in motions.lines(found):
+        print(line)
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="asrp")
     parser.add_argument("--version", action="version", version=f"asrp {__version__}")
@@ -313,6 +326,10 @@ def main(argv: list[str] | None = None) -> int:
     conv.add_argument("--hold-frames", type=int, default=10,
                       help="frames the last pose is held (default 10, as in the Ziva reference runs)")
     conv.set_defaults(func=cmd_convert_motion)
+
+    lm = sub.add_parser("list-motions", help="list the trajectory files of an export folder, one JSON line each")
+    lm.add_argument("folder", help="the export folder (it has a trajectories/ folder), or a folder of trajectory files")
+    lm.set_defaults(func=cmd_list_motions)
 
     r = sub.add_parser("run", help="run a scene with a motion (or a ready .feb) once, everything in a run folder")
     r.add_argument("scene", nargs="?", help="path of scene.json")
