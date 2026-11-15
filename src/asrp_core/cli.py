@@ -145,6 +145,12 @@ def cmd_convert_motion(args: argparse.Namespace) -> int:
             hold_frames=args.hold_frames, source=f"{origin} (sha256 {digest})")
     except trajectory.TrajectoryError as e:
         return fail(str(e))
+    if args.title is not None:
+        motion.title = args.title
+        try:
+            trajectory.from_json(motion.to_json())
+        except trajectory.TrajectoryError as e:
+            return fail(str(e))
     trajectory.write(args.out, motion)
     report = scene.check(args.scene, args.out)
     moved = max(max(sum(c * c for c in t) ** 0.5 for t in row) for row in motion.landmarks["translations_mm"])
@@ -156,6 +162,18 @@ def cmd_convert_motion(args: argparse.Namespace) -> int:
     verdict = "PASSED" if report.ok else "FAILED"
     print(f"convert {verdict}: scene and trajectory check {len(report.errors)} errors, {len(report.warnings)} warnings")
     return 0 if report.ok else 1
+
+
+def cmd_set_motion_title(args: argparse.Namespace) -> int:
+    from asrp_core import motions, trajectory
+
+    try:
+        motions.set_title(args.file, args.title)
+    except trajectory.TrajectoryError as e:
+        print(f"ERROR  {e}")
+        return 1
+    print(f"title      {args.file}: {args.title}")
+    return 0
 
 
 def cmd_run(args: argparse.Namespace) -> int:
@@ -325,7 +343,13 @@ def main(argv: list[str] | None = None) -> int:
     conv.add_argument("--driver", default="jaw01", help="the scene's jaw driver (default jaw01)")
     conv.add_argument("--hold-frames", type=int, default=10,
                       help="frames the last pose is held (default 10, as in the Ziva reference runs)")
+    conv.add_argument("--title", help="the name the Blender panel shows for this motion (one line, at most 60 characters)")
     conv.set_defaults(func=cmd_convert_motion)
+
+    st = sub.add_parser("set-motion-title", help="put a title (the name the Blender panel shows) into a trajectory.json")
+    st.add_argument("file", help="the trajectory file")
+    st.add_argument("title", help="one line, at most 60 characters")
+    st.set_defaults(func=cmd_set_motion_title)
 
     lm = sub.add_parser("list-motions", help="list the trajectory files of an export folder, one JSON line each")
     lm.add_argument("folder", help="the export folder (it has a trajectories/ folder), or a folder of trajectory files")

@@ -29,20 +29,37 @@ CANCEL_WAIT_S = 10.0  # a cancel asked for before the run folder is known: kill 
 EOF_GRACE_S = 5.0  # the process is gone but the pipe is still open (a grandchild holds it): stop waiting after this
 
 
+NO_PROJECT = ("The ASRP project folder is not chosen yet. Open the ASRP tab in the side bar (N key) "
+              "and press Choose project folder.")
+WRONG_FOLDER = ("This is not the ASRP project folder. The right folder is the one you downloaded ASRP into: it holds the file "
+                "pyproject.toml and the folder src/asrp_core.")
+preference_project = lambda: ""  # noqa: E731  the add-on puts a function here that reads its preference (this module has no bpy)
+
+
+def project_problem(folder) -> str | None:
+    """None when `folder` is an ASRP project (it holds pyproject.toml and src/asrp_core), else the sentence that says so."""
+    folder = Path(folder)
+    return None if (folder / "pyproject.toml").is_file() and (folder / "src" / "asrp_core").is_dir() else WRONG_FOLDER
+
+
 def core_project() -> Path | None:
-    """The asrp project whose venv runs the core: $ASRP_PROJECT, else the repo this add-on lives in."""
+    """The asrp project whose venv runs the core: $ASRP_PROJECT, else the folder chosen in the add-on preference, else
+    the repo this add-on lives in (when it is loaded from one). None when there is none."""
     override = os.environ.get("ASRP_PROJECT")
     if override:
         return Path(override)
+    chosen = preference_project()
+    if chosen and project_problem(chosen) is None:
+        return Path(chosen)
     repo = Path(__file__).resolve().parents[2]
-    return repo if (repo / "pyproject.toml").is_file() else None
+    return repo if project_problem(repo) is None else None
 
 
 def core_command(*args: str) -> list[str]:
     project = core_project()
     uv = shutil.which("uv")
     if project is None:
-        raise RuntimeError("ASRP project not found; set ASRP_PROJECT")
+        raise RuntimeError(NO_PROJECT)
     if uv is None:
         raise RuntimeError("Cannot find uv on PATH")
     return [uv, "run", "--project", str(project), "asrp", *args]

@@ -87,22 +87,34 @@ With no argument this is the full level, the definition of done before a merge r
 
 ## Install the Blender add-on
 
-Run from the repo root, and again after changing the add-on:
+Build the add-on package once (from the repo root; again after changing the add-on). The only command line step:
 
 ```bash
 mkdir -p dist
 "C:/Program Files/Blender Foundation/Blender 5.2/blender.exe" --factory-startup --command extension build --source-dir blender_addon/asrp_blender --output-dir dist
+```
+
+In PowerShell, put `&` in front of the quoted path. This writes `dist/asrp_blender-0.0.1.zip`.
+
+Then, with the mouse, in Blender (Start menu, no environment variable, nothing else to type):
+
+1. Edit > Preferences > Add-ons, the small arrow at the top right (Add-ons menu) > Install from Disk..., pick `dist/asrp_blender-0.0.1.zip`. Make sure the box in front of ASRP is ticked.
+2. Close the Preferences. In the 3D view press N, open the ASRP tab. The first time it says "Choose the ASRP project folder (once)": press Choose project folder and pick the folder you downloaded ASRP into (the one that holds `pyproject.toml` and `src`). Blender remembers it; it is also in Preferences > Add-ons > ASRP.
+3. Steps 1 to 3 of the panel (Open the asset, Choose a motion, Run) are then ready.
+
+The same from the command line (installs into your Blender profile and ticks the add-on):
+
+```bash
 "C:/Program Files/Blender Foundation/Blender 5.2/blender.exe" --command extension install-file -r user_default -e dist/asrp_blender-0.0.1.zip
 ```
 
-In PowerShell, put `&` in front of the quoted path.
-Installed this way the add-on lives outside the repo, so Check Backend needs `ASRP_PROJECT` set to the repo path. Load Result does not.
+The project is found in this order: the environment variable `ASRP_PROJECT` (if set), the folder chosen in the add-on preferences, the repo the add-on file lives in (when it is loaded from the repo, as the checks do).
 
 ## Playing a result in Blender
 
 A solved run is a folder with `playback.json` (surface mesh, mm) and `playback.pc2` (per-frame positions). `runs/` is git-ignored, so a fresh clone has to run something first: the lab lips (the three commands above) or the small S1 test block (`uv run python spikes/s1_dynamic_jaw.py`, writes `runs/s1_dynamic_jaw`).
 
-In Blender (with the add-on installed, above): delete the default cube, then sidebar (N) > ASRP > Load Result, pick the run folder (the one that contains `playback.json`), View > Frame Selected (numpad `.`), press play. The object is scaled 0.001 so mm data shows in metres. Load Result brings in the lips only; the skull and jaw in the pictures come from `tools/render_prototype.py`:
+In Blender (with the add-on installed, above): delete the default cube, then sidebar (N) > ASRP > Advanced > Load result, pick the run folder (the one that contains `playback.json`), View > Frame Selected (numpad `.`), press play. The object is scaled 0.001 so mm data shows in metres. Load result brings in the lips only; the skull and jaw in the pictures come from `tools/render_prototype.py`:
 
 ```bash
 "C:/Program Files/Blender Foundation/Blender 5.2/blender.exe" --background --factory-startup --python-exit-code 1 --python tools/render_prototype.py -- runs/<run folder> --out runs/<run folder>/render

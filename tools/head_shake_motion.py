@@ -96,7 +96,7 @@ def build(scene_path: Path) -> trajectory.Trajectory:
     moves = [[1.0, 0.0, 0.0, x, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0] for x in xs]
     return trajectory.Trajectory(
         fps=s.solver.fps.value, frames=frames(), drivers={HEAD: moves, JAW: [list(r) for r in moves]},
-        source_tag="ours", settle_until_frame=SETTLE,
+        source_tag="ours", settle_until_frame=SETTLE, title="Prototype 2: head shake (test motion)",
         source=(f"head shake (T-28, ours): {HEAD} and {JAW} translate along x, keys of the lab's "
                 f"passive_dynamics_test.py (0 at frames 0 and {START}, {LOOPS} loops of {FRAMES_PER_LOOP} frames, "
                 f"+-{AMPLITUDE_UNITS:g} scene units = +-{AMPLITUDE_UNITS * mm:.4g} mm), cubic Hermite with our reading of "

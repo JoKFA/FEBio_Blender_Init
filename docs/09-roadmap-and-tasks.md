@@ -155,18 +155,18 @@ M0 基础 ✅ ──► M1 原料就绪 ✅ ──► M2 物理段 ──► M3 
 
 - **结果**（2026-11-13）：面板有 Asset、Motion、Run 三个小节（`blender_addon/asrp_blender/asset.py` 和 `__init__.py`）。Open asset 用项目的 `data/lab_export` 调 `asrp import-asset`，建五个网格物体；运动列表来自 `asrp list-motions`（`src/asrp_core/motions.py`），列的是 `data/lab_export/trajectories/` 里的 `head_shake.json` 和 T-34 转出的 `neutral_to_AA.json`；Run 完成后结果放回这五个物体：嘴唇用网格缓存，骨头按运行文件夹里 `trajectory.json` 的逐帧变换打关键帧。有 landmark 层的运行默认显示最终形状，没有的显示物理层。插件里没有计算代码：骨头只播运动文件自己的驱动源，跟着派生驱动源的骨头会被拒绝。`tools/check_panel.py` 的三步检查（命令行下的 Blender，真实的 `asrp run`，真实的 AA 运动）：五个物体按身份（`session_uid`）查；甩头显示物理层，第 24、36、86 帧，AA 显示最终形状，第 25、36、46 帧，嘴唇在物体本地几何的毫米里和运行文件夹同一层的缓存差 0（门限 1×10⁻⁵ mm），检查前先确认中间那一帧两层差大于 0.05 mm；骨头在这些帧等于运动文件的变换，该不动的不动；时间轴的帧数和帧率等于运动的。四个对照都走同一个检查函数并被对应的检查抓住：甩头时颅骨不动（要求报的就是颅骨）、AA 显示成物理层、嘴唇比骨头晚一帧、结果放到新建的物体上。三个操作没有路径属性。原有的回归检查都留着。独立审查之后改了三处：运动文件夹里有一个不是文本的文件时列表不再整个失败、甩头对照要求点名颅骨、06 里的示例来源。**没做的、没验证的**：插件装进 Blender 自己的插件目录时要靠 `ASRP_PROJECT` 找项目，这种装法没验证；landmark 小点、在文本编辑器里打开导入报告、导入的进度条没有做，Open asset 时窗口会等几秒；清理子进程的回归检查把等待从约 1 秒放宽到约 9 秒（机器忙时 Windows 上结束进程树有延迟）；运行报告的 `surface_health` 只记最后一帧和最差的一帧，所以 Checks 小节只能说出这两帧的翻转面和短边。
 - **带窗口用鼠标走一遍的发现**（2026-11-15，项目负责人要求；像使用者一样只用鼠标键盘，文档要求敲命令的地方照抄文档的命令；原型一、原型二各一遍。`tools/panel_windowed_check.py --three-steps` 也跑通了，但它是脚本替人按按钮，下面这些大多是它看不到的）：
-  1. 仓库里没有现成的插件包，README 只写了命令行的装法。Blender 的 Edit > Preferences > Add-ons > Install from Disk 能装，但要先用命令行把包打出来；
-  2. 装好以后按 Open asset，弹出 "ASRP project not found; set ASRP_PROJECT"：要设一个环境变量，Blender 里没有地方设，报错也不说设成什么。这一步把使用者挡在门外；
-  3. 装好、关掉再打开 Blender，插件前面的勾没了，ASRP 标签不见，要去 Preferences 里重新勾上（只见到一次，原因没有查清，🔍）；
+  1. 仓库里没有现成的插件包，README 只写了命令行的装法。Blender 的 Edit > Preferences > Add-ons > Install from Disk 能装，但要先用命令行把包打出来；**已修一半**：README 的 "Install the Blender add-on" 现在写成一条打包命令加用鼠标装的步骤；包还是要用那一条命令打，仓库里仍没有现成的包；
+  2. 装好以后按 Open asset，弹出 "ASRP project not found; set ASRP_PROJECT"：要设一个环境变量，Blender 里没有地方设，报错也不说设成什么。这一步把使用者挡在门外；**已修**：项目文件夹的偏好加面板上的 "Choose the ASRP project folder (once)" 和 Choose project folder 按钮（06 第 2 节），找不到项目时三步灰掉并写原因，不再出现这条报错；
+  3. 装好、关掉再打开 Blender，插件前面的勾没了，ASRP 标签不见，要去 Preferences 里重新勾上（只见到一次，原因没有查清，🔍）；**没有重现，也没有找到插件这一边的原因**：用隔离的用户配置（`BLENDER_USER_RESOURCES` 指向临时文件夹）照 README 的办法打包、安装、勾上、退出再启动，勾还在，选的项目文件夹也在（`tools/check_panel.py` 的 case 12，每次验证都跑）；让 `register()` 抛错再存一次偏好，重新启动后勾仍在（面板不在，因为没注册上；改好以后又回来），所以 `register()` 出错不会把勾弄掉；项目找不到时 `register()` 不受影响（找项目是用到时才做的）。剩下的可能：Blender 退出时没有存偏好（"Auto-Save Preferences" 关着，或是别的 Blender 版本、别的配置文件夹，或用 `--factory-startup` 启动过），这些不是插件能控制的；面板上选项目文件夹时现在会立刻存一次偏好，勾也随之存下；
   4. Open asset 以后资产在启动场景的 2 米方块里面，完全看不见（当天已修：罩住资产的物体被隐藏，视角对准资产）；
-  5. Run 完成以后视口不动，停在第 0 帧，面板上没有任何提示要去按时间轴的播放键；时间轴仍然显示 0 到 250 的范围，运动的 47 帧挤在最左边；
-  6. 原型一没有界面入口：要先敲三条命令（导入、生成张嘴运动、运行），再用 Load result。加载以后视口是空的，要自己点 View > Frame Selected；看到的只有一块灰色的嘴唇，从背面看，没有颅骨和下颌；
+  5. Run 完成以后视口不动，停在第 0 帧，面板上没有任何提示要去按时间轴的播放键；时间轴仍然显示 0 到 250 的范围，运动的 47 帧挤在最左边；**已修**：Run 完成后当前帧回到运动的第 0 帧，帧范围是运动的，每个时间轴 / 摄影表区域缩放到这个范围，自动开始播放，Run 小节有 Play / Pause 和 "Playing frame 0 to 46. Space bar pauses."（没有窗口的命令行检查只看得到当前帧、帧范围和播放请求；缩放和自动播放在带窗口的 Blender 里没见过）；
+  6. 原型一没有界面入口：要先敲三条命令（导入、生成张嘴运动、运行），再用 Load result。加载以后视口是空的，要自己点 View > Frame Selected；看到的只有一块灰色的嘴唇，从背面看，没有颅骨和下颌；**已修**：原型一的张嘴 12 度是列表里的第一条 "Prototype 1: jaw opens 12 degrees (test motion)"（`data/lab_export/trajectories/jaw_open_12deg.json`，由 `tools/placeholder_jaw_motion.py` 写），默认选中，和另外两条一样在五个物体上带骨头播放；
   7. 甩头的 4.5 mm 在默认视角下只有几个像素（第 19 帧和第 0 帧相比，视口里约 5% 的像素不同），播放时几乎看不出来；
-  8. 面板最上面是 Load result 和 Check backend，三步没有编号，新使用者不知道先点哪个；Load result 和 Load run folder 是两个意思相近的按钮；
-  9. 运动列表显示的是文件名和内部用语（ours、lab_setting、landmarks），第二行在默认宽度下被截成 "neutral_to_AA: 47...etting, landmarks"；默认选中的是按字母排第一的甩头，不是实验室的运动；
-  10. Checks 里两行名字被截断（"(b) Hard attachments follow b…"），整节要往下滚才看得全，用语是内部的（Tet mesh valid、edges < 0.5x）；
+  8. 面板最上面是 Load result 和 Check backend，三步没有编号，新使用者不知道先点哪个；Load result 和 Load run folder 是两个意思相近的按钮；**已修**：三个小节标成 "1  Open the asset"、"2  Choose a motion"、"3  Run"，Load result、Check backend、Load run folder 和 Run other files 都挪进最下面收着的 "Advanced"；
+  9. 运动列表显示的是文件名和内部用语（ours、lab_setting、landmarks），第二行在默认宽度下被截成 "neutral_to_AA: 47...etting, landmarks"；默认选中的是按字母排第一的甩头，不是实验室的运动；**已修**：列表每条是标题加一行较小的细节（"47 frames, 30 fps, lab motion"），"ours" 和 "lab_setting" 说成 "test motion" 和 "lab motion"，默认选第一条（原型一）；标题写在运动文件的 `title` 里（04 第 5.2 节）；
+  10. Checks 里两行名字被截断（"(b) Hard attachments follow b…"），整节要往下滚才看得全，用语是内部的（Tet mesh valid、edges < 0.5x）；**名字已修**：名字最长 28 个字符，Checks 默认收着；"Tet mesh valid" 和 "edges < 0.5x" 的用语没有改；
   11. Load result 的文件窗口从"文档"文件夹开始，不是项目的 runs；右边有一个要手打的 version 文本框；
-  12. 面板的 Open asset 用的是默认材料（15 kPa），T-34 的报告用的是 Ziva 的值（12 kPa），所以面板里的短边是 108 条、报告里是 109 条；面板上不写用的是哪一套。
+  12. 面板的 Open asset 用的是默认材料（15 kPa），T-34 的报告用的是 Ziva 的值（12 kPa），所以面板里的短边是 108 条、报告里是 109 条；面板上不写用的是哪一套。**已修**：Open asset 用 `--tissue-settings lab`，Asset 小节从导入的 `scene.json` 读出并写 "Material: 12 kPa, 0.4 (measured in Ziva)"。第 7 条（甩头看不清）这一包没动；第 11 条（Load result 的文件窗口）没动。
   第 4 条当天修了，并且加进了检查：命令行下的三步检查原来在按 Open asset 之前先把场景里的网格（包括那个方块）删掉，所以看不到这个问题；现在它保留一个和启动场景一样的 2 米方块，要求打开资产后方块被隐藏而不是删除、旁边的物体不受影响，关掉修复时检查失败。其余各条还没有修。
 
 ---
