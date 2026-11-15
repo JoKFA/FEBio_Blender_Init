@@ -849,8 +849,25 @@ def snapshot(objs):
     return {role: (o.session_uid, o.name) for role, o in objs.items()}
 
 
+BYSTANDER = "asrp_check_bystander"  # marks the objects this check puts in the scene to stand for a user's own objects
+
+
 def mesh_objects():
-    return [o for o in bpy.data.objects if o.type == "MESH" and o.users_collection]
+    return [o for o in bpy.data.objects if o.type == "MESH" and o.users_collection and BYSTANDER not in o]
+
+
+def bystander(name, size, at):
+    """A box that is NOT the asset's: `size` metres along each axis (one number or three), centred at `at`."""
+    sx, sy, sz = (size,) * 3 if isinstance(size, (int, float)) else size
+    corners = [(x * sx / 2, y * sy / 2, z * sz / 2) for x in (-1, 1) for y in (-1, 1) for z in (-1, 1)]
+    faces = [(0, 1, 3, 2), (4, 6, 7, 5), (0, 4, 5, 1), (2, 3, 7, 6), (0, 2, 6, 4), (1, 5, 7, 3)]
+    mesh = bpy.data.meshes.new(name)
+    mesh.from_pydata(corners, [], faces)
+    obj = bpy.data.objects.new(name, mesh)
+    obj.location = at
+    obj[BYSTANDER] = True
+    bpy.context.collection.objects.link(obj)
+    return obj
 
 
 def asset_now():
@@ -1028,6 +1045,13 @@ def case_three_steps():
         asrp_blender.remove_entry(sc, index)
     asrp_blender.asset.remove_objects([o for o in bpy.data.objects if o.type == "MESH"])
     assert not mesh_objects(), [o.name for o in mesh_objects()]
+    # What a researcher's Blender holds when it opens: the start-up scene's 2 m cube at the origin. The asset is shown at its real
+    # size, a head, and lands INSIDE that cube: a person then sees a cube and no asset (seen in the windowed walk-through,
+    # 2026-11-15; this check used to delete the cube first, so it could not see it). Two more objects that do not enclose
+    # the asset stand for a user's own things: they must be left alone.
+    cube = bystander("Cube", 2.0, (0.0, 0.0, 0.0))
+    beside = bystander("Beside", 0.05, (3.0, 0.0, 0.0))
+    wall = bystander("Wall", (4.0, 0.02, 4.0), (0.0, 2.0, 0.0))  # large, but the asset is not inside it
     for name, allowed in (("open_asset", []), ("run_motion", []), ("pick_motion", ["index"])):  # no path property in the three steps
         props = [p.identifier for p in getattr(bpy.ops.asrp, name).get_rna_type().properties if p.identifier != "rna_type"]
         assert props == allowed, (name, props)
@@ -1039,6 +1063,20 @@ def case_three_steps():
         (sorted(objs), [o.name for o in meshes])
     assert {o[asrp_blender.asset.ROLE_KEY] for o in meshes} == set(ROLES)
     ident = snapshot(objs)
+    box, cube_box = asrp_blender.asset.asset_box(objs.values()), asrp_blender.asset.world_box(cube)
+    extent = [round(box[1][i] - box[0][i], 3) for i in range(3)]
+    assert all(0.05 < e < 0.5 for e in extent), f"the asset is not head-sized in Blender's metres: {extent}"
+    assert all(cube_box[0][i] < box[0][i] and box[1][i] < cube_box[1][i] for i in range(3)), "the asset is not inside the start-up cube"
+    assert cube.hide_get(), "the start-up cube still hides the asset: Open asset left it visible around the asset"
+    assert cube.name in bpy.data.objects and cube.users_collection and len(cube.data.vertices) == 8, "the cube was deleted, not hidden"
+    assert not beside.hide_get() and not wall.hide_get(), "Open asset hid an object the asset is not inside"
+    assert all(not o.hide_get() for o in objs.values()), "an asset object is hidden"
+    assert sc.asrp_asset_hidden == "Cube", sc.asrp_asset_hidden
+    cube.hide_set(False)  # the rule itself, once more: shown again, it is found again; hidden, it is not reported twice
+    assert asrp_blender.asset.hide_what_encloses(bpy.context, objs) == ["Cube"] and cube.hide_get()
+    assert asrp_blender.asset.hide_what_encloses(bpy.context, objs) == []
+    print(f"three steps, step 1 Open asset leaves the asset visible: the asset is {extent} m, inside the 2 m start-up cube; the cube "
+          f"is hidden (not deleted), 'Beside' and 'Wall' are left alone; the panel says {sc.asrp_asset_hidden!r} was hidden")
     listed = {m.file: m for m in sc.asrp_motions}
     assert set(MOTIONS) <= set(listed) and all(not listed[f].error for f in MOTIONS), [(m.file, m.error) for m in sc.asrp_motions]
     assert listed["neutral_to_AA.json"].has_landmarks and not listed["head_shake.json"].has_landmarks

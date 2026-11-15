@@ -17,7 +17,7 @@ from datetime import datetime
 from pathlib import Path
 
 import bpy
-from mathutils import Matrix
+from mathutils import Matrix, Vector
 
 from .session import core_command, core_project
 
@@ -26,6 +26,10 @@ ASSET_PREFIX = "ASRP "
 ROLE_KEY = "asrp_role"  # custom property on each of the five objects
 LAYER_WORDS = {"physics": "Physics only", "final": "Final shape"}
 IMPORT_TIMEOUT_S = 900  # the first import after installing may have to build the Python environment
+# After Open asset every 3D view looks at the asset from the front and a little to the right and above (the asset's
+# face looks along +Y), from this many times the asset's radius: the head then fills most of the view.
+VIEW_FROM = (0.55, 1.0, 0.25)
+VIEW_DISTANCE_OVER_RADIUS = 2.6
 
 
 def export_folder() -> Path:
@@ -233,7 +237,67 @@ def open_asset(context) -> dict:
     fill_motions(scene, motions)
     for other in context.selected_objects:
         other.select_set(False)
+    scene.asrp_asset_hidden = ", ".join(hide_what_encloses(context, made))
+    frame_views(context, made)
     return made
+
+
+# --- making the opened asset visible ----------------------------------------------------------------------------------------
+#
+# The asset is shown at its real size (a head, about a quarter of a metre). Blender's own start-up scene has a 2 m cube
+# at the origin, so a freshly opened asset sits INSIDE that cube and the researcher sees a cube and nothing else
+# (seen in the windowed walk-through, 2026-11-15). Open asset therefore hides whatever encloses the asset (hidden, not
+# deleted: the eye icon in the outliner shows it again) and points the 3D views at the asset.
+
+
+def world_box(obj) -> tuple[Vector, Vector]:
+    """The lowest and highest corner of an object's bounding box in world coordinates."""
+    corners = [obj.matrix_world @ Vector(c) for c in obj.bound_box]
+    return (Vector(min(c[i] for c in corners) for i in range(3)), Vector(max(c[i] for c in corners) for i in range(3)))
+
+
+def asset_box(objects) -> tuple[Vector, Vector]:
+    boxes = [world_box(o) for o in objects]
+    return (Vector(min(b[0][i] for b in boxes) for i in range(3)), Vector(max(b[1][i] for b in boxes) for i in range(3)))
+
+
+def hide_what_encloses(context, made: dict) -> list[str]:
+    """Hide every visible mesh object that is not the asset's and whose bounding box holds the whole asset: the asset
+    would be inside it and could not be seen. Returns the names of the objects hidden."""
+    context.view_layer.update()  # the new objects' world matrices
+    low, high = asset_box(made.values())
+    ours = {o.session_uid for o in made.values()}
+    hidden = []
+    for obj in context.view_layer.objects:
+        if obj.type != "MESH" or obj.session_uid in ours or obj.hide_get():
+            continue
+        a, b = world_box(obj)
+        if all(a[i] <= low[i] and high[i] <= b[i] for i in range(3)):
+            obj.hide_set(True)
+            hidden.append(obj.name)
+    return hidden
+
+
+def frame_views(context, made: dict) -> int:
+    """Point every 3D view of every window at the asset. Returns how many views were set (none in a Blender without a
+    window, where there is nothing to look at)."""
+    context.view_layer.update()
+    low, high = asset_box(made.values())
+    centre, radius = (low + high) / 2, (high - low).length / 2
+    count = 0
+    for window in context.window_manager.windows:
+        for area in window.screen.areas:
+            if area.type != "VIEW_3D":
+                continue
+            view = area.spaces[0].region_3d
+            if view.view_perspective == "CAMERA":  # looking through the scene camera: that camera is not on the asset
+                view.view_perspective = "PERSP"
+            view.view_location = centre
+            view.view_distance = VIEW_DISTANCE_OVER_RADIUS * radius
+            view.view_rotation = Vector(VIEW_FROM).normalized().to_track_quat("Z", "Y")
+            area.tag_redraw()
+            count += 1
+    return count
 
 
 # --- putting a finished run on the objects --------------------------------------------------------------------------------

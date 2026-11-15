@@ -3,12 +3,13 @@
     "<blender.exe>" --factory-startup --python tools/panel_windowed_check.py -- \
         --scene <scene.json> --motion-a <a.json> --motion-b <b.json> --work <folder>
 
-Third mode, `--three-steps` (needs only `--work <folder>`; UNTESTED: written for the T-35 flow and never run, because no
-windowed Blender was started for it): the three steps as a researcher does them, through the panel's operators and the
-add-on's own timer, no path typed: Open asset, pick neutral_to_AA, Run, wait; then it sets the timeline to a middle frame,
-takes a viewport render, draws the Asset, Motion, Run, Results and Checks panels as popups with their draw errors asserted
-absent, and presses the Physics only button. It prints what it saw; a person still has to look at the screenshots and at the
-side bar's width.
+Third mode, `--three-steps` (needs only `--work <folder>`; `--hold <seconds>` keeps the window open at the end; first run
+on 2026-11-15): the three steps through the panel's operators and the add-on's own timer, no path typed: Open asset (it
+must leave the asset in view: the start-up cube hidden, the 3D view on the asset, a viewport render that is not empty),
+pick neutral_to_AA, Run, wait; viewport renders of both layers; the Asset, Motion, Run, Results and Checks panels drawn as
+popups with their draw errors asserted absent; a window screenshot; playback with Blender's own play button, counted; then
+the head shake on the same five objects. It presses the buttons FOR a person, so it cannot see what a person would not
+find or understand: that needs a person with a mouse (docs/09, T-35 card).
 
 Blender quits itself at the end. `--work` receives the runs, the screenshots (one viewport render per shown entry, at the last
 frame) and `windowed_check.json`. The scene should be the lab lips (`asrp import-asset data/lab_export <dir>`),
@@ -76,6 +77,7 @@ sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 SESSION = asrp_blender.SESSION
 result = {"ok": False}
 QUIT_MIDRUN = "--quit-midrun" in argv
+HOLD = float(opt("--hold")) if "--hold" in argv else 0.0  # three-steps mode: seconds to keep the window open at the end
 
 
 class Capture:
@@ -173,6 +175,65 @@ def screenshots(tag, obj):
     except Exception as exc:  # noqa: BLE001
         return {"error": f"{type(exc).__name__}: {exc}"}
     return {"image": str(path), "bytes": path.stat().st_size}
+
+
+def view_shot(tag, window, area, region):
+    """A viewport render of the 3D view AS IT IS (nothing about the view is changed), and how much of the picture is not
+    background: the share of pixels that differ from the picture's corner colour."""
+    path = WORK / f"{tag}.png"
+    try:
+        bpy.ops.wm.redraw_timer(type="DRAW_WIN_SWAP", iterations=1)
+        with bpy.context.temp_override(window=window, area=area, region=region):
+            bpy.ops.render.opengl(view_context=True, write_still=False)
+            bpy.data.images["Render Result"].save_render(str(path))
+        image = bpy.data.images.load(str(path))
+        pixels = [0.0] * (image.size[0] * image.size[1] * image.channels)
+        image.pixels.foreach_get(pixels)
+        channels, corner = image.channels, pixels[:3]
+        total = image.size[0] * image.size[1]
+        covered = sum(1 for i in range(0, total * channels, channels * 16)  # every 16th pixel is plenty
+                      if max(abs(pixels[i + c] - corner[c]) for c in range(3)) > 0.04) / (total / 16)
+        bpy.data.images.remove(image)
+    except Exception as exc:  # noqa: BLE001
+        return {"error": f"{type(exc).__name__}: {exc}"}
+    return {"image": str(path), "bytes": path.stat().st_size, "covered": round(covered, 3)}
+
+
+def window_shot(tag, window):
+    """The whole Blender window as the person sees it, panels included (bpy.ops.screen.screenshot after a forced redraw)."""
+    path = WORK / f"{tag}.png"
+    try:
+        bpy.ops.wm.redraw_timer(type="DRAW_WIN_SWAP", iterations=2)
+        with bpy.context.temp_override(window=window, screen=window.screen):
+            bpy.ops.screen.screenshot(filepath=str(path), check_existing=False)
+    except Exception as exc:  # noqa: BLE001
+        return {"error": f"{type(exc).__name__}: {exc}"}
+    return {"image": str(path), "bytes": path.stat().st_size}
+
+
+def playback(window, area, region, seconds=4.0):
+    """Press Blender's own play button for a few seconds and count the frame changes it reaches: how smooth playback is
+    on this machine with this result. A generator (it waits); its value is the sentence to print."""
+    sc = bpy.context.scene
+    seen = []
+
+    def count(scene, *_):
+        seen.append(time.perf_counter())
+
+    sc.frame_set(0)
+    bpy.app.handlers.frame_change_post.append(count)
+    try:
+        with bpy.context.temp_override(window=window, area=area, region=region):
+            bpy.ops.screen.animation_play()
+        yield seconds
+        with bpy.context.temp_override(window=window, area=area, region=region):
+            bpy.ops.screen.animation_cancel(restore_frame=False)
+    finally:
+        bpy.app.handlers.frame_change_post.remove(count)
+    if len(seen) < 2:
+        return f"no frame change in {seconds:g} s: playback did not start"
+    rate = (len(seen) - 1) / (seen[-1] - seen[0])
+    return f"{len(seen)} frame changes in {seen[-1] - seen[0]:.2f} s = {rate:.1f} per second (the motion is {sc.render.fps} fps)"
 
 
 def open_panel(name):
@@ -354,8 +415,26 @@ def three_steps_script():
     sc = bpy.context.scene
     os.environ.setdefault("ASRP_RUNS_DIR", str(WORK / "runs"))
     yield 1.0
+    began = time.perf_counter()
     assert bpy.ops.asrp.open_asset() == {"FINISHED"}
-    say(f"Open asset: {[(i.role, len(i.obj.data.vertices)) for i in sc.asrp_asset_objects]}")
+    say(f"Open asset: the window waited {time.perf_counter() - began:.1f} s; "
+        f"{[(i.role, len(i.obj.data.vertices)) for i in sc.asrp_asset_objects]}")
+    # What the researcher sees right after Open asset, in the view as Open asset left it (this script has not touched the view
+    # yet). The start-up scene has a 2 m cube around the origin; the head-sized asset is inside it.
+    made = {i.role: i.obj for i in sc.asrp_asset_objects}
+    low, high = asrp_blender.asset.asset_box(made.values())
+    window, area, region = find_view3d()
+    view = area.spaces[0].region_3d
+    cube = bpy.data.objects.get("Cube")
+    assert cube is not None, "this check wants Blender's start-up scene (--factory-startup): its cube is what hid the asset"
+    assert cube.hide_get(), "the start-up cube is still shown around the asset"
+    assert all(low[i] <= view.view_location[i] <= high[i] for i in range(3)), "the 3D view does not look at the asset"
+    assert view.view_distance < 3 * (high - low).length, f"the 3D view is {view.view_distance:.2f} m away from a {(high - low).length:.2f} m asset"
+    yield 0.6
+    shot = view_shot("three_steps_after_open_asset", window, area, region)
+    say(f"the view after Open asset: looking at the asset from {view.view_distance:.2f} m, the start-up cube hidden "
+        f"({sc.asrp_asset_hidden!r}); viewport render as left by Open asset: {shot}")
+    assert shot.get("covered", 0) > 0.05, f"the asset covers {shot.get('covered', 0):.1%} of the view after Open asset: it cannot be seen"
     index = next(i for i, m in enumerate(sc.asrp_motions) if m.file == "neutral_to_AA.json")
     assert bpy.ops.asrp.pick_motion(index=index) == {"FINISHED"}
     for name in ("ASRP_PT_asset", "ASRP_PT_motion", "ASRP_PT_run"):
@@ -374,6 +453,43 @@ def three_steps_script():
     say(f"viewport render at frame 25, physics only: {screenshots('three_steps_physics', lips)}")
     for name in ("ASRP_PT_results", "ASRP_PT_checks"):
         yield from draw_panel(name)
+
+    # What a person looks at: the whole window, side bar on the ASRP tab, all five objects in view, the final shape.
+    window, area, region = find_view3d()
+    area.spaces[0].show_region_ui = True
+    side = next(r for r in area.regions if r.type == "UI")
+    try:
+        side.active_panel_category = "ASRP"
+    except (AttributeError, TypeError) as exc:
+        say(f"could not switch the side bar to the ASRP tab from a script: {exc}")
+    assert bpy.ops.asrp.set_layer(layer="final") == {"FINISHED"}
+    with bpy.context.temp_override(window=window, area=area, region=region):
+        bpy.ops.view3d.view_all()
+    sc.frame_set(36)
+    yield 1.0
+    say(f"side bar: {side.width} px wide in a 3D view of {area.width} x {area.height} px, interface scale "
+        f"{bpy.context.preferences.view.ui_scale:g}, tab {getattr(side, 'active_panel_category', '?')!r}")
+    say(f"window screenshot at frame 36, final shape: {window_shot('three_steps_window_AA', window)}")
+    say(f"playback of neutral_to_AA with Blender's own play button: {yield from playback(window, area, region)}")
+
+    # The second motion on the same five objects: the head shake shows the physics layer.
+    before = {i.role: i.obj.session_uid for i in sc.asrp_asset_objects}
+    index = next(i for i, m in enumerate(sc.asrp_motions) if m.file == "head_shake.json")
+    assert bpy.ops.asrp.pick_motion(index=index) == {"FINISHED"}
+    assert bpy.ops.asrp.run_motion() == {"FINISHED"}
+    yield from wait_for_end()
+    assert SESSION.state == "complete" and not SESSION.load_error, (SESSION.state, SESSION.error, SESSION.load_error)
+    assert {i.role: i.obj.session_uid for i in sc.asrp_asset_objects} == before, "the head shake is not on the same five objects"
+    say(f"head shake run: {SESSION.state}, passed {SESSION.passed}, layer on the lips: {sc.asrp_asset_layer}, timeline "
+        f"0..{sc.frame_end} at {sc.render.fps} fps, the same five objects")
+    sc.frame_set(24)
+    yield 1.0
+    say(f"window screenshot at frame 24 of the head shake: {window_shot('three_steps_window_head_shake', window)}")
+    say(f"playback of head_shake with Blender's own play button: {yield from playback(window, area, region)}")
+    if HOLD:
+        say(f"holding the window open for {HOLD:g} s so that a person can look")
+        (WORK / "holding.txt").write_text("the window is open now", encoding="utf-8")
+        yield HOLD
     result["ok"] = True
 
 

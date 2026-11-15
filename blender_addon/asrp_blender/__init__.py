@@ -559,7 +559,8 @@ class ASRP_OT_open_asset(bpy.types.Operator):
         except (ValueError, OSError, RuntimeError, subprocess.TimeoutExpired) as exc:
             self.report({"ERROR"}, str(exc))
             return {"CANCELLED"}
-        self.report({"INFO"}, f"Opened {len(made)} objects: {', '.join(made)}")
+        hidden = context.scene.asrp_asset_hidden
+        self.report({"INFO"}, f"Opened {len(made)} objects: {', '.join(made)}" + (f"; hid {hidden}" if hidden else ""))
         return {"FINISHED"}
 
 
@@ -741,6 +742,9 @@ class ASRP_PT_asset(bpy.types.Panel):
             wrapped(context, layout, "An asset object was deleted. Press Open asset again.", "ERROR", alert=True)
         else:
             wrapped(context, layout, "Open: " + ", ".join(i.role for i in items), "CHECKMARK")
+            if scene.asrp_asset_hidden:
+                wrapped(context, layout, f"Hidden, because the asset was inside it: {scene.asrp_asset_hidden}. "
+                                         "The eye icon in the outliner shows it again.", "HIDE_ON")
 
 
 class ASRP_PT_motion(bpy.types.Panel):
@@ -949,6 +953,7 @@ def register():
     S.asrp_asset_objects = bpy.props.CollectionProperty(type=ASRP_AssetObject)
     S.asrp_asset_scene = bpy.props.StringProperty(description="scene.json that Open asset imported")
     S.asrp_asset_export = bpy.props.StringProperty(description="The export folder the asset and the motions come from")
+    S.asrp_asset_hidden = bpy.props.StringProperty(description="Objects Open asset hid because the asset was inside them")
     S.asrp_asset_run = bpy.props.StringProperty(description="The run folder whose result is on the asset's objects")
     S.asrp_asset_layer = bpy.props.StringProperty(description="physics or final: the layer on the asset's lips")
     S.asrp_motions = bpy.props.CollectionProperty(type=ASRP_Motion)
@@ -975,7 +980,7 @@ def unregister():
         atexit.unregister(_exit_handler)
         _exit_handler = None
     S = bpy.types.Scene
-    for name in ("asrp_motion_index", "asrp_motions", "asrp_asset_layer", "asrp_asset_run", "asrp_asset_export",
+    for name in ("asrp_motion_index", "asrp_motions", "asrp_asset_layer", "asrp_asset_run", "asrp_asset_export", "asrp_asset_hidden",
                  "asrp_asset_scene", "asrp_asset_objects", "asrp_show_messages", "asrp_shown", "asrp_results", "asrp_run_name", "asrp_runs_dir",
                  "asrp_trajectory_path", "asrp_scene_path"):
         delattr(S, name)
