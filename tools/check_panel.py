@@ -426,22 +426,30 @@ def case_malformed_reports():
 class Rec:
     """A stand-in for a panel layout that records what is drawn: ('label', text, alert) and ('op', idname, text, depress, op)."""
 
-    def __init__(self, log, alert=False):
-        self.log, self.alert, self.alignment, self.enabled = log, alert, "EXPAND", True
+    def __init__(self, log, alert=False, parent=None):
+        self.log, self.alert, self.alignment, self.parent, self.own_enabled = log, alert, "EXPAND", parent, True
+
+    @property
+    def enabled(self):  # as in Blender: a layout inside a greyed-out one is greyed out, whatever it sets for itself
+        return self.own_enabled and (self.parent is None or self.parent.enabled)
+
+    @enabled.setter
+    def enabled(self, value):
+        self.own_enabled = value
 
     def label(self, text="", icon="NONE"):
         self.log.append(("label", text, self.alert))
 
     def operator(self, idname, text="", icon="NONE", depress=False):
         op = types.SimpleNamespace(index=-1)
-        self.log.append(("op", idname, text, depress, op))
+        self.log.append(("op", idname, text, depress, op, self.enabled))  # the sixth entry: the layout it is drawn in was enabled
         return op
 
     def prop(self, *args, **kw):
         self.log.append(("prop", args[1] if len(args) > 1 else "", kw.get("text")))
 
     def row(self, **kw):
-        return Rec(self.log, self.alert)
+        return Rec(self.log, self.alert, self)
 
     column = split = row
 
@@ -449,7 +457,7 @@ class Rec:
 def draw_panel(panel):
     log = []
     me = types.SimpleNamespace(layout=Rec(log))
-    for name in ("draw_running", "draw_outcome"):  # the Run panel's helper methods
+    for name in ("draw_running", "draw_outcome", "draw_playback"):  # the Run panel's helper methods
         if hasattr(panel, name):
             setattr(me, name, types.MethodType(getattr(panel, name), me))
     panel.draw(me, bpy.context)
@@ -510,12 +518,12 @@ def case_layout(run1, tmp):
 
     log = checks_log(original)
     texts = [r[1] for r in log if r[0] == "label"]
-    expect = ["(a) Motion completed", "(b) Hard attachments follow bones", "(b2) Spring anchors follow bodies",
+    expect = ["(a) Motion completed", "(b) Attachments follow bones", "(b2) Springs follow bodies",
               "(c) Gravity sag", "(d) Tet mesh valid"]
     assert [t for t in texts if t in expect] == expect, texts
     assert not [t for t in texts if t.startswith(("(a)", "(b)", "(b2)", "(c)", "(d)")) and t not in expect], texts  # no long name
     assert {"PASS", "FAIL", "NOT RUN"} & set(texts), texts  # the verdict is drawn
-    assert all(len(t) <= 38 for t in expect)
+    assert all(len(t) <= 28 for t in expect), [len(t) for t in expect]  # short enough for the 280 px sidebar with PASS / FAIL on the right
     odd = json.loads(json.dumps(original))
     odd["checks"]["z"] = {"name": "Zeta thing", "passed": True, "message": ""}
     assert "(z) Zeta thing" in [r[1] for r in checks_log(odd) if r[0] == "label"]
@@ -776,8 +784,14 @@ def case_english_only():
 ROLES = ("skull", "jaw", "teeth_upper", "teeth_lower", "lips")
 BONE_DRIVER = {"skull": "head", "teeth_upper": "head", "jaw": "jaw01", "teeth_lower": "jaw01"}  # from the card, not from the add-on
 MOTIONS = {  # file: (layer the panel must show, frame in the middle of the motion, bones that must move, bones that must not)
+    "jaw_open_12deg.json": ("physics", 32, ("jaw", "teeth_lower"), ("skull", "teeth_upper")),  # the jaw is open the widest at frame 32
     "head_shake.json": ("physics", 24, ("skull", "jaw"), ()),
-    "neutral_to_AA.json": ("final", 25, ("jaw", "teeth_lower"), ("skull", "teeth_upper")),
+    "neutral_to_AA.json": ("final", 25, ("jaw", "teeth_lower"), ("skull", "teeth_upper")),  # last: its last control replaces the five objects
+}  # the order the cases run in (the panel's list order is TITLES)
+TITLES = {  # what the panel's list shows, in the order it shows it: from the owner's words, not from the add-on
+    "jaw_open_12deg.json": "Prototype 1: jaw opens 12 degrees (test motion)",
+    "neutral_to_AA.json": "Prototype 2: neutral to AA (lab motion)",
+    "head_shake.json": "Prototype 2: head shake (test motion)",
 }
 LIPS_TOLERANCE_MM = 1e-5
 BONE_TOLERANCE_MM = 1e-4  # the bones' quaternions are float32
@@ -1009,9 +1023,13 @@ def pick(file):
 
 def three_steps_run(file, rest_check=False):
     """Step 2 and 3: pick the motion from the list, press Run, wait, return the run folder. No path is typed.
-    rest_check: the moment the run has started, the result of the run before is gone from the asset."""
+    rest_check: the moment the run has started, the result of the run before is gone from the asset.
+    The timeline is put somewhere else first (frame 20, range 5..9), so that "the frame and the range are the motion's" can fail."""
     sc = bpy.context.scene
     pick(file)
+    sc.frame_start, sc.frame_end = 5, 9
+    sc.frame_current = 20
+    plays = len(asrp_blender.asset.PLAY_REQUESTS)
     assert bpy.ops.asrp.run_motion() == {"FINISHED"} and SESSION.state == "running"
     assert SESSION.target == "asset"
     if rest_check:
@@ -1019,6 +1037,13 @@ def three_steps_run(file, rest_check=False):
     drive()
     assert SESSION.state == "complete" and not SESSION.load_error, (SESSION.state, SESSION.error, SESSION.load_error, list(SESSION.lines)[-5:])
     assert sc.asrp_scene_path == "" and sc.asrp_trajectory_path == "" and sc.asrp_runs_dir == "", "a path property was used"
+    frames = json.loads((REPO / "data" / "lab_export" / "trajectories" / file).read_text(encoding="utf-8"))["frames"]
+    need(sc.frame_current == 0, "after-run", f"after {file} the timeline is on frame {sc.frame_current}, not on the motion's first frame 0")
+    need((sc.frame_start, sc.frame_end) == (0, frames - 1), "after-run",
+         f"after {file} the frame range is {sc.frame_start}..{sc.frame_end}, the motion's is 0..{frames - 1}")
+    requests = asrp_blender.asset.PLAY_REQUESTS[plays:]
+    need(len(requests) == 1 and requests[0][:2] == (0, frames - 1), "after-run",
+         f"after {file} the play request was {requests}, expected one request for frames 0..{frames - 1}")
     return SESSION.run_dir
 
 
@@ -1080,13 +1105,19 @@ def case_three_steps():
     listed = {m.file: m for m in sc.asrp_motions}
     assert set(MOTIONS) <= set(listed) and all(not listed[f].error for f in MOTIONS), [(m.file, m.error) for m in sc.asrp_motions]
     assert listed["neutral_to_AA.json"].has_landmarks and not listed["head_shake.json"].has_landmarks
+    need([m.file for m in sc.asrp_motions] == list(TITLES) and [m.title for m in sc.asrp_motions] == list(TITLES.values()), "motions",
+         f"the list shows {[(m.file, m.title) for m in sc.asrp_motions]}, expected the three titles in this order: {list(TITLES.values())}")
+    need(sc.asrp_motion_index == 0 and sc.asrp_motions[0].file == "jaw_open_12deg.json", "motions",
+         f"the motion picked by default is {sc.asrp_motion_index}, expected Prototype 1 (the first)")
+    check_material(sc)
     print(f"three steps, step 1 Open asset: {len(meshes)} mesh objects {sorted(objs)}, vertices "
           f"{ {r: len(o.data.vertices) for r, o in objs.items()} }, motions listed {[asrp_blender.asset.motion_label(m) for m in sc.asrp_motions]}")
     draw_new_panels()
     done = {}
     for file, (layer, mid, movers, still) in MOTIONS.items():
         motion = json.loads((REPO / "data" / "lab_export" / "trajectories" / file).read_text(encoding="utf-8"))
-        run_dir = three_steps_run(file, rest_check=file != "head_shake.json")  # the first run's result must be gone once the second starts
+        run_dir = three_steps_run(file, rest_check=file != "jaw_open_12deg.json")  # the first run's result must be gone once the second starts
+        check_run_section(run_dir, motion["frames"])
         frames = [mid, 36 if motion["frames"] > 36 else motion["frames"] - 2, motion["frames"] - 1]
         case = dict(file=file, motion=motion, run_dir=run_dir, layer=layer, frames=frames, movers=movers, still=still, ident=ident)
         summary = verify_three_step(case)
@@ -1099,7 +1130,11 @@ def case_three_steps():
               f"checks {[f'{r[0]}={r[2]}' for r in rows]}")
         done[file] = case
         check_panels_on_result(file, layer, report, rows)
-        if file == "head_shake.json":
+        if file == "jaw_open_12deg.json":
+            expect_caught(case, "bones", "jaw does not move in the jaw motion", lambda: asset_now()["jaw"].animation_data_clear(),
+                          names="the jaw")
+            repair(case)
+        elif file == "head_shake.json":
             expect_caught(case, "bones", "skull does not move in the head shake", lambda: asset_now()["skull"].animation_data_clear(),
                           names="the skull")
             repair(case)
@@ -1135,16 +1170,86 @@ def recreate_objects(run_dir):
     asrp_blender.asset.apply_result(bpy.context, run_dir)
 
 
+def labels_of(log):
+    return [r[1] for r in log if r[0] == "label"]
+
+
+def check_material(sc):
+    """The scene the panel imported has Ziva's measured values (read from its scene.json), and the panel says so."""
+    data = json.loads(Path(sc.asrp_asset_scene).read_text(encoding="utf-8"))
+    params = data["soft_tissues"][0]["material"]
+    need(params["E_mpa"]["source"] == "lab_setting" and params["nu"]["source"] == "lab_setting", "material",
+         f"the imported scene's material values come from {params['E_mpa']['source']!r}, not from Ziva's measured settings (lab_setting)")
+    need(abs(params["E_mpa"]["value"] - 0.012) < 1e-12 and abs(params["nu"]["value"] - 0.4) < 1e-12, "material",
+         f"the imported scene has E {params['E_mpa']['value']} MPa and nu {params['nu']['value']}, Ziva's are 0.012 MPa and 0.4")
+    line = "Material: 12 kPa, 0.4 (measured in Ziva)"
+    need(sc.asrp_asset_material == line, "material", f"the stored material line is {sc.asrp_asset_material!r}, expected {line!r}")
+    need(line in " ".join(labels_of(draw_panel(asrp_blender.ASRP_PT_asset))), "material", "the Asset section does not show the material line")
+
+
+def check_run_section(run_dir, frames):
+    """After a run the Run section has Play / Pause, the frame line and the run folder with Open folder. A Blender without a
+    window may or may not accept the play request, so both states are drawn with a stand-in context, and the real one must agree."""
+    sc = bpy.context.scene
+    log = draw_panel(asrp_blender.ASRP_PT_run)
+    real_playing = bool(bpy.context.screen.is_animation_playing)
+    plays = [r for r in log if r[0] == "op" and r[1] == "screen.animation_play"]
+    word = "Pause" if real_playing else "Play"
+    need(len(plays) == 1 and plays[0][2] == word, "after-run", f"the Run section has no {word} button after a run: {[(r[1], r[2]) for r in log if r[0] == 'op']}")
+    text = " ".join(labels_of(log))
+    need(f"Run files: {asrp_blender.asset.relative_to_project(run_dir)}".replace(" ", "") in text.replace(" ", ""), "after-run",
+         f"the Run section does not show the run folder: {text}")
+    opens = [r for r in log if r[0] == "op" and r[1] == "wm.path_open"]
+    need(len(opens) == 1 and opens[0][4].filepath == str(run_dir) and opens[0][2] == "Open folder", "after-run", "no Open folder button for the run folder")
+    for playing, button, line in ((True, "Pause", f"Playing frame 0 to {frames - 1}. Space bar pauses."),
+                                  (False, "Play", f"Frame 0 to {frames - 1} is ready. Space bar plays.")):
+        fake = types.SimpleNamespace(scene=sc, screen=types.SimpleNamespace(is_animation_playing=playing), region=None)
+        log2 = []
+        me = types.SimpleNamespace(layout=Rec(log2))
+        asrp_blender.ASRP_PT_run.draw_playback(me, fake, me.layout)
+        need(any(r[0] == "op" and r[1] == "screen.animation_play" and r[2] == button for r in log2), "after-run", f"no {button} button")
+        need(line in " ".join(labels_of(log2)), "after-run", f"the line {line!r} is missing: {labels_of(log2)}")
+
+
 def draw_new_panels():
     for panel in (asrp_blender.ASRP_PT_asset, asrp_blender.ASRP_PT_motion, asrp_blender.ASRP_PT_run):
         log = draw_panel(panel)
         assert log, panel
-    texts = [r[1] for r in draw_panel(asrp_blender.ASRP_PT_asset) if r[0] == "label"]
+    # the words and the order of the panel
+    titles = {c.__name__: c.bl_label for c in asrp_blender.classes if hasattr(c, "bl_label") and c.__name__.startswith("ASRP_PT_")}
+    assert [titles[n] for n in ("ASRP_PT_asset", "ASRP_PT_motion", "ASRP_PT_run", "ASRP_PT_results", "ASRP_PT_checks", "ASRP_PT_advanced")] == [
+        "1  Open the asset", "2  Choose a motion", "3  Run", "Results", "Checks", "Advanced"], titles
+    order = [c.__name__ for c in asrp_blender.classes if c.__name__.startswith("ASRP_PT_") and getattr(c, "bl_parent_id", "") == "ASRP_PT_main"]
+    assert order == ["ASRP_PT_asset", "ASRP_PT_motion", "ASRP_PT_run", "ASRP_PT_results", "ASRP_PT_checks", "ASRP_PT_advanced"], order
+    for name in ("ASRP_PT_checks", "ASRP_PT_advanced", "ASRP_PT_run_files"):
+        assert "DEFAULT_CLOSED" in getattr(asrp_blender, name).bl_options, name
+    assert asrp_blender.ASRP_PT_run_files.bl_parent_id == "ASRP_PT_advanced"
+    main = draw_panel(asrp_blender.ASRP_PT_main)
+    assert not [r for r in main if r[0] == "op"], "the main panel has buttons although the project is known"
+    adv = [r[1] for r in draw_panel(asrp_blender.ASRP_PT_advanced) if r[0] == "op"]
+    assert adv == ["asrp.choose_project", "asrp.check_backend", "asrp.load_playback", "asrp.load_run_folder"], adv
+    for panel in (asrp_blender.ASRP_PT_asset, asrp_blender.ASRP_PT_motion, asrp_blender.ASRP_PT_run, asrp_blender.ASRP_PT_results):
+        assert "asrp.check_backend" not in [r[1] for r in draw_panel(panel) if r[0] == "op"]
+    # step 1
+    texts = labels_of(draw_panel(asrp_blender.ASRP_PT_asset))
+    assert "One asset for both prototypes: skull, jaw, teeth, lips." in " ".join(texts), texts
     assert any(t.startswith("Open: ") for t in texts), texts
-    ops = [r for r in draw_panel(asrp_blender.ASRP_PT_motion) if r[0] == "op"]
-    assert len(ops) == len(bpy.context.scene.asrp_motions) and sum(1 for r in ops if r[3]) == 1, [(r[2], r[3]) for r in ops]
+    scene_files = f"Scene files: {asrp_blender.asset.relative_to_project(Path(bpy.context.scene.asrp_asset_scene).parent)}"
+    assert scene_files.replace(" ", "") in "".join(texts).replace(" ", ""), (scene_files, texts)  # a long path wraps over lines
+    opens = [r for r in draw_panel(asrp_blender.ASRP_PT_asset) if r[0] == "op" and r[1] == "wm.path_open"]
+    assert len(opens) == 1 and opens[0][2] == "Open folder" and opens[0][4].filepath == str(Path(bpy.context.scene.asrp_asset_scene).parent), opens
+    # step 2: the title on the button, the details on a second, smaller line
+    log = draw_panel(asrp_blender.ASRP_PT_motion)
+    ops = [r for r in log if r[0] == "op"]
+    assert [r[2] for r in ops] == list(TITLES.values()) and sum(1 for r in ops if r[3]) == 1 and ops[0][3], [(r[2], r[3]) for r in ops]
+    details = [t for t in labels_of(log)]
+    assert details == ["      51 frames, 30 fps, test motion", "      47 frames, 30 fps, lab motion", "      87 frames, 30 fps, test motion"], details
+    # no internal word where a plain one exists
+    import re
+    shown = " ".join(labels_of(draw_panel(asrp_blender.ASRP_PT_asset)) + details + [r[2] for r in ops])
+    assert not re.search(r"\b(ours|lab_setting|ziva_default|teeth_upper|teeth_lower)\b", shown), shown
     log = draw_panel(asrp_blender.ASRP_PT_asset)
-    assert [r[1] for r in log if r[0] == "op"] == ["asrp.open_asset"]
+    assert [r[1] for r in log if r[0] == "op"] == ["asrp.open_asset", "wm.path_open"]
     assert [r[1] for r in draw_panel(asrp_blender.ASRP_PT_run) if r[0] == "op"] == ["asrp.run_motion"]
 
 
@@ -1157,7 +1262,7 @@ def check_panels_on_result(file, layer, report, rows):
     pressed = [r[2] for r in results if r[0] == "op" and r[1] == "asrp.set_layer" and r[3]]
     assert pressed == [asrp_blender.asset.LAYER_WORDS[layer]], pressed
     texts = " ".join(r[1] for r in draw_panel(asrp_blender.ASRP_PT_checks) if r[0] == "label")
-    for label in ("(a) Motion completed", "(b) Hard attachments follow bones", "(b2) Spring anchors follow bodies", "(c) Gravity sag",
+    for label in ("(a) Motion completed", "(b) Attachments follow bones", "(b2) Springs follow bodies", "(c) Gravity sag",
                   "(d) Tet mesh valid"):
         assert label in texts, (label, texts)
     assert f"Surface ({layer}):" in texts and f"Worst frame ({layer}):" in texts, texts
@@ -1167,10 +1272,170 @@ def check_panels_on_result(file, layer, report, rows):
           f"all-pass note {'shown' if note else 'not shown (a check did not pass)'}")
 
 
+# --- finding the project: the order, and the add-on installed outside the repo ---------------------------------------------------
+
+
+def fake_project(folder: Path) -> Path:
+    (folder / "src" / "asrp_core").mkdir(parents=True)
+    (folder / "pyproject.toml").write_text("[project]\nname = 'x'\n", encoding="utf-8", newline="\n")
+    return folder
+
+
+def case_project_order(tmp):
+    """core_project(): $ASRP_PROJECT, then the folder chosen in the preference, then the repo the add-on lives in. A chosen folder
+    that is not a project is ignored; paths in the panel are relative to the project folder."""
+    mine, other = fake_project(tmp / "proj_a"), fake_project(tmp / "proj_b")
+    (tmp / "not_a_project").mkdir()
+    env = os.environ.pop("ASRP_PROJECT", None)
+    try:
+        assert asrp_blender.core_project() == REPO, "with nothing set the repo the add-on lives in is the project"
+        asrp_blender.set_project_preference(str(mine))
+        assert asrp_blender.core_project() == mine, "the preference does not come before the repo"
+        asrp_blender.set_project_preference(str(tmp / "not_a_project"))
+        assert asrp_blender.core_project() == REPO, "a chosen folder that is not a project was used"
+        asrp_blender.set_project_preference(str(mine))
+        os.environ["ASRP_PROJECT"] = str(other)
+        assert asrp_blender.core_project() == other, "$ASRP_PROJECT does not come before the preference"
+    finally:
+        del os.environ["ASRP_PROJECT"]
+        if env is not None:
+            os.environ["ASRP_PROJECT"] = env
+        asrp_blender.set_project_preference("")
+    assert asrp_blender.core_project() == REPO
+    rel = asrp_blender.asset.relative_to_project
+    assert rel(REPO / "runs" / "_asset" / "20261115-101010-123456") == "runs/_asset/20261115-101010-123456"
+    assert rel(tmp) == tmp.as_posix(), "a folder outside the project is shown whole"
+    assert asrp_blender.project_problem(tmp / "not_a_project") and asrp_blender.project_problem(REPO) is None
+    # the chooser: a wrong folder is refused in plain words and stores nothing; a right one is stored and saved
+    saved = []
+    real = asrp_blender.save_preferences
+    asrp_blender.save_preferences = lambda: saved.append(1) or True
+    try:
+        try:
+            bpy.ops.asrp.choose_project(directory=str(tmp / "not_a_project"))
+            raise AssertionError("a folder that is not a project was accepted")
+        except RuntimeError as exc:
+            assert "pyproject.toml" in str(exc) and "src/asrp_core" in str(exc), exc
+        assert not saved and asrp_blender.preference_project() == ""
+        assert bpy.ops.asrp.choose_project(directory=str(mine) + os.sep) == {"FINISHED"}
+        assert saved == [1] and Path(asrp_blender.preference_project()) == mine and asrp_blender.core_project() == mine
+    finally:
+        asrp_blender.save_preferences = real
+        asrp_blender.set_project_preference("")
+    print("case 11 finding the project: environment variable, then the chosen folder, then the repo; a folder that is not a project is "
+          "refused with a plain sentence and ignored; a chosen one is stored and the preferences saved; paths relative to the project")
+
+
+CHILD_MARK = "--installed-child"
+
+
+def blender_exe() -> str:
+    return bpy.app.binary_path
+
+
+def isolated(profile: Path, **extra) -> dict:
+    """The environment of a child Blender: its own profile (never the real one), and no ASRP_PROJECT."""
+    env = {**os.environ, "BLENDER_USER_RESOURCES": str(profile), **{k: str(v) for k, v in extra.items()}}
+    env.pop("ASRP_PROJECT", None)
+    return env
+
+
+def case_installed_copy(tmp):
+    """The add-on built and installed the way the README says (into an isolated profile), loaded from outside the repo, started
+    three times: (a) no project known -> the panel says "choose the project folder", the steps are greyed out, nothing raises
+    in a way the researcher cannot read; the folder is chosen with the operator, Open asset works; (b) a second start: the add-on
+    is still enabled and the folder is still chosen (the tick does not go away, the choice survives a restart)."""
+    profile, dist = tmp / "profile", tmp / "dist"
+    profile.mkdir()
+    dist.mkdir()
+    exe = blender_exe()
+    done = subprocess.run([exe, "--factory-startup", "--command", "extension", "build", "--source-dir", str(REPO / "blender_addon" / "asrp_blender"),
+                           "--output-dir", str(dist)], capture_output=True, text=True, env=isolated(profile))
+    zips = sorted(dist.glob("asrp_blender-*.zip"))
+    assert done.returncode == 0 and len(zips) == 1, (done.returncode, done.stdout[-300:], done.stderr[-300:])
+    done = subprocess.run([exe, "--command", "extension", "install-file", "-r", "user_default", "-e", str(zips[0])],
+                          capture_output=True, text=True, env=isolated(profile))
+    assert done.returncode == 0 and "Installed" in done.stdout, (done.returncode, done.stdout[-300:], done.stderr[-300:])
+    out = []
+    for phase in ("a", "b"):
+        done = subprocess.run([exe, "--background", "--python-exit-code", "1", "--python", str(THIS), "--", CHILD_MARK, phase, str(REPO), str(tmp)],
+                              capture_output=True, text=True, encoding="utf-8", errors="replace", env=isolated(profile, ASRP_RUNS_DIR=tmp / "child_runs"),
+                              timeout=TIMEOUT_S)
+        lines = [x for x in done.stdout.splitlines() if x.startswith("CHILD ")]
+        assert done.returncode == 0 and lines, f"the installed-copy check, phase {phase}, failed (exit {done.returncode}):\n{done.stdout[-3000:]}\n{done.stderr[-1500:]}"
+        out += lines
+    print("case 12 add-on installed in an isolated profile, loaded from outside the repo, no ASRP_PROJECT:\n  " + "\n  ".join(x[6:] for x in out))
+
+
+def run_child(phase: str, repo: Path, tmp: Path) -> None:
+    """Inside the child Blender: the add-on is the installed copy (bl_ext...), not the repo's."""
+    import importlib
+
+    assert os.environ.get("BLENDER_USER_RESOURCES") and "ASRP_PROJECT" not in os.environ, "the child does not run in an isolated profile"
+    assert Path(os.environ["BLENDER_USER_RESOURCES"]).resolve() == (tmp / "profile").resolve()
+    ab = importlib.import_module("bl_ext.user_default.asrp_blender")
+    where = Path(ab.__file__).resolve()
+    assert repo.resolve() not in where.parents, f"the add-on was loaded from the repo: {where}"
+    enabled = [a.module for a in bpy.context.preferences.addons]
+    assert "bl_ext.user_default.asrp_blender" in enabled and hasattr(bpy.types, "ASRP_PT_main"), f"the add-on is not enabled: {enabled}"
+    prefs = ab.preferences()
+    assert prefs is not None
+    if phase == "a":
+        assert prefs.project_dir == "" and ab.core_project() is None, (prefs.project_dir, ab.core_project())
+        main = draw_panel(ab.ASRP_PT_main)
+        assert "Choose the ASRP project folder (once)" in labels_of(main), main
+        assert [r[1] for r in main if r[0] == "op"] == ["asrp.choose_project"], main
+        for panel in (ab.ASRP_PT_asset, ab.ASRP_PT_motion, ab.ASRP_PT_run):  # steps 1 to 3 greyed out, with the reason
+            log = draw_panel(panel)
+            assert "Choose the project folder first (top of this tab)." in " ".join(labels_of(log)), (panel.bl_label, log)
+            assert all(not r[5] for r in log if r[0] == "op"), f"{panel.bl_label}: a button is enabled while no project is known"
+        for name in ("open_asset", "run_motion"):  # pressed anyway (from a script): a plain sentence, not the old one
+            try:
+                getattr(bpy.ops.asrp, name)()
+                raise AssertionError(f"{name} did not refuse")
+            except RuntimeError as exc:
+                text = str(exc)
+                assert "set ASRP_PROJECT" not in text and (name != "open_asset" or "Choose project folder" in text), text
+        bad = tmp / "not_a_project"
+        bad.mkdir(exist_ok=True)
+        try:
+            bpy.ops.asrp.choose_project(directory=str(bad))
+            raise AssertionError("a folder that is not a project was accepted")
+        except RuntimeError as exc:
+            assert "pyproject.toml" in str(exc) and "src/asrp_core" in str(exc), exc
+        assert prefs.project_dir == ""
+        assert bpy.ops.asrp.choose_project(directory=str(repo)) == {"FINISHED"}
+        assert Path(prefs.project_dir).resolve() == repo.resolve() and ab.core_project().resolve() == repo.resolve()
+        assert not [r for r in draw_panel(ab.ASRP_PT_main) if r[0] == "label" and "Choose the ASRP" in r[1]]
+        assert bpy.ops.asrp.open_asset() == {"FINISHED"}
+        sc = bpy.context.scene
+        assert len(sc.asrp_asset_objects) == 5 and [m.file for m in sc.asrp_motions] == list(TITLES), [m.file for m in sc.asrp_motions]
+        print(f"CHILD phase a: loaded from {where.parent.name} outside the repo; no project -> 'Choose the ASRP project folder (once)', steps 1 to 3 "
+              f"greyed out, open_asset refused in plain words; a wrong folder refused; the right one chosen; Open asset made "
+              f"{len(sc.asrp_asset_objects)} objects, motions {[m.title for m in sc.asrp_motions]}, {sc.asrp_asset_material!r}")
+    else:
+        assert Path(prefs.project_dir).resolve() == repo.resolve(), f"the chosen folder did not survive the restart: {prefs.project_dir!r}"
+        assert ab.core_project().resolve() == repo.resolve()
+        assert not [r for r in draw_panel(ab.ASRP_PT_main) if r[0] == "label"]
+        print(f"CHILD phase b: after a restart the add-on is still enabled ({len(enabled)} add-ons on) and the project folder is still {Path(prefs.project_dir).name!r}")
+
+
+if CHILD_MARK in sys.argv:  # a child Blender of case_installed_copy: runs one phase and ends
+    run_child(sys.argv[sys.argv.index(CHILD_MARK) + 1], Path(sys.argv[sys.argv.index(CHILD_MARK) + 2]), Path(sys.argv[sys.argv.index(CHILD_MARK) + 3]))
+    raise SystemExit(0)
+
 tmp = Path(tempfile.mkdtemp(prefix="asrp_panel_"))
 os.environ["ASRP_RUNS_DIR"] = str(tmp / "asset_runs")  # the three steps write their scene and run folders here, not into the repo
 asrp_blender.register()
+# Never write the real Blender profile: this Blender is not in an isolated profile, so saving the preferences is a recorded stand-in here.
+# The real save happens only in the child Blenders of case_installed_copy, which run in a temporary profile.
+asrp_blender.save_preferences = lambda: True
+os.environ.pop("ASRP_PROJECT", None)
 try:
+    if "--installed-only" in sys.argv:
+        case_installed_copy(tmp)
+        print("INSTALLED ONLY PASSED")
+        raise SystemExit(0)
     if "--three-steps-only" in sys.argv:
         case_three_steps()
         print("THREE STEPS ONLY PASSED")
@@ -1181,6 +1446,8 @@ try:
     assert made.returncode == 0, f"could not build the cube scene:\n{made.stdout}\n{made.stderr}"
     runs = tmp / "runs"
     case_english_only()
+    case_project_order(tmp)
+    case_installed_copy(tmp)
     run1 = case_complete(box, runs, tmp)
     case_layout(run1, tmp)
     case_start_fails(box, runs, "complete")

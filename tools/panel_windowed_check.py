@@ -146,6 +146,19 @@ def last_frame_vertices(entry):
     return points
 
 
+def stop_autoplay():
+    """A finished run starts playing by itself (asset.show_playback). Stop it so the frames set next stay where they are; the value
+    says whether it was playing (the owner's window: a run ends in a playing animation)."""
+    found = find_view3d()
+    window = found[0] if found else None
+    playing = bool(window is not None and window.screen.is_animation_playing)
+    if playing:
+        with bpy.context.temp_override(window=window, area=found[1], region=found[2]):
+            bpy.ops.screen.animation_cancel(restore_frame=False)
+    yield 0.2
+    return playing
+
+
 def find_view3d():
     for window in bpy.context.window_manager.windows:
         for area in window.screen.areas:
@@ -444,6 +457,8 @@ def three_steps_script():
     yield from wait_for_end()
     assert SESSION.state == "complete" and not SESSION.load_error, (SESSION.state, SESSION.error, SESSION.load_error)
     say(f"run: {SESSION.state}, passed {SESSION.passed}, layer on the lips: {sc.asrp_asset_layer}, timeline 0..{sc.frame_end} at {sc.render.fps} fps")
+    stopped = yield from stop_autoplay()  # a finished run starts playing by itself; the screenshots below need a still frame
+    say(f"after the run the animation was playing by itself: {stopped}, the current frame was {sc.frame_current}")
     lips = next(i.obj for i in sc.asrp_asset_objects if i.role == "lips")
     sc.frame_set(25)
     yield 0.6
@@ -480,6 +495,7 @@ def three_steps_script():
     yield from wait_for_end()
     assert SESSION.state == "complete" and not SESSION.load_error, (SESSION.state, SESSION.error, SESSION.load_error)
     assert {i.role: i.obj.session_uid for i in sc.asrp_asset_objects} == before, "the head shake is not on the same five objects"
+    yield from stop_autoplay()
     say(f"head shake run: {SESSION.state}, passed {SESSION.passed}, layer on the lips: {sc.asrp_asset_layer}, timeline "
         f"0..{sc.frame_end} at {sc.render.fps} fps, the same five objects")
     sc.frame_set(24)

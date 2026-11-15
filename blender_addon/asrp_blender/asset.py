@@ -19,12 +19,13 @@ from pathlib import Path
 import bpy
 from mathutils import Matrix, Vector
 
-from .session import core_command, core_project
+from .session import NO_PROJECT, core_command, core_project
 
 MM_TO_BLENDER = 0.001  # the meshes stay in mm; only the objects' scale shows them in metres
 ASSET_PREFIX = "ASRP "
 ROLE_KEY = "asrp_role"  # custom property on each of the five objects
 LAYER_WORDS = {"physics": "Physics only", "final": "Final shape"}
+TISSUE_SETTINGS = "lab"  # Open asset imports with Ziva's measured material values (the T-34 report used them)
 IMPORT_TIMEOUT_S = 900  # the first import after installing may have to build the Python environment
 # After Open asset every 3D view looks at the asset from the front and a little to the right and above (the asset's
 # face looks along +Y), from this many times the asset's radius: the head then fills most of the view.
@@ -39,7 +40,7 @@ def export_folder() -> Path:
         return Path(override)
     project = core_project()
     if project is None:
-        raise ValueError("ASRP project not found; set ASRP_PROJECT")
+        raise ValueError(NO_PROJECT)
     return project / "data" / "lab_export"
 
 
@@ -50,7 +51,7 @@ def runs_folder() -> Path:
         return Path(override)
     project = core_project()
     if project is None:
-        raise ValueError("ASRP project not found; set ASRP_PROJECT")
+        raise ValueError(NO_PROJECT)
     return project / "runs"
 
 
@@ -95,6 +96,7 @@ def fill_motions(scene, motions: list[dict]) -> None:
     for m in motions:
         item = scene.asrp_motions.add()
         item.file = m["file"]
+        item.title = str(m.get("title") or m["file"])
         item.error = str(m.get("error") or "")
         item.frames = int(m.get("frames") or 0)
         item.fps = float(m.get("fps") or 0.0)
@@ -104,11 +106,17 @@ def fill_motions(scene, motions: list[dict]) -> None:
     scene.asrp_motion_index = first
 
 
+SOURCE_WORDS = {"lab_setting": "lab motion", "ours": "test motion", "ziva_default": "Ziva default", "unstated": "source not stated"}
+
+
 def motion_label(item) -> str:
-    if item.error:
-        return f"{item.file} (cannot be used)"
-    fps = f"{item.fps:g}"
-    return f"{Path(item.file).stem}: {item.frames} frames, {fps} fps, {item.source_tag}" + (", landmarks" if item.has_landmarks else "")
+    """The first line of a motion in the list: its title (the file name when the file has none)."""
+    return f"{item.file} (cannot be used)" if item.error else item.title or item.file
+
+
+def motion_details(item) -> str:
+    """The second, smaller line: "47 frames, 30 fps, lab motion"."""
+    return f"{item.frames} frames, {item.fps:g} fps, {SOURCE_WORDS.get(item.source_tag, item.source_tag)}"
 
 
 def picked_motion(scene):
@@ -147,6 +155,30 @@ def asset_meshes(data: dict) -> list[tuple[str, str, str]]:
     out = [(t["name"], t["mesh"]["path"], "tissue") for t in data.get("soft_tissues", [])]
     out += [(b["name"], b["mesh"]["path"], "bone") for b in data.get("bones", [])]
     return out
+
+
+def material_line(data: dict) -> str:
+    """"Material: 12 kPa, 0.4 (measured in Ziva)", read from the imported scene.json, not written here."""
+    tissues = data.get("soft_tissues") or [{}]
+    params = (tissues[0].get("material") or {}) if isinstance(tissues[0], dict) else {}
+    try:
+        e, nu = params["E_mpa"], params["nu"]
+        kpa = float(e["value"]) * 1000.0
+        where = {"lab_setting": "measured in Ziva", "ours": "our own values", "ziva_default": "Ziva's defaults"}.get(e.get("source"), "source not stated")
+        return f"Material: {kpa:g} kPa, {float(nu['value']):g} ({where})"
+    except (KeyError, TypeError, ValueError):
+        return "Material: not readable from the scene file"
+
+
+def relative_to_project(folder) -> str:
+    """A folder as a path relative to the project folder, with forward slashes ("runs/_asset/<stamp>"); the whole path when
+    the folder is not inside the project."""
+    folder = Path(folder)
+    project = core_project()
+    try:
+        return folder.resolve().relative_to(project.resolve()).as_posix() if project is not None else folder.as_posix()
+    except ValueError:
+        return folder.as_posix()
 
 
 def material(kind: str):
@@ -222,7 +254,7 @@ def open_asset(context) -> dict:
     out = scenes_folder() / datetime.now().strftime("%Y%m%d-%H%M%S-%f")
     out.parent.mkdir(parents=True, exist_ok=True)
     try:
-        proc = run_core_quiet("import-asset", str(export), str(out), timeout=IMPORT_TIMEOUT_S)
+        proc = run_core_quiet("import-asset", str(export), str(out), "--tissue-settings", TISSUE_SETTINGS, timeout=IMPORT_TIMEOUT_S)
     except (RuntimeError, OSError, subprocess.TimeoutExpired) as exc:
         raise ValueError(f"The asset could not be imported: {exc}") from exc
     if proc.returncode != 0:
@@ -234,6 +266,7 @@ def open_asset(context) -> dict:
         if is_live(item.obj):
             remove_objects([item.obj])
     register_objects(scene, made, scene_json)
+    scene.asrp_asset_material = material_line(read_scene_json(scene_json))
     fill_motions(scene, motions)
     for other in context.selected_objects:
         other.select_set(False)
@@ -391,6 +424,64 @@ def key_bone(obj, rows: list) -> None:
         edit.keyframe_new_interpolation_type = before
 
 
+# --- showing the finished result: first frame, the motion's range, the timeline zoomed, playing -------------------------------
+
+PLAY_REQUESTS: list = []  # one entry per play request (what a check without a window can look at): (first frame, last frame, started)
+RANGE_AREAS = ("DOPESHEET_EDITOR", "TIMELINE")  # the Timeline is a Dope Sheet mode; both are zoomed to the scene's range
+
+
+def windows(context) -> list:
+    try:
+        return list(context.window_manager.windows)
+    except AttributeError:
+        return []
+
+
+def zoom_timelines(context) -> int:
+    """Zoom every timeline / dope sheet area to the scene's frame range (View All). Returns how many were zoomed."""
+    count = 0
+    for window in windows(context):
+        for area in window.screen.areas:
+            if area.type not in RANGE_AREAS:
+                continue
+            region = next((r for r in area.regions if r.type == "WINDOW"), None)
+            if region is None:
+                continue
+            try:
+                with context.temp_override(window=window, area=area, region=region):
+                    bpy.ops.action.view_all()
+                count += 1
+            except RuntimeError:
+                pass  # this area cannot be zoomed right now; the others still are
+    return count
+
+
+def start_playback(context) -> bool:
+    """Start the animation playing (once: a second call does not pause it). False when there is no window to play in."""
+    for window in windows(context):
+        screen = window.screen
+        if screen.is_animation_playing:
+            return True
+        try:
+            with context.temp_override(window=window, screen=screen):
+                bpy.ops.screen.animation_play()
+            return True
+        except RuntimeError:
+            continue
+    return False
+
+
+def show_playback(context, frames: int) -> None:
+    """After a run: the timeline is on the motion's first frame with the motion's range, the timelines are zoomed to it, and
+    playback starts by itself. In a Blender without a window the play request is only recorded."""
+    scene = context.scene
+    scene.frame_start, scene.frame_end = 0, frames - 1
+    scene.frame_current = 0
+    zoom_timelines(context)
+    started = start_playback(context)
+    PLAY_REQUESTS.append((scene.frame_start, scene.frame_end, started))
+
+
 def apply_result(context, run_dir) -> str:
     """A finished run onto the asset's objects: the lips' point cache (the default layer), the bones' keyframes, the
     timeline. Returns the layer shown. Raises ValueError (nothing is half-applied: the asset is put back at rest)."""
@@ -433,6 +524,7 @@ def apply_result(context, run_dir) -> str:
     render.fps, render.fps_base = int(manifest["fps"]), 1.0
     scene.frame_start, scene.frame_end = 0, frames - 1
     scene.frame_set(0)
+    show_playback(context, frames)
     show_entry(scene, -1)  # an older result of the results list is not shown with this one
     for obj in objs.values():
         hide_object(obj, False)

@@ -7,6 +7,8 @@ Format `asrp-trajectory/1`, one JSON object:
       "fps": 30,                      # frames per second; must equal the scene's solver fps
       "frames": 46,                   # transforms per driver; frame 0 is the first entry
       "source": "free text: which controller output, or which generator, made this",
+      "title": "Jaw opens 12 degrees (test motion)",   # optional: the name the Blender panel shows, one line of at
+                                      #   most 60 characters; without it the panel shows the file name
       "source_tag": "lab_setting" | "ziva_default" | "ours",   # optional: where the motion comes from, the
                                       #   same three tags as in scene.json; the run report shows it
                                       #   ("unstated" when absent, never guessed from the text)
@@ -49,6 +51,7 @@ SOURCE_TAGS = ("lab_setting", "ziva_default", "ours")  # the same three values a
 # How far a transform may be from rigid (rotation part orthonormal with determinant 1, last row
 # 0 0 0 1). Round-trip through text keeps ~1e-16; this only lets through rounding, not a scale.
 RIGID_TOLERANCE = 1e-6
+TITLE_MAX = 60  # characters of the optional "title": the panel's motion list shows it at the sidebar's default width
 
 
 class TrajectoryError(ValueError):
@@ -64,6 +67,7 @@ class Trajectory:
     landmarks: object = None  # the validated "landmarks" section as read (None: absent); see landmark_translations
     source_tag: str | None = None  # "lab_setting" | "ziva_default" | "ours"; None: the file does not say
     settle_until_frame: int | None = None  # last frame of the gravity-only settle; None: the file does not say
+    title: str | None = None  # the name the panel shows; None: the file has none (the panel shows the file name)
     extra: dict = field(default_factory=dict)  # unknown top-level keys, kept for the round trip
 
     def to_json(self) -> dict:
@@ -74,6 +78,8 @@ class Trajectory:
             "source": self.source,
             "drivers": self.drivers,
         }
+        if self.title is not None:
+            data["title"] = self.title
         if self.source_tag is not None:
             data["source_tag"] = self.source_tag
         if self.settle_until_frame is not None:
@@ -298,6 +304,13 @@ def from_json(data) -> Trajectory:
             f"source_tag is {tag!r}; it must be one of {', '.join(SOURCE_TAGS)} (or leave it out if the "
             "origin of the motion is not known)"
         )
+    title = data.get("title")
+    if title is not None and (not isinstance(title, str) or not title.strip() or len(title) > TITLE_MAX
+                              or title != title.strip() or any(ord(c) < 32 for c in title)):
+        raise TrajectoryError(
+            f"title is {title!r}; it must be one line of text, 1 to {TITLE_MAX} characters, without spaces at either end "
+            "(or leave it out: the panel then shows the file name)"
+        )
     settle = data.get("settle_until_frame")
     if settle is not None and (not isinstance(settle, int) or isinstance(settle, bool) or not 0 <= settle < frames):
         raise TrajectoryError(
@@ -306,7 +319,8 @@ def from_json(data) -> Trajectory:
         )
     if data.get("landmarks") is not None:
         _check_landmarks(data["landmarks"], frames)
-    known = {"format_version", "fps", "frames", "source", "source_tag", "settle_until_frame", "drivers", "landmarks"}
+    known = {"format_version", "fps", "frames", "source", "source_tag", "settle_until_frame", "drivers", "landmarks",
+             "title"}
     return Trajectory(
         fps=fps,
         frames=frames,
@@ -315,6 +329,7 @@ def from_json(data) -> Trajectory:
         landmarks=data.get("landmarks"),
         source_tag=tag,
         settle_until_frame=settle,
+        title=title,
         extra={k: v for k, v in data.items() if k not in known},
     )
 
