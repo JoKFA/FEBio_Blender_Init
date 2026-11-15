@@ -10,11 +10,17 @@ pit 12), so the mesh is generated once, explicitly (`tools/build_tetmesh.py`), w
 `data/tetmesh/` and read back with `load`, which checks its hash. Nothing regenerates it behind
 the caller's back (requirement R-06: same input, same result).
 
+A second kind of mesh, the regular lattice (`lattice_tetrahedralize`, ADR-44), is made without
+fTetWild: axis-aligned cubes, 6 tets each, welded nodes. It is deterministic. It does not keep the
+upper and lower lip apart, which is on purpose (see there), so it has its own checks
+(`check_lattice`), and a file says which kind it is in its `kind` field (`mesh_kind`).
+
 Everything is in mm, Z up, the units and axes the rest of the core uses.
 """
 
 import contextlib
 import hashlib
+import itertools
 import json
 import tempfile
 from dataclasses import dataclass
@@ -599,6 +605,184 @@ def check(mesh: TetMesh, vertices_mm, triangles, step_mm: float = 0.25) -> Repor
     )  # fmt: skip
 
 
+# --- the regular lattice (ADR-44) ---------------------------------------------------------------
+
+KIND_FINE = "fine"  # a file without a `kind` field: fTetWild, upper and lower lip kept apart
+KIND_LATTICE = "lattice"
+KINDS = (KIND_FINE, KIND_LATTICE)
+
+# 6 tets per cube, all along the diagonal (0,0,0) -> (1,1,1): one per order of the three axes.
+# Every cube is cut the same way, so the triangles on a shared face are the same on both sides and
+# neighbouring cubes conform without any extra node.
+_KUHN = np.array(
+    [
+        [np.zeros(3, int), np.eye(3, dtype=int)[a], np.eye(3, dtype=int)[a] + np.eye(3, dtype=int)[b], np.ones(3, int)]
+        for a, b, _ in itertools.permutations(range(3))
+    ]
+)  # (6, 4, 3) corner offsets
+
+
+def surface_samples(vertices, triangles, step_mm: float) -> np.ndarray:
+    """Every vertex, plus on each triangle the points of a barycentric grid whose spacing is at most
+    step_mm along the triangle's longest edge. Deterministic: no random numbers."""
+    vertices = np.asarray(vertices, dtype=np.float64)
+    triangles = np.asarray(triangles)
+    out = [vertices]
+    for a, b, c in vertices[triangles]:
+        longest = max(np.linalg.norm(b - a), np.linalg.norm(c - a), np.linalg.norm(c - b))
+        n = int(np.ceil(longest / step_mm))
+        if n < 2:
+            continue
+        i, j = np.meshgrid(np.arange(n + 1), np.arange(n + 1), indexing="ij")
+        keep = i + j <= n
+        i, j = i[keep][:, None], j[keep][:, None]
+        out.append((i * b + j * c + (n - i - j) * a) / n)
+    return np.concatenate(out)
+
+
+def lattice_origin(vertices, shift_mm=(0.0, 0.0, 0.0)) -> np.ndarray:
+    """The lattice's origin: the minimum corner of the surface's bounding box, moved back by
+    shift_mm (0 for the product; the sensitivity runs of ADR-44 use half a cell)."""
+    return np.asarray(vertices, dtype=np.float64).min(axis=0) - np.asarray(shift_mm, dtype=np.float64)
+
+
+def lattice_cubes(vertices, triangles, cell_mm: float, shift_mm=(0.0, 0.0, 0.0)) -> tuple[np.ndarray, int]:
+    """The cubes (integer indices, lexicographic order) that hold lip material, and how many of
+    them a surface sample touches.
+
+    A cube is kept when (a) a surface sample falls in it (a cube is [i, i+1) cells, so a sample on
+    a shared face goes to the higher cube), or (b) it cannot be reached from outside through empty
+    cubes (6-neighbours): the lips are a closed shell, so what it encloses is filled.
+    """
+    origin = lattice_origin(vertices, shift_mm)
+    # A sample made as a weighted sum of corners can land one rounding step outside the bounding box
+    # the lattice starts at (and so in a cube of index -1); it cannot really be there.
+    vertices = np.asarray(vertices, dtype=np.float64)
+    samples = np.clip(surface_samples(vertices, triangles, cell_mm / 4.0), vertices.min(axis=0), vertices.max(axis=0))
+    index = np.floor((samples - origin) / cell_mm).astype(np.int64)
+    # Pad by one empty cube all round so the outside is one connected region.
+    occupied = np.zeros(index.max(axis=0) + 3, dtype=bool)
+    occupied[tuple((index + 1).T)] = True
+    outside = np.zeros_like(occupied)
+    outside[0, 0, 0] = True
+    while True:
+        grown = outside.copy()
+        for axis in range(3):
+            grown |= np.roll(outside, 1, axis) | np.roll(outside, -1, axis)
+        grown &= ~occupied
+        if (grown == outside).all():
+            break
+        outside = grown
+    return np.argwhere(~outside) - 1, int(occupied.sum())
+
+
+def lattice_tetrahedralize(vertices_mm, triangles, cell_mm: float, shift_mm=(0.0, 0.0, 0.0)) -> TetMesh:
+    """Fill the solid a closed surface encloses with cubes of edge cell_mm, 6 positive tets each,
+    nodes welded where cubes meet. The same input always gives the same bytes (ADR-44).
+
+    The upper and lower lip are NOT kept apart: a cube that holds both is one cube. That is the
+    point: Ziva's own mesh is this coarse, and the lips move as one body there.
+    """
+    vertices = np.asarray(vertices_mm, dtype=np.float64)
+    faces = np.asarray(triangles)
+    if vertices.ndim != 2 or vertices.shape[1] != 3 or faces.ndim != 2 or faces.shape[1] != 3:
+        raise ValueError("expected vertices as (n, 3) and triangles as (m, 3); split quads first")
+    if not cell_mm > 0:
+        raise ValueError(f"the cell size must be positive, got {cell_mm} mm")
+    cubes, _ = lattice_cubes(vertices, faces, cell_mm, shift_mm)
+    corners = (cubes[:, None, None, :] + _KUHN[None]).reshape(-1, 4, 3)
+    lattice_nodes, inverse = np.unique(corners.reshape(-1, 3), axis=0, return_inverse=True)
+    tets = inverse.reshape(-1, 4).astype(np.int64)
+    nodes = lattice_origin(vertices, shift_mm) + lattice_nodes * cell_mm
+    flip = signed_volumes(nodes, tets) < 0
+    tets[flip] = tets[flip][:, [0, 2, 1, 3]]
+    return TetMesh(nodes, tets)
+
+
+# A display vertex must lie in a tet; this much slack is only for rounding on a shared face.
+LATTICE_OUTSIDE_TOL_MM = 1e-6
+# The embedded display mesh at rest must come back to the surface to rounding.
+LATTICE_REST_TOL_MM = 1e-6
+
+
+@dataclass
+class LatticeReport:
+    quality: Quality
+    components: int  # pieces of the solid (face-connected tets); must be 1
+    overused_faces: int  # faces shared by more than two tets; must be 0 (the cubes conform)
+    outside_count: int  # display vertices outside every tet, beyond LATTICE_OUTSIDE_TOL_MM
+    outside_max_mm: float
+    embedded_rest_max_mm: float  # largest difference between the embedded display mesh at rest and the surface
+    rebuild_identical: bool  # building again from the same input gives the same content hash
+    cubes_touched: int  # cubes a surface sample falls in
+    cubes_kept: int  # touched cubes plus the ones they enclose
+    boundary_genus: int  # informational: a welded lattice need not have a manifold boundary
+    nonmanifold_edges: int  # informational
+    failures: list[str]
+
+
+def check_lattice(mesh: TetMesh, vertices_mm, triangles, cell_mm: float, shift_mm=(0.0, 0.0, 0.0)) -> LatticeReport:
+    """The checks a lattice mesh must pass before it is saved (ADR-44): its own, not `check`'s.
+
+    `check` asks for what fTetWild is meant to give (lips apart, manifold boundary, the surface's
+    genus); a welded lattice has none of that by design, so those are not asked here, and the fine
+    mesh keeps being held to them. Asked here: positive, non-degenerate tets (the fine mesh's
+    floors), one piece, conforming faces, every display vertex inside a tet, the embedded display
+    mesh at rest equal to the surface, and the same bytes when built again.
+    """
+    from asrp_core import embed  # embed imports this module; imported here to avoid the cycle
+
+    vertices = np.asarray(vertices_mm, dtype=np.float64)
+    q = quality(mesh)
+    faces = np.concatenate([mesh.tets[:, list(f)] for f in _OPPOSITE_FACES])
+    _, counts = np.unique(np.sort(faces, axis=1), axis=0, return_counts=True)
+    components = tet_components(mesh.tets)
+    out = outside_distances(mesh, vertices)
+    # Flat tets cannot be inverted for the embedding; the volume check below reports them, so leave
+    # them out here and let a bad mesh be measured instead of stopping on LinAlgError.
+    solid = TetMesh(mesh.nodes, mesh.tets[np.abs(signed_volumes(mesh.nodes, mesh.tets)) > FLAT_TET_VOLUME_MM3])
+    if len(solid.tets):
+        embedding = embed.embed(solid, vertices)
+        rest_error = float(np.linalg.norm(embed.apply(embedding, mesh.nodes) - vertices, axis=1).max())
+    else:
+        rest_error = float("inf")
+    again = lattice_tetrahedralize(vertices, triangles, cell_mm, shift_mm)
+    identical = content_sha256(again.nodes, again.tets) == content_sha256(mesh.nodes, mesh.tets)
+    cubes, touched = lattice_cubes(vertices, triangles, cell_mm, shift_mm)
+    bad_edges, _, _, genus = surface_topology(boundary_faces(mesh.tets))
+
+    failures = []
+    if (signed_volumes(mesh.nodes, mesh.tets) <= 0).any():
+        failures.append("some tets are inverted or flat")
+    if q.min_dihedral_deg <= MIN_DIHEDRAL_DEG:
+        failures.append(f"a tet has a dihedral angle of {q.min_dihedral_deg:.2f} degrees (need more than {MIN_DIHEDRAL_DEG:g})")
+    if q.min_tet_volume_mm3 <= MIN_TET_VOLUME_MM3:
+        failures.append(f"a tet has a volume of {q.min_tet_volume_mm3:.5f} mm3 (need more than {MIN_TET_VOLUME_MM3:g})")
+    if components != 1:
+        failures.append(f"the solid is in {components} pieces, expected 1")
+    if (counts > 2).any():
+        failures.append(f"{int((counts > 2).sum())} faces are shared by more than two tets: the cubes do not conform")
+    if (out > LATTICE_OUTSIDE_TOL_MM).any():
+        failures.append(
+            f"{int((out > LATTICE_OUTSIDE_TOL_MM).sum())} display vertices lie outside every tet "
+            f"(farthest {out.max():.4f} mm; allowed {LATTICE_OUTSIDE_TOL_MM:g} mm)"
+        )
+    if rest_error > LATTICE_REST_TOL_MM:
+        failures.append(f"the embedded display mesh at rest differs from the surface by {rest_error:.3g} mm")
+    if not identical:
+        failures.append("building again from the same input gave different bytes")
+    return LatticeReport(
+        q, components, int((counts > 2).sum()), int((out > LATTICE_OUTSIDE_TOL_MM).sum()), float(out.max()),
+        rest_error, identical, touched, len(cubes), genus, bad_edges, failures,
+    )  # fmt: skip
+
+
+def mesh_kind(meta: dict) -> str:
+    """Which kind of mesh a loaded file is, by its `kind` field. A file without the field is the
+    fine mesh: data/tetmesh/lips.json was written before the field existed and stays as it is."""
+    return meta.get("kind", KIND_FINE)
+
+
 # --- on disk ----------------------------------------------------------------------------------
 
 
@@ -671,6 +855,8 @@ def load(path: Path, surface: Path | None = None) -> tuple[TetMesh, dict]:
             f"{path} is missing {', '.join(missing)}, so it cannot be trusted; regenerate it with "
             "tools/build_tetmesh.py"
         )
+    if mesh_kind(data) not in KINDS:
+        raise ValueError(f"{path} has kind {data['kind']!r}; this reader knows {', '.join(KINDS)}")
     nodes = np.array(data.pop("nodes"), dtype=np.float64).reshape(-1, 3)
     tets = np.array(data.pop("tets"), dtype=np.int64).reshape(-1, 4)
     digest = content_sha256(nodes, tets)
