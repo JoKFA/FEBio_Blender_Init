@@ -210,6 +210,8 @@ runs/2026-11-03_neutral-to-AA_001/
 ### 5.3 回放包 `playback.json` + `playback.pc2`
 已经实现，格式见 `src/asrp_core/playback.py` 开头的说明。表面网格以毫米存储，Blender 插件负责缩放显示。
 
+Ziva 结果的回放包（`asrp compare` 写的，T-11）是同一个格式：`source.feb` 里放导出文件夹的名字（插件用它给物体起名），`source.kind` 是 `ziva export`，多一个键 `topology`，写明固定拓扑的包只能带一种连法，这里是第 0 帧的（Ziva 每帧的连法都变，顶点编号不变）。
+
 运行有 landmark 层时（T-09），`playback.json` 多一个可选键 `versions`：`physics` 指向 `playback.pc2`，`final` 指向 `playback_final.pc2`；`cache` 始终是物理版本。没有 landmark 层时没有 `versions` 键，也没有第二份点缓存。插件加载时可选版本（`physics` 或 `final`）。
 
 ### 5.4 溯源 `provenance.json`
@@ -235,7 +237,7 @@ FEBio 是第一个实现。Ziva 不在我们的软件里运行：它的结果在
 | `asrp check <scene.json> [<trajectory.json>]` | 检查场景设置；带上运动时，再查运动和场景对不对得上。有错误才失败，提醒照样通过 | R-02 |
 | `asrp run <scene.json> <trajectory.json> [--threads N]` | 运行一次，生成运行文件夹；运行文件夹一建好就先打印 `run folder <路径>`（结束时再打一次）；之后打印生成器报告、max\|u\|÷δ、五项检查（a、b、b2、c、d）、一行 `landmarks`（叠上了：移动的个数、最大平移、最终形状离物理结果最远多少；没叠上：原因）和每帧用时，检查有不通过的就以 1 退出。`--threads N`：FEBio 的线程数，默认 4（取 N 和本机核数中小的），1 时回放文件逐位相同（ADR-38） | R-03、R-06 |
 | `asrp run --feb <现成的 .feb> [--threads N]` | 替身模式：不生成输入，直接跑现成的 `.feb`，做运行文件夹、溯源、进度、取消、出错处理这层外壳 | R-03、R-06 |
-| `asrp compare <运行文件夹> <Ziva 参考>` | 和 Ziva 对比（T-11） | R-05 |
+| `asrp compare <运行文件夹> <Ziva 导出文件夹> --out <文件夹> [--target <目标姿态文件>]` | 和 Ziva 对比（T-11）：写 `compare_report.json`（物理层和最终形状分开的每帧平均、P95、最大差别，到目标姿态的距离，下唇跟随比例，每一路 Ziva 数据的身份）、热力图数据（`heatmap.json` + 裸 float32 的 `heatmap_*.f32`）和 Ziva 的回放包 `ziva_playback/`。`--out` 装的是实验室的数据，必须在仓库外或被 git 忽略的 `runs/` 下，否则拒绝。只比同一网格、同样的帧、30 帧/秒；前缀的流不比。细节见 [07](07-validation.md) 第 4.2 节 | R-05 |
 
 Blender 插件的每个按钮都对应其中一条命令。界面能做的事，命令行都能做。
 

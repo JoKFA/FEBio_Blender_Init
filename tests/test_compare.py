@@ -57,6 +57,51 @@ def test_sizes_that_differ_are_an_error_never_cut_short():
         compare.per_frame(np.zeros((3, 2)), np.zeros((3, 2)))
 
 
+def test_distance_to_target_is_zero_on_the_target_and_the_offset_elsewhere():
+    frames = _cloud(frames=3)
+    target = frames[1].copy()
+    out = compare.distance_to_target(frames, target)
+    assert out["mean_mm"][1] == 0.0 and out["max_mm"][1] == 0.0 and out["mean_mm"][0] > 1.0
+    moved = compare.distance_to_target(frames, target + [0.0, 3.0, 4.0])  # 5 mm away from the target on frame 1
+    assert np.allclose([moved["mean_mm"][1], moved["p95_mm"][1], moved["max_mm"][1]], 5.0)
+    with pytest.raises(compare.CompareError, match="one shape"):
+        compare.distance_to_target(frames, frames)
+
+
+def _jaw_about_x(degrees):
+    a = np.radians(degrees)
+    t = np.eye(4)
+    t[:3, :3] = [[1, 0, 0], [0, np.cos(a), -np.sin(a)], [0, np.sin(a), np.cos(a)]]
+    return t
+
+
+def test_the_follow_ratio_is_one_for_the_rigid_motion_minus_one_for_its_opposite_and_none_when_still():
+    rest = np.random.default_rng(5).normal(size=(30, 3)) * 20
+    jaw = [np.eye(4), np.eye(4), _jaw_about_x(4.0), _jaw_about_x(8.0)]
+    rigid = np.stack([compare.rigid_prediction(rest, t) + rest for t in jaw])  # glued to the jaw
+    f = compare.follow_ratio(rigid, jaw, 0, np.arange(30))
+    assert f["per_frame"][0] is None and f["per_frame"][1] is None  # the jaw has not moved yet: not applicable
+    assert np.allclose(f["per_frame"][2:], 1.0) and np.isclose(f["moved_mean_mm"][3], f["rigid_mean_mm"][3])
+    opposite = 2 * rest - rigid  # moves the other way by the same amount
+    assert np.allclose(compare.follow_ratio(opposite, jaw, 0, np.arange(30))["per_frame"][2:], -1.0)
+    half = rest + 0.5 * (rigid - rest)
+    assert np.allclose(compare.follow_ratio(half, jaw, 0, np.arange(30))["per_frame"][2:], 0.5)
+    still = np.stack([rest] * 4)
+    assert np.allclose(compare.follow_ratio(still, jaw, 0, np.arange(30))["per_frame"][2:], 0.0)
+    # another reference frame: the same prediction taken from frame 2
+    again = compare.follow_ratio(rigid, jaw, 2, np.arange(30))
+    assert again["per_frame"][2] is None and np.isclose(again["per_frame"][3], 1.0)  # frames before it count too
+    assert np.allclose(again["per_frame"][:2], 1.0)
+    # a group is a group: the ratio of 10 vertices glued to the jaw is 1 whatever the others do
+    mixed = rigid.copy()
+    mixed[:, 10:] = rest[10:]
+    assert np.allclose(compare.follow_ratio(mixed, jaw, 0, np.arange(10))["per_frame"][2:], 1.0)
+    with pytest.raises(compare.CompareError, match="transforms"):
+        compare.follow_ratio(rigid, jaw[:3], 0, np.arange(10))
+    with pytest.raises(compare.CompareError, match="outside"):
+        compare.follow_ratio(rigid, jaw, 9, np.arange(10))
+
+
 def test_displacement_reports_the_sag_along_gravity():
     f = np.zeros((4, 10, 3))
     for i in range(4):

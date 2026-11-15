@@ -158,6 +158,23 @@ def cmd_convert_motion(args: argparse.Namespace) -> int:
     return 0 if report.ok else 1
 
 
+def cmd_compare(args: argparse.Namespace) -> int:
+    """One run of ours against a Ziva export folder (T-11): report, heat-map data, Ziva's lips as a playback package."""
+    from asrp_core import compare, ziva_compare
+
+    try:
+        report = ziva_compare.compare_run(args.run, args.ziva, args.out, args.target)
+    except (ziva_compare.CompareRunError, compare.CompareError) as e:
+        print(f"ERROR  {e}")
+        print("compare FAILED: nothing compared")
+        return 1
+    for line in ziva_compare.summary_lines(report):
+        print(line)
+    print(f"report     {args.out}/{ziva_compare.REPORT}")
+    print("compare DONE: the differences are reported, not judged (no pass line, ADR-17)")
+    return 0
+
+
 def cmd_run(args: argparse.Namespace) -> int:
     from pathlib import Path
 
@@ -342,6 +359,17 @@ def main(argv: list[str] | None = None) -> int:
                    help=f"FEBio threads (default {febio.DEFAULT_THREADS}, never more than this machine's CPUs); "
                         "1 gives bit-identical results, more gives results within 1e-9 mm")
     r.set_defaults(func=cmd_run)
+
+    cmp = sub.add_parser("compare", help="compare a run of ours with a Ziva export folder: report, heat maps, "
+                                         "Ziva's lips as a playback package")
+    cmp.add_argument("run", help="our run folder (made by asrp run)")
+    cmp.add_argument("ziva", help="a Ziva export folder (the lab's data, outside the repository)")
+    cmp.add_argument("--out", required=True,
+                     help="where to write the report, the heat-map data and Ziva's playback package. It holds Ziva's "
+                          "shapes, so it must be outside the repository, or under its git-ignored runs/")
+    cmp.add_argument("--target", help="the lab's target-pose file (dataV22_phoneme_AA_for_d2.py), for the distance "
+                                      "to the artist's target pose; without it that number is reported as not available")
+    cmp.set_defaults(func=cmd_compare)
 
     args = parser.parse_args(argv)
     return args.func(args)

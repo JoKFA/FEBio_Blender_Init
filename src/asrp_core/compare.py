@@ -151,3 +151,57 @@ def flipped_faces(rest, shape, faces) -> np.ndarray:
     length = np.linalg.norm(n0, axis=1)
     dot = np.einsum("ij,ij->i", normals(shape), n0 / np.maximum(length, 1e-12)[:, None])
     return (dot < 0) & (length > 0)
+
+
+# --- T-11: the two numbers that do not need Ziva (ADR-25; docs/07 section 4.2) -------------------------------
+
+
+def distance_to_target(frames, target, vertices=None) -> dict:
+    """How far each frame of a result is from ONE target shape (the artist's target pose): the same three numbers
+    per frame as `per_frame` ("frames", "vertices", "mean_mm", "p95_mm", "max_mm", "worst"). `target` is
+    (vertices, 3) and is held against every frame; the vertex order and the units are the caller's to match."""
+    f = _frames(frames, "the result")
+    t = _frames(target, "the target pose")
+    if t.shape[0] != 1:
+        raise CompareError(f"the target pose is one shape of (vertices, 3), got {t.shape[0]} frames")
+    return per_frame(f, np.broadcast_to(t, f.shape), vertices)
+
+
+def rigid_prediction(reference_points, transform, reference_transform=None) -> np.ndarray:
+    """Where points would move if they were glued to a rigid body: the body's transform at some frame (4x4, column
+    vectors, mm) taken from its transform at the reference frame (identity when not given), applied to the
+    points as they were at the reference frame. Returns the displacement, (vertices, 3)."""
+    p = np.asarray(reference_points, dtype=np.float64)
+    t = np.asarray(transform, dtype=np.float64).reshape(4, 4)
+    if reference_transform is not None:
+        t = t @ np.linalg.inv(np.asarray(reference_transform, dtype=np.float64).reshape(4, 4))
+    return p @ t[:3, :3].T + t[:3, 3] - p
+
+
+def follow_ratio(frames, body_transforms, reference_frame: int, vertices, min_motion_mm: float = 1e-3) -> dict:
+    """The follow ratio of a group of vertices (docs/07 section 4.2): u is the group's displacement from the
+    reference frame, r what it would be if the group were glued to the body (`rigid_prediction`, same reference
+    frame), and the ratio is sum(u . r) / sum(r . r), the signed least-squares factor: 1 follows the body fully,
+    0 not at all, a negative number goes the other way.
+
+    One number per frame. A frame where the body has not moved from the reference (its largest rigid displacement
+    over the group is below `min_motion_mm`, so the denominator is zero or noise) has None, never a number:
+    "not applicable". {"reference_frame", "vertices", "per_frame": [ratio | None], "moved_mean_mm": [...],
+    "rigid_mean_mm": [...]}: the last two are the mean distance the group moved and the body's prediction."""
+    f = _frames(frames, "the result")
+    if len(body_transforms) != len(f):
+        raise CompareError(f"the result has {len(f)} frames but the body has {len(body_transforms)} transforms")
+    if not 0 <= reference_frame < len(f):
+        raise CompareError(f"reference frame {reference_frame} is outside the result's frames 0 to {len(f) - 1}")
+    group = _group(f, vertices, "a follow ratio")
+    ref = group[reference_frame]
+    ratios, moved_mean, rigid_mean = [], [], []
+    for i in range(len(f)):
+        u = group[i] - ref
+        r = rigid_prediction(ref, body_transforms[i], body_transforms[reference_frame])
+        moved_mean.append(float(np.linalg.norm(u, axis=1).mean()))
+        rigid_mean.append(float(np.linalg.norm(r, axis=1).mean()))
+        moves = float(np.linalg.norm(r, axis=1).max()) >= min_motion_mm
+        ratios.append(float((u * r).sum() / (r * r).sum()) if moves else None)
+    return {"reference_frame": int(reference_frame), "vertices": int(group.shape[1]), "per_frame": ratios,
+            "moved_mean_mm": moved_mean, "rigid_mean_mm": rigid_mean}
