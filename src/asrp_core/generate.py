@@ -41,12 +41,12 @@ What it writes, all in mm, N, MPa, s (mass in tonnes):
 - **Guard**: a display vertex farther than MAX_DISTANCE_EDGES × the median tet edge from its tet is
   an error; nothing is written (the correspondence cannot be trusted, docs/05 section 3 rule 5).
 - **Dynamic analysis** at the scene's fps and substeps, one must point per frame (FEBio then writes
-  frames 1..N and no frame 0, pit 15), adaptive stepping as in spikes/s2_lips_febio.py (up to
+  frames 1..N and no frame 0, pit 15), adaptive stepping as in tests/s2_lips_febio.py (up to
   MAX_RETRIES retries, the step may shrink to dt × DTMIN_FRACTION), generalized-α with spectral radius
   rhoi = the scene's `solver.numerical_damping_rhoi`, or RHOI = 0 when the scene does not set it (the strongest
   damping of fast modes FEBio offers; T-07's runs used it; a value we chose).
 - **Physical damping** (T-28): the scene's `solver.damping` is the rate C (1/s) of FEBio's "mass damping" body load
-  (f = -C ρ v, every mode's amplitude decays as exp(-C t / 2); checked on a cube, spikes/t28_damped_cube.py). 0
+  (f = -C ρ v, every mode's amplitude decays as exp(-C t / 2); checked on a cube, docs/05 section 4). 0
   writes nothing, so such a scene gives the .feb it gave before. It acts on the absolute velocity.
 - **Motion between frames** (T-33): the scene's `solver.motion_between_frames` is "linear" (the default, also when the key
   is absent: the curves above, byte for byte) or "smooth": each of the six curves of a prescribed body is a monotone
@@ -299,10 +299,10 @@ def build(scene_path, trajectory_path, *, delta: float | None = None,
     fps = float(s.solver.fps.value)
     substeps = int(s.solver.substeps_per_frame.value)
     # Physical damping (T-28): solver.damping is the mass damping rate C (1/s) of FEBio's "mass damping" body load,
-    # f = -C rho v; checked on a cube against theory (spikes/t28_damped_cube.py). It is a rate, so k does not touch it.
+    # f = -C rho v; checked on a cube against theory (docs/05 section 4). It is a rate, so k does not touch it.
     mass_damping = float(s.solver.damping.value)
     rhoi_param = s.solver.numerical_damping_rhoi
-    rhoi = RHOI if rhoi_param is None else float(rhoi_param.value)  # RHOI read now, not at import (spikes set it)
+    rhoi = RHOI if rhoi_param is None else float(rhoi_param.value)  # RHOI read now, not at import (the tests set it)
     if traj.frames < 2:
         raise GenerateError("the trajectory needs at least 2 frames (frame 0 is the rest pose)")
     motions = scene_module.driver_motion(s, traj)

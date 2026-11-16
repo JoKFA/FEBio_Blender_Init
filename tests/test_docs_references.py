@@ -12,7 +12,7 @@ import pytest
 
 REPO = Path(__file__).resolve().parents[1]
 DOCS = REPO / "docs"
-FILES = sorted(DOCS.rglob("*.md")) + [REPO / "README.md", REPO / "AGENTS.md"]
+FILES = sorted(DOCS.rglob("*.md")) + [REPO / "README.md"]
 INLINE_LINK = re.compile(r"\]\(([^)]*)\)")  # everything between the parentheses; taken apart in `link_targets`
 REFERENCE_LINK = re.compile(r"^\[[^\]]+\]:\s*(\S+)", re.M)
 # kind -> (how it is cited anywhere, the document that defines it, how a definition's heading starts)

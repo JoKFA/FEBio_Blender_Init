@@ -28,7 +28,7 @@ packages = ["src/asrp_core"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["spikes", "tools"]
+pythonpath = ["tools"]
 
 [tool.ruff]
 target-version = "py313"
@@ -46,5 +46,4 @@ ignore = [
 [tool.ruff.lint.per-file-ignores]
 # Scripts run by Maya's mayapy: written in a terse stdlib-only style, kept as is.
 "tools/maya_export.py" = ["UP031", "E741"]
-"tools/rehearse_ziva_export.py" = ["UP031", "E702"]
 "tools/ziva_machine_export.py" = ["UP031", "E731"]

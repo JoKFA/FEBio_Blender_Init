@@ -11,8 +11,8 @@ Two models on data/tetmesh/lips.json (mm, N, MPa, s; mass in tonnes), with place
   hinge (data/lab_export/joints.json, scene units -> mm, Maya Y up -> Z up) by JAW_DEG over
   JAW_FRAMES frames. Prints whether FEBio got there, where it failed, and the largest stretch.
 
-    uv run python spikes/s2_lips_febio.py smoke [out_dir]
-    uv run python spikes/s2_lips_febio.py jaw [out_dir] [free band mm around the slit, default 0]
+    uv run python tests/s2_lips_febio.py smoke [out_dir]
+    uv run python tests/s2_lips_febio.py jaw [out_dir] [free band mm around the slit, default 0]
 """
 
 import json

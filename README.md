@@ -52,7 +52,7 @@ uv run asrp doctor
 FEBio binaries need a free registration at febio.org (GitHub releases are source only).
 Override tool locations with `ASRP_FEBIO` / `ASRP_BLENDER`.
 
-The lab's Maya scene goes in `assets/` and solver runs in `runs/`: both are git-ignored and must never be committed. Exports and derived data go in `data/`; `data/lab_export/`, `data/preview/`, `data/briefing/` and `data/tetmesh/` are committed because this repo is private (docs ADR-19). The lab's `.mb` files, paper and video are never committed.
+The lab's Maya scene goes in `assets/` and solver runs in `runs/`: both are git-ignored and must never be committed. Exports and derived data go in `data/`; `data/lab_export/`, `data/preview/` and `data/tetmesh/` are committed because this repo is private (docs ADR-19). The lab's `.mb` files, paper and video are never committed.
 
 ## Scene files
 
@@ -83,7 +83,7 @@ With no argument this is the full level, the definition of done before a merge r
 | `--level core` | all unit tests, without the slow real-lip test | code or tests changed |
 | `full` (no argument) | the test suite with `ASRP_SLOW=1` (the real-lip run), `asrp doctor`, Blender's own validation of the add-on manifest, the add-on round trip (`tools/check_blender_addon.py`), the playback check (`tools/check_playback.py`: S1 through real FEBio, loaded with the add-on, Blender's evaluated mesh compared with the FEBio log frame by frame) and the panel check | before a merge request; `blender_addon/` changed |
 
-`--level auto` picks a level from the changed files; `.claude/verify.json` uses it. Only `full` sets `ASRP_SLOW=1`. Blender is located like `asrp doctor` does (`ASRP_BLENDER`, PATH, default install).
+`--level auto` picks a level from the changed files (`uv run python tools/verify.py --level auto`; each machine's own settings, not part of the repo, can call it after every change). Only `full` sets `ASRP_SLOW=1`. Blender is located like `asrp doctor` does (`ASRP_BLENDER`, PATH, default install).
 
 ## Install the Blender add-on
 
@@ -112,7 +112,7 @@ The project is found in this order: the environment variable `ASRP_PROJECT` (if 
 
 ## Playing a result in Blender
 
-A solved run is a folder with `playback.json` (surface mesh, mm) and `playback.pc2` (per-frame positions). `runs/` is git-ignored, so a fresh clone has to run something first: the lab lips (the three commands above) or the small S1 test block (`uv run python spikes/s1_dynamic_jaw.py`, writes `runs/s1_dynamic_jaw`).
+A solved run is a folder with `playback.json` (surface mesh, mm) and `playback.pc2` (per-frame positions). `runs/` is git-ignored, so a fresh clone has to run something first: the lab lips (the three commands above) or the small S1 test block (`uv run python tests/s1_dynamic_jaw.py`, writes `runs/s1_dynamic_jaw`).
 
 In Blender (with the add-on installed, above): delete the default cube, then sidebar (N) > ASRP > Advanced > Load result, pick the run folder (the one that contains `playback.json`), View > Frame Selected (numpad `.`), press play. The object is scaled 0.001 so mm data shows in metres. Load result brings in the lips only; the skull and jaw in the pictures come from `tools/render_prototype.py`:
 
@@ -121,12 +121,6 @@ In Blender (with the add-on installed, above): delete the default cube, then sid
 ```
 
 It checks the Blender result against the solver's numbers, then renders three side views (rest, settled, jaw fully open). Add `--frames-dir <folder>` to render every frame (that is how `data/preview/prototype_motion.gif` was made).
-
-To render a few frames of the S1 block from the side (the camera and context props fit S1's geometry only). In PowerShell, put `&` in front of the quoted path:
-
-```bash
-"C:/Program Files/Blender Foundation/Blender 5.2/blender.exe" --background --factory-startup --python-exit-code 1 --python tools/render_playback.py -- runs/s1_dynamic_jaw runs/s1_dynamic_jaw/render 0 15 30 45
-```
 
 ## Lab asset
 
@@ -152,4 +146,4 @@ Bring the export into Blender and render the preview (this checks the meshes lan
 "C:/Program Files/Blender Foundation/Blender 5.2/blender.exe" --background --factory-startup --python-exit-code 1 --python tools/blender_import_preview.py -- data/lab_export data/preview
 ```
 
-What only Ziva can give comes from `tools/ziva_machine_export.py`, run in Maya's Script Editor on the Ziva machine; `tools/rehearse_ziva_export.py` rehearses its plumbing without Ziva. What was taken on 2026-11-12, how, and what is still to fetch: docs/12 and docs/13 E-11.
+What only Ziva can give comes from `tools/ziva_machine_export.py`, run in Maya's Script Editor on the Ziva machine; What was taken on 2026-11-12, how, and what is still to fetch: docs/12 and docs/13 E-11.

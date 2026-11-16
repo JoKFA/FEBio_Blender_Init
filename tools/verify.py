@@ -38,7 +38,8 @@ def step(name: str, cmd: list[str], extra_env: dict | None = None) -> None:
 
 
 DOC_TESTS = ["tests/test_docs_references.py", "tests/test_verify_gate.py", "tests/test_no_lab_files.py",
-             "tests/test_prototype_page.py"]  # the results page is a document too
+             "tests/test_prototype_page.py",  # the results page is a document too
+             "tests/test_one_off_files_gone.py"]
 LEVELS = ("docs", "core", "full")
 
 

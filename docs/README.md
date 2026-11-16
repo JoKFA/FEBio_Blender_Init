@@ -48,10 +48,9 @@
 ```
 asrp/
 ├─ README.md                  GitHub 首页：原型机动图、运行命令、安装、自动检查、Blender 插件、回放
-├─ AGENTS.md                  给开发者和 AI 开发会话的项目规则
 ├─ pyproject.toml  uv.lock    Python 依赖（Python 3.13）
 ├─ .github/                   合并请求模板
-├─ .claude/verify.json        自动检查的入口，和 tools/verify.py 相同
+├─ AGENTS.md  CLAUDE.md  .claude/   🚫  本机 AI 开发用的文件，每台机器自己的，不进仓库（验证门拒绝被跟踪）；自动检查的命令是 `uv run python tools/verify.py --level auto`
 ├─ .gitattributes             data/、tests/fixtures/ 按字节检出，哈希在任何电脑上都对得上（08 第 10 节）
 │
 ├─ docs/                      设计文档（本目录），唯一依据
@@ -93,10 +92,11 @@ asrp/
 │  ├─ test_docs_references.py 文档里的相对链接都指向存在的文件；引用的 T-、ADR-、E- 编号都有定义
 │  ├─ test_no_lab_files.py    不许实验室和厂商文件进 git 的检查的测试
 │  ├─ test_verify_gate.py     验证门本身
+│  ├─ test_one_off_files_gone.py  一次性开发文件（13 E-12 的清单）和本机 AI 开发文件一个都不能被跟踪
+│  ├─ s1_dynamic_jaw.py  s2_lips_febio.py  s3_attachment.py  landmark_layer_check.py   原来的试验脚本，现在是被验证门和测试运行、导入的检查（不是 test_*.py）
 │  ├─ test_line_endings.py    被跟踪的文本文件一律 LF
 │  └─ test_*.py               其余是各模块的测试，文件名对应模块名
 │
-├─ spikes/                    试验代码，不是产品代码，不要在上面继续开发。验证门和测试还在用其中 s1、s2_lips、s3 三个文件
 ├─ tools/                     检查、导出、分析、渲染工具，不是产品代码
 │  ├─ verify.py               "完成"的定义，分 docs / core / full 三级（08 第 6 节）
 │  ├─ check_no_lab_files.py   不许实验室和厂商文件进 git 的检查（验证门每级都跑）
@@ -104,7 +104,6 @@ asrp/
 │  ├─ lip_attachments.py      导出嘴唇的四组粘连顶点集 data/lab_export/lip_attachments.json（T-03）
 │  ├─ placeholder_jaw_motion.py   写测试用的下颌铰链运动 trajectory.json（张开 12°）。它只是测试输入，实验室的真实运动由 T-10 转换
 │  ├─ ziva_comparison.py      我们的嘴唇对 Ziva 的两次运行：导入、转换、运行、逐帧比，写 data/preview/ziva_comparison.json（T-34；需要仓库外的数据）
-│  ├─ landmark_layer_check.py 我们的 landmark 层对实验室自己的公式和数据（需要实验室自己的文件）
 │  ├─ render_prototype.py     在 Blender 里加载回放包、逐帧核对、渲染
 │  ├─ check_blender_addon.py  check_playback.py  check_panel.py   插件、回放、面板的检查（验证门会跑）
 │  ├─ panel_windowed_check.py 面板的定时器路径，带窗口的 Blender，手动跑，不在验证门里
@@ -112,15 +111,12 @@ asrp/
 │  ├─ maya_export.py  check_lab_export.py  本机 Maya 导出网格、权重、关节并逐点核对（12 第一部分）
 │  ├─ blender_import_preview.py            导出结果进 Blender，渲染预览
 │  ├─ ziva_machine_export.py               在 Ziva 机器上采集（12 第一部分）
-│  ├─ rehearse_ziva_export.py              在普通 Maya 上排练上面那个脚本
 │  └─ lab_trip_manifest.py                 给一趟上机取回的数据写清单和指向它的 `.local/ziva_trip_pointer.json`
-│                              一次性的试验、数字脚本和讲解页的源文件还在 spikes/ 和 tools/ 下，由 T-38 移出仓库，这里不逐个列
 │
 ├─ data/                      导出和派生数据（ADR-19）
 │  ├─ lab_export/        ✅   网格 OBJ、mesh_report.json、skin_skinCluster7.json、joints.json、
 │  │                          lip_attachments.json；T-10 转换后的运动放 trajectories/；
 │  │                          ziva_trip_pointer.json 指向仓库外的 Ziva 机器数据
-│  │  └─ manual_maya_obj/     手动导的下巴、嘴唇、颅骨、两只眼睛和一个 .blend，只作参考，产品不读
 │  ├─ preview/           ✅   Blender 预览图和归档的运行报告，15 的数字来源；README 里的动图 prototype_motion.gif
 │  ├─ tetmesh/           ✅   嘴唇四面体网格 lips.json，由 tools/build_tetmesh.py 生成一次（ADR-20）
 │  └─ asset_inventory*.json  🚫  .mb 的完整清单，约 40 MB，能重新生成

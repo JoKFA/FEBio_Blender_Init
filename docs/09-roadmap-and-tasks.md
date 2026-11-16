@@ -277,6 +277,7 @@ M0 基础 ✅ ──► M1 原料就绪 ✅ ──► M2 物理段 ──► M3 
 - **不做**：改产品代码的行为；改 `AGENTS.md`、`CLAUDE.md` 的内容；改写 git 历史（旧提交里还留着的指针文件和这些 AI 开发文件2026-11-13 项目负责人定：现在不抹，等第一阶段做完或者整个产品做完时再说）。
 - **依赖**：T-36（15 的数字工具和存档等结果页改完再移）；T-37 的第 7 项。
 - **改动范围**：`tools/`、`spikes/`、`tests/`、`data/preview/`、`data/briefing/`、`pyproject.toml`、`.gitignore`、`README.md`、文档里的命令。
+- **做了（2026-11-15）**：E-12 清单里的一次性文件移出了仓库（`tools/` 的 `rehearse_ziva_export.py`、`lip_attachments_preview.py`、`render_playback.py`、`briefing/`；`spikes/` 整个目录；`data/briefing/`、`data/lab_export/manual_maya_obj/`、`data/preview/` 里一次性脚本的输出和讲解页的图），存在仓库外的开发归档里，git 历史里仍有。三个检查和 `landmark_layer_check.py`（`tests/test_skinning.py` 要用它）搬进了 `tests/`：`tests/s1_dynamic_jaw.py`、`tests/s2_lips_febio.py`、`tests/s3_attachment.py`、`tests/landmark_layer_check.py`，`pyproject.toml` 的 `pythonpath` 只剩 `tools`。清单里有几条后来成了产品、留下：`tools/prototype_numbers.py`、`tests/test_prototype_page.py`、`tests/test_render_prototype.py`、`data/preview/prototype_*`（结果页 15 读它们；`prototype_run_report.json` 也在其中，`prototype_numbers.py` 读它）和 README 的动图。`AGENTS.md` 和 `.claude/verify.json` 已从 git 取消跟踪（本机文件内容不变，已核对哈希），`.gitignore` 加了 `AGENTS.md`、`CLAUDE.md`、`.claude/`，验证门拒绝它们被跟踪（`tests/test_no_lab_files.py`）。`tests/test_one_off_files_gone.py` 列出要移走的路径，剩一个就失败，也进 docs 级。`docs/15` 里一条写着 `tools/landmark_layer_check.py` 的命令随 `docs/15` 的下一次改动改成 `tests/landmark_layer_check.py`。
 - **规模**：中。
 
 ---
@@ -356,7 +357,7 @@ M0 基础 ✅ ──► M1 原料就绪 ✅ ──► M2 物理段 ──► M3 
 
 ### T-07 粘连做法试验（S3） 🟢（第 1、2、4 步 ✅ 2026-11-11；第 3 步推后到第二阶段）
 - **目标**：验证 [05](05-ziva-to-febio.md) 第 3 节定下的两种做法（上唇 `hard`、下唇和嘴角 `spring`）写得对，并给出弹簧基础刚度的取法。第 2 步的比较如果推翻了 05 第 3 节的类型，停下来报告，不自己改。
-- **已完成的步骤**（结果在 05 第 3 节"T-07 第 1、2 步的结果"和 ADR-36，复现 `uv run python spikes/s3_attachment.py [--extra]`，快速部分 `uv run python -m pytest tests/test_s3_attachment.py`）：
+- **已完成的步骤**（结果在 05 第 3 节"T-07 第 1、2 步的结果"和 ADR-36，复现 `uv run python tests/s3_attachment.py [--extra]`，快速部分 `uv run python -m pytest tests/test_s3_attachment.py`）：
   - 第 1 步：挂在 4 根弹簧上的方块，伸长和理论值 ρ·V·k²·g ÷（4K）比，k = 1 误差 1×10⁻⁹%、k = 2 误差 0.0165%；
   - 第 2 步：软方块用 `hard` 和 `spring` 粘在转动的板上，K 从 10⁻³ 加到 10¹⁰ N/mm，14 档单调趋近 `hard`（差 ≈ 2×10⁻³ N ÷ K）；零长度的单根弹簧不收敛，所以每个节点三根带偏移的弹簧，δ ≥ 10 × 最大滑移；
   - 第 4 步：六个自由度全固定的刚体可当颅骨用（05 第 1 节）。
@@ -520,7 +521,7 @@ M0 基础 ✅ ──► M1 原料就绪 ✅ ──► M2 物理段 ──► M3 
 - **目标**：做一个和 fTetWild 并排比较的备选生成办法：用整齐的格子罩住嘴唇表面，保留在实体内部的格子；同一格里上下唇不相连的部分，各自成格（各算各的）。
 - **为什么**：现有办法（fTetWild，ADR-20）每次结果不同、偶尔崩溃、会出极小的四面体，还依赖锁了版本的第三方包；格子办法是确定的、不怕表面自相交，Ziva 自己就是这类做法。网格已经是独立的文件，换生成办法不影响下游。详见 [13](13-explanations.md) E-03 末尾。
 - **触发时机**：和 T-17、T-23、T-24 三个试验一起做，在第二阶段投入之前。T-06a 的运行没有出现嘴角小四面体的问题（0 次重试、没有负体积），所以不是为了救急。
-- **做法**：生成的网格过 `asrp_core.tetmesh` 同一套检查和同一个 FEBio 重力沉降测试（`spikes/s2_lips_febio.py`），再和 `data/tetmesh/lips.json` 并排比较：结果（下沉量、嘴缝宽度、嘴角处的行为）、速度、稳定性（重复生成是否逐位相同、有没有极小的四面体、有没有崩溃）。
+- **做法**：生成的网格过 `asrp_core.tetmesh` 同一套检查和同一个 FEBio 重力沉降测试（`tests/s2_lips_febio.py`），再和 `data/tetmesh/lips.json` 并排比较：结果（下沉量、嘴缝宽度、嘴角处的行为）、速度、稳定性（重复生成是否逐位相同、有没有极小的四面体、有没有崩溃）。
 - **进展（2026-11-15，ADR-44）**：格子办法已做成产品里第二个可选的网格 `data/tetmesh/lips_lattice.json`（126 个四面体，格边 = Ziva 的 `tetSz` 换算成 25.37 mm，原点 = 表面包围盒最小角，上下唇**不**分开，文件里写明），生成 `uv run python tools/build_tetmesh.py --method lattice`，有自己的检查 `tetmesh.check_lattice`，生成两遍哈希相同。代价是上下唇是一个整体；好处是在实验室的 AA 上上唇被带动（5.5 mm，Ziva 4.80），细网格几乎不动（0.22 mm）。默认网格仍是 `lips.json`，换不换由项目负责人看 ADR-42 的数字定。上面"同一格里上下唇不相连的部分各自成格"这一点**没有**做（684 个四面体的试验里它让上唇不动，ADR-42）。比较报告写进 13 的 E-03 和 11 的 A-32 仍待做。
 - **输出**：试验代码（放 `spikes/`）、比较报告（写进 13 的 E-03 和 11 的 A-32）。
 - **验收**：同样的输入重复生成，网格逐位相同；通过 `tetmesh.check` 全部检查；FEBio 重力沉降测试正常结束；报告有上面三项比较，并给出明确结论（换 / 不换 / 并存）。
@@ -700,12 +701,12 @@ M0 基础 ✅ ──► M1 原料就绪 ✅ ──► M2 物理段 ──► M3 
 ---
 
 ### T-00 基础设施 ✅
-- **结果**：仓库和开发环境、`asrp doctor`、Blender 插件骨架、FEBio 动力学试验（S1，`spikes/s1_dynamic_jaw.py`）、结果回放（`tools/check_playback.py`）、资产盘点工具、可移植的自动检查脚本 `tools/verify.py`。证据见各次提交。
+- **结果**：仓库和开发环境、`asrp doctor`、Blender 插件骨架、FEBio 动力学试验（S1，`tests/s1_dynamic_jaw.py`）、结果回放（`tools/check_playback.py`）、资产盘点工具、可移植的自动检查脚本 `tools/verify.py`。证据见各次提交。
 
 ---
 
 ### T-02 资产导入 ✅ 2026-11-10
-- **结果**（2026-11-10）：`asrp import-asset <导出文件夹> <输出文件夹> [--mm-per-scene-unit 0.962] [--tetmesh 路径]`，代码在 `src/asrp_core/asset/`；换算只在 `asset/coords.py` 的 `to_mm_zup` 里，`tools/build_tetmesh.py`、`tools/blender_import_preview.py`、`tools/briefing/build.py`、`spikes/s2_lips_febio.py` 都改成调用它。输出文件夹里有 `scene.json`、`meshes/`（五个网格，毫米、Z 轴朝上；`lips_tet.json` 是 `data/tetmesh/lips.json` 的原样拷贝）、`landmarks/`（T-09 起是换算好的 `skin_mm.json`）和 `import_report.json`（换算系数、坐标轴、网格、每个参数的来源、"缺了什么"、场景检查结果）。`uv run asrp import-asset data/lab_export <输出文件夹>` 打印的尺寸和 [03](03-asset.md) 第 12 节的表一致，下颌前后 150.0 mm；`jaw01` 枢轴 (0.00, −121.71, −54.65) mm、转轴 (1, 0, 0)，带动下颌和下牙；结果 `import PASSED: scene check 0 errors, 1 warnings`（唯一的提醒是软组织没有连接；T-06a 把粘连写进场景后是 `0 warnings`）。导入前 `uv run python tools/check_lab_export.py data/lab_export "assets/w64 from v36 proxy delete done non ziva.mb"` 输出 `LAB EXPORT CHECK PASSED`（5 个网格最大差 0.0000000）。
+- **结果**（2026-11-10）：`asrp import-asset <导出文件夹> <输出文件夹> [--mm-per-scene-unit 0.962] [--tetmesh 路径]`，代码在 `src/asrp_core/asset/`；换算只在 `asset/coords.py` 的 `to_mm_zup` 里，`tools/build_tetmesh.py`、`tools/blender_import_preview.py`、`tools/briefing/build.py`、`tests/s2_lips_febio.py` 都改成调用它。输出文件夹里有 `scene.json`、`meshes/`（五个网格，毫米、Z 轴朝上；`lips_tet.json` 是 `data/tetmesh/lips.json` 的原样拷贝）、`landmarks/`（T-09 起是换算好的 `skin_mm.json`）和 `import_report.json`（换算系数、坐标轴、网格、每个参数的来源、"缺了什么"、场景检查结果）。`uv run asrp import-asset data/lab_export <输出文件夹>` 打印的尺寸和 [03](03-asset.md) 第 12 节的表一致，下颌前后 150.0 mm；`jaw01` 枢轴 (0.00, −121.71, −54.65) mm、转轴 (1, 0, 0)，带动下颌和下牙；结果 `import PASSED: scene check 0 errors, 1 warnings`（唯一的提醒是软组织没有连接；T-06a 把粘连写进场景后是 `0 warnings`）。导入前 `uv run python tools/check_lab_export.py data/lab_export "assets/w64 from v36 proxy delete done non ziva.mb"` 输出 `LAB EXPORT CHECK PASSED`（5 个网格最大差 0.0000000）。
 - **事实在哪里**：单位、坐标轴、变换只套一次、导入时检查 `obj_coordinates` 是 `scene`、`jaw01` 铰链换算后的位置：[03](03-asset.md) 第 10 节；`scene.json` 的内容和 `import_report.json`：[04](04-architecture.md) 第 3、5.1 节；参数的来源标注：ADR-34；换算只有一份实现：05 坑 6；测试 `tests/test_asset.py`。
 
 ---
@@ -717,7 +718,7 @@ M0 基础 ✅ ──► M1 原料就绪 ✅ ──► M2 物理段 ──► M3 
 ---
 
 ### T-04 嘴唇四面体化试验（S2） ✅ 2026-11-09
-- **结果**（2026-11-06 初版，2026-11-09 复核定稿）：选定 fTetWild（ADR-20）。嘴唇网格自身穿插（05 坑 9），TetGen 不能用。fTetWild 每次结果不同（坑 12），所以网格用 `uv run python tools/build_tetmesh.py` 生成一次，提交在 `data/tetmesh/lips.json`，之后只读这个文件。定稿参数：包络 0.12 mm、边长 25.4 mm，6,747 个计算点；比较表见 ADR-20（`uv run python spikes/s2_tetmesh.py` 可重跑）；FEBio 重力沉降 `uv run python spikes/s2_lips_febio.py smoke` 通过。初版的问题、下颌张开压力测试见 [13](13-explanations.md) E-03。新问题：嘴角重叠部分和两个小孔是否和 Ziva 一致（11 的 Q11）。
+- **结果**（2026-11-06 初版，2026-11-09 复核定稿）：选定 fTetWild（ADR-20）。嘴唇网格自身穿插（05 坑 9），TetGen 不能用。fTetWild 每次结果不同（坑 12），所以网格用 `uv run python tools/build_tetmesh.py` 生成一次，提交在 `data/tetmesh/lips.json`，之后只读这个文件。定稿参数：包络 0.12 mm、边长 25.4 mm，6,747 个计算点；比较表见 ADR-20（`uv run python spikes/s2_tetmesh.py` 可重跑）；FEBio 重力沉降 `uv run python tests/s2_lips_febio.py smoke` 通过。初版的问题、下颌张开压力测试见 [13](13-explanations.md) E-03。新问题：嘴角重叠部分和两个小孔是否和 Ziva 一致（11 的 Q11）。
 - **事实在哪里**：工具选择和比较表：ADR-20；网格的数字和 FEBio 重力沉降：[05](05-ziva-to-febio.md) 第 1 节 zTet 行；踩的坑：05 坑 9–15；为什么需要这一步、初版为什么不行：[13](13-explanations.md) E-02、E-03；备选办法：T-20。
 
 ---
@@ -752,7 +753,7 @@ M0 基础 ✅ ──► M1 原料就绪 ✅ ──► M2 物理段 ──► M3 
 ### T-09 landmark 变形层 ✅ 2026-11-12
 - **结果**：`src/asrp_core/skinning.py`；导入时把蒙皮矩阵换算成毫米、Z 轴朝上，写成 `landmarks/skin_mm.json`（补上 M1 的缺口，ADR-34）；`trajectory.json` 的 `landmarks` 一节的读取和校验。
   - **和 Ziva 对过**：每一帧 f，Ziva 同一帧的蒙皮前嘴唇经 `skinning.deform` 叠加运动文件第（f − 15）步的 landmark 位移后，和 Ziva 同一帧的蒙皮后嘴唇比，47 帧、10,240 个顶点最大差 0.000016 mm（限 0.01 mm；整张脸和只留嘴唇两次都是，E-15 第 3 条）；把 landmark 列错开一位的对照组差 11.9 mm。数据在仓库外（[13](13-explanations.md) E-11）；
-  - **和实验室公式对过**：`uv run python tools/landmark_layer_check.py` 用实验室自己的绑定姿态和权重文件、按他们的公式算，300 个 landmark 全部移动，最大差 5.34×10⁻⁶ mm，对照（权重列错开一个 landmark）6.79 mm，施加的最大平移 16.1 mm（`data/preview/landmark_layer_check.json`）；
+  - **和实验室公式对过**：`uv run python tests/landmark_layer_check.py` 用实验室自己的绑定姿态和权重文件、按他们的公式算，300 个 landmark 全部移动，最大差 5.34×10⁻⁶ mm，对照（权重列错开一个 landmark）6.79 mm，施加的最大平移 16.1 mm（`data/preview/landmark_layer_check.json`）；
   - **测试**：换算 `tests/test_asset.py`（换算后每个 landmark 静止矩阵里的平移等于场景里它的静止位置）和 `tests/test_skinning.py`；landmark 不动时最终形状等于物理结果（`tests/test_skinning.py`、`tests/test_simulate.py`）；小例子和手算一致（`tests/test_skinning.py`）；`landmarks` 一节读回不变、缺字段和帧数对不上时报错（`tests/test_trajectory.py`）；场景不认识的 landmark 名字被 `asrp check` 拒绝（`tests/test_scene.py`）。
 - **事实在哪里**：设计 [04](04-architecture.md) 第 2 节、第 5.2 节（`landmarks` 一节）、ADR-08；选 physics only 或 final shape 加载在插件的加载函数里，面板归 T-13。
 

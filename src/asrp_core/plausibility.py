@@ -33,7 +33,7 @@ beyond a reference frame (the settled shape), per frame. Reported, not judged (T
 `surface_health` is not a check either (the five checks look only at the physics tet mesh): how many faces of the display
 surface have turned over against the rest surface, and how far its edges have shrunk or grown, at the last frame and at the
 worst frame. Reported, not judged. A turned-over face (normal against the rest normal) is not a proof of
-self-intersection; intersections are not measured. `folds` is the same count for one frame (spikes/audit_aa_folds.py).
+self-intersection; intersections are not measured. `folds` is the same count for one frame.
 
 `tissue_step` is also only reported: how far the tet nodes moved between two frames (the settle frame and the one
 before it), so a reader can see whether the tissue was still moving when the settled shape was taken.
@@ -364,8 +364,7 @@ def fold_counts(rest: np.ndarray, frames: np.ndarray, faces: np.ndarray, chunk: 
 
 
 def folds(rest: np.ndarray, shape: np.ndarray, faces: np.ndarray) -> dict:
-    """Count folded and squashed faces of one shape against the rest shape (docs/15 section 8; the printout of
-    spikes/audit_aa_folds.py). A flipped face is not a proof of self-intersection."""
+    """Count folded and squashed faces of one shape against the rest shape (docs/15 section 8). A flipped face is not a proof of self-intersection."""
     c = fold_counts(rest, shape[None], faces)
     return {"faces": c["faces"], "flipped (dot < 0)": int(c["flipped"][0]), "turned > 60 deg (dot < 0.5)": int(c["turned"][0]),
             "edges > 2x": int(c["long"][0]), "edges < 0.5x": int(c["short"][0]),

@@ -26,7 +26,7 @@
 
 | 检查 | 证明什么 | 位置 |
 |---|---|---|
-| 刚体绕关节转动和理论值一致 | 下颌的驱动方式正确 | `spikes/s1_dynamic_jaw.py`（由 `tests/test_febio.py` 调用） |
+| 刚体绕关节转动和理论值一致 | 下颌的驱动方式正确 | `tests/s1_dynamic_jaw.py`（由 `tests/test_febio.py` 调用） |
 | 组织在重力下往下沉 | 重力符号正确（坑 1） | 同上 |
 | Blender 里播放的形状和 FEBio 结果逐帧一致 | 结果回放没有错位、没有丢帧 | `tools/check_playback.py` |
 | 表面提取、点缓存格式 | 回放包的格式正确 | `tests/test_playback.py` |

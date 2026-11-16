@@ -19,8 +19,8 @@ condition, or (b) with springs: the same nodes, each with a spring to an anchor 
 Gravity plus a prescribed plate rotation. The base spring stiffness is swept over decades; the largest
 node difference to (a) must shrink monotonically. Reports run time and where it gets slow or fails.
 
-    uv run python spikes/s3_attachment.py [out_dir]            # the checks: prints the tables, exits 1 on any FAIL
-    uv run python spikes/s3_attachment.py --extra [out_dir]    # also the studies behind docs/05 section 3: the
+    uv run python tests/s3_attachment.py [out_dir]            # the checks: prints the tables, exits 1 on any FAIL
+    uv run python tests/s3_attachment.py --extra [out_dir]    # also the studies behind docs/05 section 3: the
                                                                # spring offset, time step, E and mesh size
 """
 
@@ -74,7 +74,7 @@ class Model:
         return grid, tets
 
     def stub(self, p):
-        """The small tet every rigid body needs for FEBio to accept it (as in spikes/s2_lips_febio.py)."""
+        """The small tet every rigid body needs for FEBio to accept it (as in tests/s2_lips_febio.py)."""
         x, y, z = p
         return [self.node(q) for q in [(x, y, z), (x + 1, y, z), (x, y + 1, z), (x, y, z + 1)]]
 

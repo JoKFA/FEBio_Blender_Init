@@ -33,11 +33,20 @@ def test_a_tracked_file_that_names_a_path_of_this_machine_is_reported():
         "notes/d.md": "the home folder is C:\\Users\\someone\\AppData",
         "tools/e.py": 'EXAMPLE = "D:/work/asrp"  # a made-up path is fine\n',
         "docs/f.md": "FEBio is in C:\\Program Files\\FEBioStudio\n",
-        "AGENTS.md": "Adds to Q:\\people\\someone\\AGENTS.md.\n",                          # the owner's own file
+        "docs/g.md": "see Q:\\people\\someone\\AGENTS.md\n",                              # no file is exempt
     }
     found = guard.machine_paths(texts, markers)
-    assert [line.split(": ")[0] for line in found] == ["data/c.json:1", "docs/b.md:2", "notes/d.md:1", "tools/a.py:1"]
+    assert [line.split(": ")[0] for line in found] == ["data/c.json:1", "docs/b.md:2", "docs/g.md:1", "notes/d.md:1",
+                                                      "tools/a.py:1"]
     assert guard.machine_paths({"tools/e.py": texts["tools/e.py"], "docs/f.md": texts["docs/f.md"]}, markers) == []
+
+
+def test_the_local_ai_development_files_are_never_tracked():
+    """AGENTS.md, CLAUDE.md and everything under .claude/ are each machine's own (T-38 item 5): a tracked one fails."""
+    found = guard.violations({"AGENTS.md": "aa", "CLAUDE.md": "bb", ".claude/verify.json": "cc", ".claude/skills/x.md": "dd",
+                              "docs/AGENTS.md.txt": "ee", "tools/claude.py": "ff", "README.md": "gg"}, set())
+    assert [line.split(":")[0] for line in found] == [".claude/skills/x.md", ".claude/verify.json", "AGENTS.md", "CLAUDE.md"]
+    assert guard.violations({"README.md": "gg", "docs/09-roadmap-and-tasks.md": "hh"}, set()) == []
 
 
 def test_a_drive_root_is_not_a_marker():
