@@ -13,13 +13,14 @@ Writes into an output folder:
 Roles follow docs/03 sections 3 and 4: the lips are the soft tissue; skull and upper teeth follow
 the driver head (T-28), which is at rest whenever a trajectory leaves it out, so they are then
 fixed; jaw and lower teeth both follow the driver jaw01, the joint that moves them in Maya. The
-Ziva attribute list was fetched on 2026-11-12 (docs/03 section 5), but this import does not use it yet:
-material, solver settings and bone masses are still our own values, marked "ours" (they change in T-37,
-after the T-34 baseline). The four lip attachments come from T-03's lip_attachments.json
-(docs/05 section 3): upper lip hard on the skull, lower lip a spring to the jaw, the two lip
-corners springs to an anchor that moves half as far as the jaw relative to the head (T-06a, T-28).
-Their stiffness and the
-blend factor are provisional values marked "ours". `asrp check` passes with no warning.
+material (Young's modulus, Poisson's ratio, density) and the solver's substeps are Ziva's values measured
+on 2026-11-12 (docs/03 section 5), marked `lab_setting` (T-37); `tissue_settings="ours"` keeps our earlier
+values. Damping, gravity and the bone masses are still our own, marked "ours". The four lip attachments
+come from T-03's lip_attachments.json (docs/05 section 3): by default upper lip hard on the skull, lower
+lip a spring to the jaw, the two lip corners springs to an anchor that moves half as far as the jaw
+relative to the head (T-06a, T-28), with a stiffness and a blend factor of ours; `attachment_rule=
+"ziva-soft"` makes all four springs of Ziva's stiffness per volume times an area (docs/05 section 3).
+`asrp check` passes with no warning.
 """
 
 import hashlib
@@ -74,15 +75,25 @@ LIP_ATTACHMENTS = {
     "zAttachment10": ("right_corner_on_anchor", CORNER_ANCHOR, "spring", 309),
 }
 SOLVER_FPS = 30  # the lab's zSolver frame rate (docs/03 section 5)
-# T-06a's temporary material (docs/09 T-06a card), ours: guessed to be near Ziva's defaults, not checked.
+# --attachments (docs/05 section 3): "ours" is the rule above; "ziva-soft" makes every group a spring whose stiffness
+# is Ziva's 1e8 N/m^3 (= 0.1 N/mm^3, docs/03 section 5) times an area, which a spring needs and Ziva's number does not
+# have: the group's mean lip-surface area per vertex (a third of each triangle around the vertex, geometric mm^2) times
+# k^2 (FEBio coordinates are geometric mm x k, so an area there is k^2 times larger). Needed by tet meshes so coarse
+# that the upper and lower lip share tet nodes, where a hard attachment would pin the lower lip too.
+ATTACHMENT_RULES = ("ours", "ziva-soft")
+ZIVA_ATTACHMENT_STIFFNESS_N_PER_MM3 = 0.1
+# Our earlier material (T-06a), guessed near Ziva's defaults before they were measured; kept so that a run with it
+# can still be made and compared (tissue_settings="ours", `--tissue-settings ours`). Not the default since T-37.
 TISSUE_E_MPA = 0.015
 TISSUE_NU = 0.45
 TISSUE_DENSITY = 1.06e-9  # t/mm^3
-TISSUE_NOTE = ("our own value, NOT Ziva's. Measured in the lab's scene on 2026-11-12: E 12 kPa, Poisson 0.4, "
-               "density 1060, material model StVK (docs/03 section 5). This default changes in T-37")
-# The values measured in the lab's Ziva scene on 2026-11-12 (docs/03 section 5; tests/test_lab_facts.py), used
-# only when the import is asked for them (tissue_settings="lab", T-34). The default stays ours until T-37.
+TISSUE_NOTE = ("our own earlier value, NOT Ziva's, kept for comparison (--tissue-settings ours). Measured in the "
+               "lab's scene on 2026-11-12: E 12 kPa, Poisson 0.4, density 1060, material model StVK (docs/03 "
+               "section 5), which is what --tissue-settings lab (the default) writes")
+# The values measured in the lab's Ziva scene on 2026-11-12 (docs/03 section 5; tests/test_lab_facts.py): the
+# default since T-37 (the T-34 comparison report holds the runs with ours and with these).
 TISSUE_SETTINGS = ("ours", "lab")
+DEFAULT_TISSUE_SETTINGS = "lab"
 LAB_TISSUE_E_MPA = 0.012
 LAB_TISSUE_NU = 0.4
 LAB_TISSUE_NOTE = ("measured in the lab's Ziva scene on 2026-11-12 (docs/03 section 5). Only the number is "
@@ -91,21 +102,37 @@ LAB_TISSUE_NOTE = ("measured in the lab's Ziva scene on 2026-11-12 (docs/03 sect
 LAB_SUBSTEPS_NOTE = ("Ziva's zSolver in the lab's scene: 1 substep per frame (docs/03 section 5). Ziva's integrator "
                      "(BackwardEuler), its Newton limit (5) and its stiffness damping have no setting here")
 
-# Data the import cannot fill yet, said once here so the report and the docs agree.
+# What the import does not take from Ziva, said once here so the report and the docs agree.
 SETTINGS_MISSING = {
-    "ours": "Ziva's settings were measured on 2026-11-12 (docs/03 section 5) but this import was not asked for them: "
-            "material, solver substeps, damping and gravity are our own values marked 'ours'. Ask for the "
-            "measured values with --tissue-settings lab; the default changes in T-37",
-    "lab": "Ziva's Young's modulus, Poisson's ratio, density and substeps are used (--tissue-settings lab). Still "
-           "ours, because nothing here can be set to Ziva's: the material model (neo-Hookean, Ziva's is StVK), the "
-           "integrator and its Newton limit, stiffness damping, gravity and the physical scale (docs/09 T-34, T-37)",
+    "ours": "--tissue-settings ours: our earlier material (E 15 kPa, Poisson 0.45) and our substeps, not Ziva's "
+            "measured 12 kPa, 0.4 (docs/03 section 5); the default is --tissue-settings lab. Also ours: damping "
+            "(mass damping only, Ziva also has stiffness damping 0.001, which is not built: FEBio has no "
+            "stiffness-proportional damping, docs/05 section 4) and gravity (9.81, Ziva's is -9.8 in a length "
+            "unit that is not verified, docs/05 section 4)",
+    "lab": "Ziva's Young's modulus, Poisson's ratio, density and substeps are used (the default, "
+           "--tissue-settings lab). Still ours, because nothing here can be set to Ziva's: the material model "
+           "(neo-Hookean, Ziva's is StVK), the integrator and its Newton limit, stiffness damping (not built: FEBio "
+           "has no stiffness-proportional damping, docs/05 section 4), gravity (9.81; Ziva's -9.8 is in a length "
+           "unit that is not verified) and the physical scale (docs/09 T-34, T-37)",
+}
+HAND_EDIT_NOTE = ("Spring stiffness is fixed at import from E and the median tet edge (100 x E x h, the 'ours' rule): "
+                  "editing material.E_mpa in scene.json afterwards does NOT recompute it, so a hand edit of E and a "
+                  "re-import with another E are different experiments. To change E with the springs following, "
+                  "import again; to change it alone, edit E in scene.json (docs/05 section 3)")
+ATTACHMENT_MISSING = {
+    "ours": "Attachments: the vertex sets are confirmed (A-33: the map default is 1.0, confirmed 2026-11-12). Their "
+            "type and stiffness are ours, not Ziva's: upper lip hard, the others springs of 100 x E x h, lip corner "
+            "blend factor 0.5; Ziva has 140 soft attachments of 1e8 N/m^3 (docs/03 section 5). Making the upper lip "
+            "soft too was measured on the fine tet mesh and changes almost nothing (docs/05 section 3); "
+            "--attachments ziva-soft does it for every group",
+    "ziva-soft": "Attachments: the vertex sets are confirmed (A-33). --attachments ziva-soft: all four groups are "
+                 "springs of 0.1 N/mm3 (Ziva's 1e8 N/m^3) x the group's mean lip-surface area per vertex x k^2; the "
+                 "area rule is ours, Ziva's own is not known (docs/05 section 3). Lip corner blend factor 0.5 is "
+                 "ours. Ziva has 140 soft attachments of this stiffness",
 }
 STILL_MISSING = [
     "Motion: this import carries none. A lab motion file that starts at rest is converted with "
     "`asrp convert-motion` (docs/09 T-34); segments that start from another pose are T-10",
-    "Attachments: the vertex sets are confirmed (A-33: the map default is 1.0). Their type and stiffness are "
-    "ours, not Ziva's: upper lip hard, the others springs of 100 x E x h, lip corner blend factor 0.5; Ziva "
-    "has 140 soft attachments of 1e8 N/m^3 (docs/03 section 5, T-37)",
     "Physical scale (ADR-31): geometry is settled (0.962 mm per scene unit); physics_length_scale k "
     "is 0.67, real-person size, a value we chose from the meeting conclusion, not Ziva's scale",
 ]
@@ -139,15 +166,36 @@ def _write_obj(path: Path, header: list[str], vertices: np.ndarray, faces) -> No
     path.write_text("\n".join(lines) + "\n", encoding="utf-8", newline="\n")
 
 
+def vertex_areas(vertices, faces) -> np.ndarray:
+    """The surface area each vertex stands for: a third of every triangle around it (polygons are fanned into
+    triangles), in the unit of `vertices` squared. (V,) float64; the sum is the surface's total area."""
+    vertices = np.asarray(vertices, dtype=np.float64)
+    tri = coords.triangulate(faces)
+    area = 0.5 * np.linalg.norm(np.cross(vertices[tri[:, 1]] - vertices[tri[:, 0]],
+                                         vertices[tri[:, 2]] - vertices[tri[:, 0]]), axis=1)
+    out = np.zeros(len(vertices))
+    for corner in range(3):
+        np.add.at(out, tri[:, corner], area / 3.0)
+    return out
+
+
 def import_asset(export: Path, out: Path, tet_mesh: Path,
-                 mm_per_scene_unit: float = DEFAULT_MM_PER_SCENE_UNIT, tissue_settings: str = "ours") -> ImportResult:
-    """tissue_settings "ours" (the default) writes our own material values; "lab" writes the Young's modulus,
-    Poisson's ratio, density and substeps measured in the lab's Ziva scene, marked `lab_setting`. Everything
-    else is the same in both: the material model, the attachments' kinds and the spring rule 100 x E x h (which
-    follows the Young's modulus that is written), the damping, gravity and the physical scale stay ours."""
+                 mm_per_scene_unit: float = DEFAULT_MM_PER_SCENE_UNIT,
+                 tissue_settings: str = DEFAULT_TISSUE_SETTINGS, attachment_rule: str = "ours") -> ImportResult:
+    """tissue_settings "lab" (the default, T-37) writes the Young's modulus (12 kPa), Poisson's ratio (0.4), density
+    and substeps measured in the lab's Ziva scene, marked `lab_setting`; "ours" writes our earlier material (15 kPa,
+    0.45) for comparison. Everything else is the same in both: the material model, the spring rule 100 x E x h
+    (which follows the Young's modulus that is written, once, at import), the damping, gravity and the physical
+    scale stay ours.
+
+    attachment_rule "ours" (the default) is the upper lip hard, the others springs of 100 x E x h; "ziva-soft" makes
+    all four groups springs of Ziva's 0.1 N/mm3 x the group's mean lip-surface area per vertex x k^2 (docs/05
+    section 3), for tet meshes so coarse that the lips share tet nodes."""
     export, out, tet_mesh = Path(export), Path(out), Path(tet_mesh)
     if tissue_settings not in TISSUE_SETTINGS:
         raise AssetError(f"tissue_settings is {tissue_settings!r}; it must be one of {', '.join(TISSUE_SETTINGS)}")
+    if attachment_rule not in ATTACHMENT_RULES:
+        raise AssetError(f"attachments is {attachment_rule!r}; it must be one of {', '.join(ATTACHMENT_RULES)}")
     report_json = json.loads(_need(export / "mesh_report.json").read_text(encoding="utf-8"))
     # ADR-18: the export already applied each mesh's world matrix. Applying it again would scale
     # everything by 2.54 a second time without any error, so refuse anything else.
@@ -211,8 +259,9 @@ def import_asset(export: Path, out: Path, tet_mesh: Path,
 
     lips_mesh, lips_source = convert("lips", LIPS, "soft tissue")
     shutil.copyfile(tet_mesh, out / "meshes" / "lips_tet.json")
-    no_attribute_list = "our own value: Ziva's measured settings (docs/03 section 5) are not used yet (T-37)"
-    tissue_vertex_count = len(coords.read_obj(export / f"mesh_{LIPS}.obj")[0])
+    ours_value = "our own value, not taken from Ziva's measured settings (docs/03 section 5)"
+    lips_scene, lips_faces = coords.read_obj(export / f"mesh_{LIPS}.obj")
+    tissue_vertex_count = len(lips_scene)
     tissue = scene.SoftTissue(
         "lips", lips_mesh, lips_source,
         scene.TetRef("meshes/lips_tet.json", tet_meta.get("content_sha256", "")),
@@ -268,9 +317,12 @@ def import_asset(export: Path, out: Path, tet_mesh: Path,
     stiffness_note = (
         f"provisional (T-07 rule): 100 x E x h = 100 x {e_mpa} MPa x {h:.3f} mm, h = median tet edge "
         f"{h / k:.3f} mm x k {k}; ours, not Ziva's (Ziva: soft attachments of 1e8 N/m^3, which need an "
-        "area to become a spring stiffness; docs/05 section 3, T-37)"
+        "area to become a spring stiffness: --attachments ziva-soft, docs/05 section 3). Computed once, here: "
+        "editing E in scene.json does not change it"
     )
     groups = {g.get("attachment"): g for g in attachments_json.get("groups", [])}
+    soft = attachment_rule == "ziva-soft"
+    vertex_area_mm2 = vertex_areas(coords.to_mm_zup(lips_scene, mm_per_scene_unit), lips_faces) if soft else None
     attachments = []
     attachments_report = []
     for maya_name, (name, target, kind, count) in LIP_ATTACHMENTS.items():
@@ -286,15 +338,27 @@ def import_asset(export: Path, out: Path, tet_mesh: Path,
                 f"{maya_name} in {ATTACHMENTS} is for a mesh of {g.get('source_vertex_count')} vertices, the "
                 f"lips have {tissue_vertex_count}; the files do not belong together"
             )
-        base = ours(None if kind == "hard" else stiffness,
-                    "hard: the vertices join the target, no stiffness" if kind == "hard" else stiffness_note)
         weights = [[int(v), float(w)] for v, w in g["vertices"]]
+        if soft:
+            kind = "spring"
+            area = float(vertex_area_mm2[[v for v, _ in weights]].mean())
+            group_stiffness = float(f"{ZIVA_ATTACHMENT_STIFFNESS_N_PER_MM3 * area * k * k:.3g}")
+            base = scene.Param(group_stiffness, "lab_setting", (
+                f"--attachments ziva-soft: {ZIVA_ATTACHMENT_STIFFNESS_N_PER_MM3} N/mm3 (Ziva's 1e8 N/m3, "
+                f"docs/03 section 5) x {area:.3f} mm2 (the mean lip-surface area of this group's {len(weights)} "
+                f"vertices, a third of each triangle around a vertex, geometric mm) x k^2 ({k * k:.4f}). Only the "
+                "per-volume stiffness is Ziva's; the area rule and k^2 are ours (docs/05 section 3)"))
+        else:
+            base = ours(None if kind == "hard" else stiffness,
+                        "hard: the vertices join the target, no stiffness" if kind == "hard" else stiffness_note)
         attachments.append(scene.Attachment(name, tissue.name, target, kind, base, weights))
         attachments_report.append({
             "name": name, "maya_attachment": maya_name, "label": g.get("label", ""), "to": target,
             "kind": kind, "vertices": len(weights),
             "defaulted_weights": len(g.get("defaulted_vertices", [])),
-            "stiffness_n_per_mm": base.value, "source": "ours" if kind == "spring" else "lip_attachments.json",
+            "stiffness_n_per_mm": base.value,
+            "source": base.source if soft else ("ours" if kind == "spring" else "lip_attachments.json"),
+            **({"mean_vertex_area_mm2": area} if soft else {}),
         })
 
     skin_file = _need(export / SKIN)
@@ -331,7 +395,10 @@ def import_asset(export: Path, out: Path, tet_mesh: Path,
             "notes": f"OBJ files are scene coordinates (ADR-18): scaled and turned, no world matrix applied. "
                      f"meshes/lips_tet.json is a byte copy of {tet_origin}. "
                      f"Attachments are from {ATTACHMENTS} (sha256 {attachments_sha}; the vertex sets are "
-                     "confirmed, A-33)",
+                     "confirmed, A-33). "
+                     + (HAND_EDIT_NOTE if not soft else
+                        "The attachment stiffness (--attachments ziva-soft) does not depend on E, so editing E in "
+                        "scene.json changes the tissue only"),
         },
         units=scene.Units(
             scene.Param(mm_per_scene_unit, "ours", mm_note),
@@ -350,10 +417,13 @@ def import_asset(export: Path, out: Path, tet_mesh: Path,
         solver=scene.Solver(
             "dynamic",
             scene.Param(SOLVER_FPS, "lab_setting", "the lab's zSolver runs at 30 frames per second (docs/03 section 5)"),
-            (ours(1, f"one step per frame; {no_attribute_list}") if tissue_settings == "ours"
-             else scene.Param(1, "lab_setting", LAB_SUBSTEPS_NOTE)),
-            ours(0.0, f"none, FEBio's default (docs/05 pit 2); {no_attribute_list}"),
-            ours([0.0, 0.0, -9810.0], f"9.81 m/s2 down, physical direction; {no_attribute_list}"),
+            (ours(1, f"one step per frame; {ours_value}; the lab's value is also 1 (--tissue-settings lab)")
+             if tissue_settings == "ours" else scene.Param(1, "lab_setting", LAB_SUBSTEPS_NOTE)),
+            ours(0.0, "no damping, FEBio's default (docs/05 pit 2). Ziva has stiffness damping 0.001 and mass damping 0 "
+                      "(docs/03 section 5); the scene has mass damping only and NO stiffness damping is built: FEBio has "
+                      "no stiffness-proportional damping (docs/05 section 4)"),
+            ours([0.0, 0.0, -9810.0], "9.81 m/s2 down, physical direction; Ziva's is -9.8 in a length unit that is NOT "
+                                      "verified (docs/05 section 4, docs/11 D18), so the two are not known to be equal"),
         ),
     )
     scene_path = out / "scene.json"
@@ -378,7 +448,8 @@ def import_asset(export: Path, out: Path, tet_mesh: Path,
                     HEAD_DRIVER: {"absent_means_rest": True,
                                   "moves": [b.name for b in bones if b.driver == HEAD_DRIVER]}},
         "parameters": [{"where": w, **p} for w, p in scene.parameters(model.to_json())],
-        "missing": [*check.warnings, SETTINGS_MISSING[tissue_settings], *STILL_MISSING],
+        "missing": [*check.warnings, SETTINGS_MISSING[tissue_settings], ATTACHMENT_MISSING[attachment_rule],
+                    *STILL_MISSING, *([] if soft else [HAND_EDIT_NOTE])],
         "check": {"errors": check.errors, "warnings": check.warnings},
     }
     (out / "import_report.json").write_text(json.dumps(report, indent=2, ensure_ascii=False) + "\n",

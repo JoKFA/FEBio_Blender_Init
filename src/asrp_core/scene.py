@@ -61,8 +61,10 @@ scene.json only names them and records their hash.
                  "damping": PARAM,                    # physical damping, mass-proportional: FEBio's "mass
                                                       #   damping" body load, f = -C rho v, C in 1/s; 0 = none
                  "gravity_mm_per_s2": PARAM,          # physical direction
-                 "numerical_damping_rhoi": PARAM}     # optional (T-28): FEBio's rhoi, 0..1 or -2 (Newmark);
-    }                                                 #   absent = the generator's default 0 (generate.RHOI)
+                 "numerical_damping_rhoi": PARAM,     # optional (T-28): FEBio's rhoi, 0..1 or -2 (Newmark);
+                                                      #   absent = the generator's default 0 (generate.RHOI)
+                 "motion_between_frames": PARAM}      # optional (T-33): "linear" (absent = linear) or "smooth":
+    }                                                 #   how a driven bone moves between two frames (docs/05 sec. 4)
 
     PARAM      = {"value": number | [x, y, z] | null, "source": SOURCE_TAG, "note": str (optional)}
     SOURCE_TAG = "lab_setting" | "ziva_default" | "ours"   (实验室设置 / Ziva 默认值 / 我们定的)
@@ -94,6 +96,7 @@ MATERIAL_PARAMS = {"neo-Hookean": ("E_mpa", "nu", "density_t_per_mm3")}
 # float; anything beyond rounding means the mesh was built for another unit.
 UNIT_MATCH = 1e-12
 NEWMARK_RHOI = -2.0  # FEBio's rhoi value for its Newmark rule (beta 1/4, gamma 1/2), no numerical damping
+MOTION_BETWEEN_FRAMES = ("linear", "smooth")  # solver.motion_between_frames; absent means "linear" (T-33)
 
 
 # --- the format ---------------------------------------------------------------------------------
@@ -294,6 +297,7 @@ class Solver:
     damping: Param  # physical, mass-proportional: FEBio's "mass damping" C, 1/s (0: none)
     gravity_mm_per_s2: Param
     numerical_damping_rhoi: Param | None = None  # None: not in the file, the generator's default (generate.RHOI)
+    motion_between_frames: Param | None = None  # None: not in the file = "linear" (T-33)
 
     def to_json(self) -> dict:
         d = {"analysis": self.analysis, "fps": self.fps.to_json(),
@@ -301,6 +305,8 @@ class Solver:
              "gravity_mm_per_s2": self.gravity_mm_per_s2.to_json()}
         if self.numerical_damping_rhoi is not None:  # absent when not set, so older scenes are written as before
             d["numerical_damping_rhoi"] = self.numerical_damping_rhoi.to_json()
+        if self.motion_between_frames is not None:
+            d["motion_between_frames"] = self.motion_between_frames.to_json()
         return d
 
 
@@ -621,7 +627,15 @@ def _solver(data: dict) -> Solver:
         if not (rhoi.value == NEWMARK_RHOI or 0 <= rhoi.value <= 1):
             raise _Bad(f"solver.numerical_damping_rhoi must be between 0 (FEBio's strongest numerical damping) and 1, "
                        f"or {NEWMARK_RHOI:g} (FEBio's Newmark rule, none); got {rhoi.value}")
-    return Solver("dynamic", _number_param(s, "fps", "solver", positive=True), substeps, damping, gravity, rhoi)
+    between = None
+    if "motion_between_frames" in s:
+        raw = _dict(s["motion_between_frames"], "solver.motion_between_frames")
+        if raw.get("source") not in SOURCES:
+            raise _Bad(f"solver.motion_between_frames: source {raw.get('source')!r} is not one of {', '.join(SOURCES)}")
+        if raw.get("value") not in MOTION_BETWEEN_FRAMES:
+            raise _Bad(f'solver.motion_between_frames must be "linear" (the default) or "smooth", got {raw.get("value")!r}')
+        between = Param(raw["value"], raw["source"], raw.get("note", ""))
+    return Solver("dynamic", _number_param(s, "fps", "solver", positive=True), substeps, damping, gravity, rhoi, between)
 
 
 @dataclass

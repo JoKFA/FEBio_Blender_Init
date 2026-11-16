@@ -28,8 +28,12 @@
                                   and frame; reported only, T-28), surface_health (flipped faces and
                                   stretched or squashed edges of the display surface against its rest
                                   shape, physics and final, at the last and the worst frame; reported
-                                  only), landmark_layer (below), timing. settled_shape also reports how far
-                                  the tet nodes moved in the settle frame's last step (reported only)
+                                  only), surface_flags (what surface_health says in one line: flipped display
+                                  faces are also added to `warnings`, so a PASSED run does not hide them; reported
+                                  only, T-37), landmark_layer (below), timing. settled_shape also reports how far
+                                  the tet nodes moved in the settle frame's last step (reported only), and three
+                                  separate facts: `available` (the bones were still, the shape is written),
+                                  `tissue_settled` (the tissue had stopped) and `comparable` (both)
 
 When the trajectory has a `landmarks` section (T-09) the landmark layer is applied on top of the physics,
 `final = physics + weights @ translations` (`skinning.deform`; the physics results above are not touched):
@@ -83,7 +87,7 @@ PLAYBACK_FILES = ("playback.json", "playback.pc2")
 RESULT_DIRS = ("physics", "final")
 RESULT_FILES = (*PLAYBACK_FILES, FINAL_PLAYBACK)
 RESULT_REPORT_KEYS = ("settled_shape", "return_to_settled", "spring_slip", "motion", "landmark_layer", "relative_to_head",
-                      "surface_health")
+                      "surface_health", "surface_flags")
 SLIP_LIMIT = 0.1  # docs/05 section 3: max|u| / δ above this, the spring result is off by more than ~2 %
 
 def generator_settings(model: generate.Model | None = None) -> list[tuple]:
@@ -246,6 +250,10 @@ def _physics_checks(model: generate.Model, node_frames: np.ndarray, display: np.
         checks["c"] = plausibility.gravity_sag(model.display, display, free, model.gravity, estimate,
                                                range(max(1, settle - SETTLE_FRAMES + 1), settle + 1))
         report["settled_shape"] |= plausibility.tissue_step(node_frames, settle)  # reported; does not change `passed`
+        # Three separate facts (T-37 item 13): `available` (the bones were still, so the shape is written),
+        # `tissue_settled` (the tissue had stopped at that frame) and `comparable` (both: the frame can be compared with
+        # another settled shape, e.g. Ziva's, without the comparison depending on when it was read).
+        report["settled_shape"]["comparable"] = report["settled_shape"].get("tissue_settled") is True
     else:
         if settle is None:
             reason = "the trajectory does not say where the gravity-only settle ends (settle_until_frame)"
@@ -255,6 +263,7 @@ def _physics_checks(model: generate.Model, node_frames: np.ndarray, display: np.
             reason = f"the motion starts on or before frame {settle}, the end of the gravity-only settle"
         checks["c"] = plausibility.Check("gravity sag", None, reason)
         report["settled_shape"]["reason"] = f"{reason}: the shape after the settle is not written"
+        report["settled_shape"]["comparable"] = False
     checks["d"] = plausibility.tet_mesh_valid(model.mesh.nodes, model.mesh.tets, node_frames)
     if settled:
         report["return_to_settled"] = plausibility.return_to_settled(
@@ -325,6 +334,28 @@ def _surface_health(model: generate.Model, display: np.ndarray, final: np.ndarra
     }
 
 
+def surface_flags(health: dict) -> dict:
+    """What a plain PASSED hides (T-37 item 13): the five plausibility checks look only at the physics tet mesh, but the
+    display surface can still have turned over. From `surface_health` (physics and, when there is a landmark layer,
+    final): the flipped faces at the last and at the worst frame of each version, and one `line` that says so in words
+    when any version has a flipped face (None otherwise). Reported only: it does not change `passed`, and a flipped face
+    is not a proof of self-intersection."""
+    versions = {}
+    for version in ("physics", "final"):
+        h = health.get(version) if isinstance(health, dict) else None
+        versions[version] = None if not h else {
+            "last": h["last"]["flipped_faces"], "worst": h["worst"]["flipped_faces"], "worst_frame": h["worst"]["frame"]}
+    flipped = {v: s for v, s in versions.items() if s and s["worst"] > 0}
+    line = None
+    if flipped:
+        parts = [f"{s['worst']} in the {v} version at frame {s['worst_frame']} ({s['last']} at the last frame)"
+                 for v, s in flipped.items()]
+        line = ("display surface: flipped faces, " + "; ".join(parts) + ". The plausibility checks look only at the tet "
+                "mesh, so a PASSED run can still have them. Reported, not a check: a flipped face is not a proof of "
+                "self-intersection (surface_health in run_report.json has the counts)")
+    return {"flipped_faces": versions, "any_flipped": bool(flipped), "line": line}
+
+
 def _outputs(settle: int | None, final: bool = False) -> list[str]:
     """The result files whose hashes go into the provenance record."""
     files = [run.POSITIONS, run.POSITIONS_ARRAY, DISPLAY, DISPLAY_ARRAY, *PLAYBACK_FILES]
@@ -366,7 +397,7 @@ def run_scene(scene_path, trajectory_path, runs_dir: Path, exe: Path, name: str 
         "frames": model.frames,
         "parameters": _parameters(model, trajectory_path),
         "simplifications": list(model.scene.simplifications),
-        "warnings": model.warnings,
+        "warnings": list(model.warnings),
         "generator": model.report,
         "checks": {},
         "timing": {},
@@ -397,6 +428,7 @@ def run_scene(scene_path, trajectory_path, runs_dir: Path, exe: Path, name: str 
             checks.update(found)
             final = _landmark_layer(model, run_dir, display, report)  # nothing is written yet
             report["surface_health"] = _surface_health(model, display, final)
+            report["surface_flags"] = surface_flags(report["surface_health"])
             _write_results(run_dir, model, node_frames, display, settle, final)
             record["outputs"] = provenance.hash_files(run_dir, _outputs(settle, final is not None))
         # An invalid number (NaN, inf) in the report is a failed run, never a silently written one.
@@ -410,6 +442,8 @@ def run_scene(scene_path, trajectory_path, runs_dir: Path, exe: Path, name: str 
         record["failure"] = {"frame": None, "message": failure_text}
         checks = _unrun_checks(plausibility.motion_completed("failed", model.frames, [], retries, failure_text))
     report["checks"] = {key: c.to_json() for key, c in checks.items()}
+    if status == "complete" and (report.get("surface_flags") or {}).get("line"):
+        report["warnings"].append(report["surface_flags"]["line"])  # its own line next to the PASSED (`asrp run` prints it)
     # Only an explicit False is a failure; None is "not run" (the reason is in the check). (a) must always run.
     passed = status == "complete" and checks["a"].passed is True and all(c.passed is not False for c in checks.values())
     report["passed"] = passed

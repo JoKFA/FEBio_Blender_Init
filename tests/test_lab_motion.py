@@ -289,9 +289,11 @@ def trip() -> Path:
 
 @pytest.fixture(scope="module")
 def ours(trip, scene_path, tmp_path_factory) -> trajectory.Trajectory:
-    """The real entry point on the real file: `asrp convert-motion`, then the file it wrote."""
+    """The real entry point on the real file: `asrp convert-motion`, then the file it wrote. The title is the
+    one the committed motion carries for the Blender panel; everything else comes from the lab's file."""
     out = tmp_path_factory.mktemp("lab_motion_aa") / "neutral_to_AA.json"
-    done = _cli("convert-motion", trip / AA_JOB / "combined_checkpoints.pkl", scene_path, out, "--starts-at-rest")
+    done = _cli("convert-motion", trip / AA_JOB / "combined_checkpoints.pkl", scene_path, out, "--starts-at-rest",
+                "--title", "Prototype 2: neutral to AA (lab motion)")
     assert done.returncode == 0, done.stdout + done.stderr
     assert "47 frames at 30 fps" in done.stdout and "-5.16416 degrees" in done.stdout
     return trajectory.read(out)
