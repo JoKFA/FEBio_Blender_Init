@@ -406,7 +406,10 @@ def attachment_entry(scene, name: str) -> dict:
 def show_vertex_colours(context) -> None:
     """Every 3D view shows vertex colours (solid, colour type "vertex"); what each showed before is kept for restore_views."""
     for key, space in view3d_spaces(context):
-        _SAVED_SHADING.setdefault(key, (space.shading.type, space.shading.color_type))
+        before = (space.shading.type, space.shading.color_type)
+        if before[1] == "VERTEX":  # a .blend saved with the colours on: what the view showed before them is material colours
+            before = (before[0], "MATERIAL")
+        _SAVED_SHADING.setdefault(key, before)
         space.shading.type, space.shading.color_type = "SOLID", "VERTEX"
 
 
@@ -628,6 +631,9 @@ def open_asset(context) -> dict:
         raise
     if scene.asrp_highlight:
         clear_highlight(context)
+    # The result of the asset opened before goes with it: Ziva's lips, the difference colours (their handler and the
+    # views' vertex-colour shading) and the cache would otherwise stay on screen until the next Run.
+    clear_result(scene)
     for item in list(scene.asrp_asset_objects):  # the objects of an asset opened before
         if is_live(item.obj):
             remove_objects([item.obj])

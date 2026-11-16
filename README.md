@@ -87,7 +87,7 @@ With no argument this is the full level, the definition of done before a merge r
 
 ## Install the Blender add-on
 
-Build the add-on package once (from the repo root; again after changing the add-on). The only command line step:
+Do "Setup (Windows)" above first: the panel runs the core program through `uv`, and Run needs FEBio. Then build the add-on package once (from the repo root; again after changing the add-on). The only command line step:
 
 ```bash
 mkdir -p dist

@@ -44,7 +44,9 @@
 
 ### 2.1 装一次
 
-先在项目文件夹里建一次插件包（只有这一条命令行，之后全用鼠标）。完整的步骤在 [README](../README.md) 的 "Install the Blender add-on"：
+先要有核心程序要用的东西，照 [README](../README.md) 的 "Setup (Windows)" 做一次：装 `uv`，装 FEBio（要在 febio.org 免费注册才能下载），在项目文件夹里 `uv sync`，`uv run asrp doctor` 每一行都是 `ok`。没有 `uv` 时 Open asset 会报 "Cannot find uv on PATH"；没有 FEBio 时 Run 会失败。
+
+然后在项目文件夹里建一次插件包（只有这一条命令行，之后全用鼠标）。完整的步骤在 README 的 "Install the Blender add-on"：
 
 ```bash
 "C:/Program Files/Blender Foundation/Blender 5.2/blender.exe" --factory-startup --command extension build --source-dir blender_addon/asrp_blender --output-dir dist
@@ -58,7 +60,7 @@
 
 | 面板上的小节 | 你做什么 | 你会看到什么 |
 |---|---|---|
-| **1  Open the asset** | 选 Coarse lattice (Ziva's tet size) 或 Fine (lips move separately)，按 **Open asset**。导入要等几秒，没有进度条 | 视口里出现颅骨、下颌、上牙、下牙、嘴唇五个物体（骨头灰白，嘴唇红）和嘴唇上的 300 个 landmark 小点；面板写 "Open: lips, jaw, skull, upper teeth, lower teeth"；Blender 启动场景里那个 2 米的方块被隐藏，视角对准资产。单位、材料（"Material: 12 kPa, 0.4 (measured in Ziva)"）、导入报告收在 **Asset details** 里 |
+| **1  Open the asset** | 选 Coarse lattice (Ziva's tet size) 或 Fine (lips move separately)，按 **Open asset**。导入要等几秒，没有进度条，Blender 这期间不响应；如果没先做过 `uv sync`，第一次会先建 Python 环境，可能要几分钟 | 视口里出现颅骨、下颌、上牙、下牙、嘴唇五个物体（骨头灰白，嘴唇红）和嘴唇上的 300 个 landmark 小点；面板写 "Open: lips, jaw, skull, upper teeth, lower teeth"；Blender 启动场景里那个 2 米的方块被隐藏，视角对准资产。单位、材料（"Material: 12 kPa, 0.4 (measured in Ziva)"）、导入报告收在 **Asset details** 里 |
 | **Physics setup**（默认收着） | 展开看；每一行右边的小按钮在视口里点亮对应的东西，**Check setup** 检查场景设置 | 软组织、四块骨头各自在物理里做什么、四组粘连各连着多少个顶点。这一版只读："Read-only in this version." |
 | **2  Choose a motion** | 在列表里点一条：三个标题见第 1 节的表。每条标题下一行小字写帧数、帧率、"lab motion" 或 "test motion"。打开资产后默认选中的是实验室的中性到 AA | 压下的那一条是选中的 |
 | **3  Run** | 按 **Run** | 进度条和 "Frame N / M"，可以按 **Cancel**；算完后状态写 Complete，结果自动在那五个物体上播放（Space 键或 **Pause** 暂停）。粗格子一两秒算完，细网格约半分钟 |
@@ -71,7 +73,7 @@
 
 ### 用鼠标走一遍（截图）
 
-2026-11-15 在开发机上，从开始菜单打开 Blender 5.2，只用鼠标和键盘照上面的步骤走的（不是脚本替人按按钮）。一共走了三遍，前两遍发现的问题改完以后走的第三遍，截图是第三遍的。窗口 1920 × 1080，侧边栏是默认宽度。
+2026-11-15 到 16 在开发机上，从开始菜单打开 Blender 5.2，只用鼠标和键盘照上面的步骤走的（不是脚本替人按按钮）。一共走了四遍，前三遍发现的问题改完以后走的第四遍，截图是第四遍的（从正面看）。窗口 1920 × 1080，侧边栏是默认宽度。
 
 | 步骤 | 截图 |
 |---|---|

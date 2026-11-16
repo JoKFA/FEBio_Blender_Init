@@ -1260,7 +1260,30 @@ def case_three_steps():
     # Open asset on top of an asset that carries a finished run (seen by hand on 2026-11-15: the new objects were called
     # "ASRP jaw.001" and step 3 still said "Complete" although the new asset had no result)
     need(SESSION.state == "complete", "reopen", f"this check needs a finished run before it; the state is {SESSION.state!r}")
+    # ... and with the comparison of that run on screen (the AA run, last; its comparison exists when the Ziva data is here):
+    # Ziva's lips and the difference colours belong to the old result and must go with it (review finding, 2026-11-16)
+    cmp = asrp_blender.compare
+    shading_before = [(k, sp.shading.type, sp.shading.color_type) for k, sp in asrp_blender.asset.view3d_spaces(bpy.context)]
+    with_compare = cmp.ready(sc)
+    if with_compare:
+        sc.asrp_show_ziva = True
+        sc.asrp_show_heat = True
+        need(asrp_blender.asset.is_live(sc.asrp_ziva_object) and cmp.heat_handler in bpy.app.handlers.frame_change_post, "reopen",
+             "ticking both boxes before the second Open asset showed neither Ziva's lips nor the colours: this check would prove nothing")
     assert bpy.ops.asrp.open_asset() == {"FINISHED"}
+    if with_compare:
+        z = sc.asrp_ziva_object
+        need(not asrp_blender.asset.is_live(z) and not any(o.name.startswith("Ziva lips") for o in bpy.data.objects), "reopen",
+             "after a second Open asset the old result's 'Ziva lips' object is still in the scene")
+        need(cmp.heat_handler not in bpy.app.handlers.frame_change_post, "reopen", "after a second Open asset the difference-colour handler is still installed")
+        need([(k, sp.shading.type, sp.shading.color_type) for k, sp in asrp_blender.asset.view3d_spaces(bpy.context)] == shading_before, "reopen",
+             "after a second Open asset the 3D views still show vertex colours")
+        sc.asrp_show_ziva = False
+        sc.asrp_show_heat = False
+        print("three steps, Open asset again with Ziva's lips and the difference colours on: both went with the old result, the views are as before")
+    else:
+        NOT_VERIFIED.append("Open asset again with Ziva's lips and the difference colours on: no comparison on this machine (see the compare case)")
+        print("  reopen with the comparison on: NOT VERIFIED (no comparison on this machine, see the compare case)")
     names = sorted(o.name for o in bpy.data.objects if o.name.startswith(asrp_blender.asset.ASSET_PREFIX))
     need(len(names) == 6 and all("." not in n for n in names), "reopen", f"after a second Open asset the objects are called {names}")
     need(SESSION.state == "idle" and "Complete" not in " ".join(labels_of(draw_panel(asrp_blender.ASRP_PT_run))), "reopen",
