@@ -9,13 +9,22 @@
    （只做一次）    （只做一次）       scene.json       trajectory.json
                                                                                          │
 ⑪ Blender 播放 ←─ ⑩ 生成 PC2 回放包 ←─ ⑨ 合理性检查 ←─ ⑧ 叠加 landmark 蒙皮 ←─ ⑦ 读回结果、嵌入显示网格
-      │                                                （运动里有 landmark 才做）
-      └─→ ⑫ 和 Ziva 对比（要 Ziva 机器上导出的参考结果）
+                        │                               （运动里有 landmark 才做）
+                        └─→ ⑫ 和 Ziva 对比：读运行文件夹，不经过 Blender（要 Ziva 机器上导出的参考结果）
 ```
 
 - ① ② 已经做过，结果提交在 `data/` 里（ADR-19），平时从 ③ 开始；三条现成的运动也已提交（第 5 节）；
 - ⑤ 到 ⑩ 由一条命令 `asrp run` 一次做完；
 - 在 Blender 面板上，③ 到 ⑪ 是三个按钮：**Open asset**（③ 加读运动列表）、选运动、**Run**（⑤ 到 ⑩，结果直接播放）；⑫ 是 **Compare with Ziva**。
+
+## 0. 开始之前（每台电脑做一次）
+
+下面这些不属于流程本身，但不做的话第一步就会卡住。完整的命令在仓库根目录 [README](../README.md) 的 "Setup (Windows)" 和 "Install the Blender add-on"，以及 [15](15-prototype.md) 第 2.1 节。
+
+1. **核心程序**：装 `uv`，装 FEBio（在 febio.org 免费注册后下载），在项目文件夹里运行 `uv sync`，再运行 `uv run asrp doctor`，每一行都是 `ok`；
+2. **Blender 插件**：在项目文件夹里用 Blender 的 `extension build` 命令打出插件包，到 `dist/` 下；在 Blender 里 Edit > Preferences > Add-ons > Install from Disk，选这个包，勾上 ASRP；
+3. **项目文件夹**：第一次打开面板（3D 视图里按 N，ASRP 标签）时，按提示选一次项目文件夹（Choose project folder）。面板靠它找到 `data/` 和 `asrp` 命令；
+4. **Ziva 参考数据**（只有做 ⑫ 才需要）：在面板里选一次 Ziva 导出所在的文件夹（Ziva reference folder）。它是实验室的数据，在仓库外，位置只记在插件的偏好设置里。
 
 ## 1. 一眼看全流程
 
@@ -77,7 +86,7 @@
 |---|---|---|
 | `--tetmesh` | `data/tetmesh/lips.json`（细网格） | 用粗格子就写 `--tetmesh data/tetmesh/lips_lattice.json` |
 | `--tissue-settings` | `lab` | Ziva 里实测的材料（杨氏模量 12 kPa、泊松比 0.4、密度、子步数）；`ours` 是我们早先的值 |
-| `--attachments` | `ours` | 上唇硬绑颅骨，其余用弹簧；`ziva-soft` 是四组都用按 Ziva 的软约束换算的弹簧，粗格子必须用它 |
+| `--attachments` | `ours` | 上唇硬绑颅骨，其余用弹簧；`ziva-soft` 是四组都用按 Ziva 的软约束换算的弹簧。粗格子要配 `ziva-soft`：粗格子里上下唇共用节点，硬粘连会把这些节点连同另一片嘴唇一起固定住（ADR-44） |
 | `--mm-per-scene-unit` | `0.962` | 长度换算 |
 
 面板的 Open asset 就是在后台运行这条命令，用的是粗格子加 `--attachments ziva-soft`（选 Fine 时用细网格）。
@@ -126,13 +135,15 @@ uv run asrp run <scene.json> <trajectory.json>
 
 **⑧ 叠加 landmark 蒙皮**：只在运动里有 `landmarks` 一节时才做。`skinning.py` 计算 最终形状 = 物理结果 + 权重 × landmark 位移。物理结果原样保留，最终形状另存一份。为什么放在物理之后：实验室的场景和源码就是先物理、后蒙皮（ADR-29，[04](04-architecture.md) 第 2 节）。
 
-**⑨ 合理性检查**：`plausibility.py` 做五项检查（[07](07-validation.md) 第 3 节）：运动算完了没有、硬粘住的地方跟着骨头走没有、弹簧锚跟着刚体走没有、重力是不是往下拉、四面体有没有被压翻。任何一项不通过，命令以非 0 退出。另外报告显示表面的翻转面和短边，和 Ziva 自己的数并排看，只报告、不判合格（ADR-43）。
+**⑨ 合理性检查**：`plausibility.py` 做五项检查（[07](07-validation.md) 第 3 节）：运动算完了没有、硬粘住的地方跟着骨头走没有、弹簧锚跟着刚体走没有、重力是不是往下拉、四面体有没有被压翻。任何一项不通过，命令以非 0 退出；"未运行"不算不通过。用粗格子配 `ziva-soft` 时没有硬粘连，所以第二项（硬粘住的地方）总是显示**未运行**（NOT RUN），这是正常的。另外报告显示表面的翻转面和短边，和 Ziva 自己的数并排看，只报告、不判合格（ADR-43）。
 
 **⑩ 生成 PC2 回放包**：`playback.py` 写出 `playback.json`（表面网格和元数据）和 `playback.pc2`（每帧顶点坐标）；做了 ⑧ 时再加一份最终形状的点缓存。`provenance.py` 写溯源记录。PC2 格式和回放包见 [04](04-architecture.md) 第 5.3 节。
 
 ## 7. ⑪ Blender 播放
 
 **做什么**：资产的五个物体（颅骨、下颌、上牙、下牙、嘴唇）在 Open asset 时就建好了；Run 算完以后，嘴唇挂上一个 Mesh Cache 修改器读 PC2，骨头按 `trajectory.json` 每帧打关键帧，时间轴设成运动的帧数和帧率，按空格播放。再跑一次只替换修改器和关键帧，不换物体。Blender 不做任何计算。
+
+**默认显示哪一层**：运行结果里有最终形状（运动带 landmark，比如中性到 AA）时，嘴唇默认显示**最终形状**（物理 + landmark 层）；只有物理层（比如张嘴 12°、甩头）时显示物理层。面板上有 **Final shape** 和 **Physics only** 两个按钮，按下的那个就是当前显示的层，点另一个就切换（只有物理层时只有一个）。
 
 | 文件 | 作用 |
 |---|---|
@@ -145,7 +156,7 @@ uv run asrp run <scene.json> <trajectory.json>
 
 ## 8. ⑫ 和 Ziva 对比
 
-**做什么**：把我们一次运行的嘴唇，和 Ziva 同一段运动、同一帧的嘴唇逐个顶点比，物理层（蒙皮前）和最终形状（蒙皮后）分开报告，每帧给出平均、95%、最大三个数（[07](07-validation.md) 第 4.2 节）。和 Ziva 差多少只作参考，不设合格线（ADR-17）。
+**做什么**：把我们一次运行的嘴唇（直接读运行文件夹里的物理层和最终形状），和 Ziva 同一段运动、同一帧的嘴唇逐个顶点比，物理层（蒙皮前）和最终形状（蒙皮后）分开报告，每帧给出平均、95%、最大三个数（[07](07-validation.md) 第 4.2 节）。和 Ziva 差多少只作参考，不设合格线（ADR-17）。
 
 ```bash
 uv run asrp compare <我们的运行文件夹> <Ziva 的导出文件夹> --out <输出文件夹>
