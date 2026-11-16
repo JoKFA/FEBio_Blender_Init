@@ -99,7 +99,7 @@ In PowerShell, put `&` in front of the quoted path. This writes `dist/asrp_blend
 Then, with the mouse, in Blender (Start menu, no environment variable, nothing else to type):
 
 1. Edit > Preferences > Add-ons, the small arrow at the top right (Add-ons menu) > Install from Disk..., pick `dist/asrp_blender-0.0.1.zip`. Make sure the box in front of ASRP is ticked.
-2. Close the Preferences. In the 3D view press N, open the ASRP tab. The first time it says "Choose the ASRP project folder (once)": press Choose project folder and pick the folder you downloaded ASRP into (the one that holds `pyproject.toml` and `src`). Blender remembers it; it is also in Preferences > Add-ons > ASRP.
+2. Close the Preferences. In the 3D view press N, open the ASRP tab. The first time it says "Choose the ASRP project folder.": press Choose project folder and pick the folder you downloaded ASRP into (the one that holds `pyproject.toml` and `src`). Blender remembers it; it is also in Preferences > Add-ons > ASRP.
 3. Steps 1 to 3 of the panel (Open the asset, Choose a motion, Run) are then ready.
 
 The same from the command line (installs into your Blender profile and ticks the add-on):

@@ -102,7 +102,7 @@ def test_set_motion_title_changes_only_the_title_and_refuses_a_bad_one(tmp_path,
     assert cli.main(["set-motion-title", str(folder / "m.json"), "Some motion (test motion)"]) == 0
     after = (folder / "m.json").read_text(encoding="utf-8")
     assert after != before and after.replace('  "title": "Some motion (test motion)",\n', "") == before
-    assert cli.main(["set-motion-title", str(folder / "m.json"), "x" * 61]) == 1
+    assert cli.main(["set-motion-title", str(folder / "m.json"), "x" * 35]) == 1
     assert "ERROR  title is" in capsys.readouterr().out
     assert (folder / "m.json").read_text(encoding="utf-8") == after
 
@@ -110,9 +110,9 @@ def test_set_motion_title_changes_only_the_title_and_refuses_a_bad_one(tmp_path,
 def test_the_three_committed_motions_have_their_titles_in_the_prototype_order():
     got = motions.list_motions(REPO / "data" / "lab_export")
     assert [(m["file"], m["title"]) for m in got] == [
-        ("jaw_open_12deg.json", "Prototype 1: jaw opens 12 degrees (test motion)"),
-        ("neutral_to_AA.json", "Prototype 2: neutral to AA (lab motion)"),
-        ("head_shake.json", "Prototype 2: head shake (test motion)")]
+        ("jaw_open_12deg.json", "Prototype 1: jaw opens 12 deg"),
+        ("neutral_to_AA.json", "Prototype 2: neutral to AA"),
+        ("head_shake.json", "Prototype 2: head shake")]
     assert got[1]["source_tag"] == "lab_setting" and got[0]["source_tag"] == "ours" and got[0]["frames"] == 51
 
 

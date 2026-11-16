@@ -114,6 +114,7 @@ if "--fake-asrp" in sys.argv:
     raise SystemExit(fake_asrp(sys.argv[sys.argv.index("--fake-asrp") + 1:]))
 
 sys.path.insert(0, str(REPO / "blender_addon"))
+sys.path.insert(1, str(REPO / "tools"))  # local_paths: where the data outside the repository lives on this machine
 
 import asrp_blender  # noqa: E402
 import bpy  # noqa: E402
@@ -423,6 +424,9 @@ def case_malformed_reports():
           "null name / message / numbers -> still rows and a summary; no exception")
 
 
+LABEL_MAX = 34  # characters one line holds at the default sidebar width (280 px); longer text is wrapped (wrapped() uses 32)
+
+
 class Rec:
     """A stand-in for a panel layout that records what is drawn: ('label', text, alert) and ('op', idname, text, depress, op)."""
 
@@ -461,6 +465,9 @@ def draw_panel(panel):
         if hasattr(panel, name):
             setattr(me, name, types.MethodType(getattr(panel, name), me))
     panel.draw(me, bpy.context)
+    too_long = [(r[0], (r[1] if r[0] == "label" else r[2])) for r in log
+                if r[0] in ("label", "op", "prop") and len(str((r[1] if r[0] == "label" else r[2]) or "").rstrip()) > LABEL_MAX]
+    assert not too_long, f"{panel.bl_label}: text that does not fit {LABEL_MAX} characters (cut off at the default sidebar width): {too_long}"
     return log
 
 
@@ -549,6 +556,15 @@ def case_layout(run1, tmp):
     alerts = " ".join(r[1] for r in log if r[0] == "label" and r[2])  # the alert-coloured lines (long text wraps to several)
     assert "Tissue not settled at the settle frame" in alerts, alerts
     assert "Tissue not settled" not in text_of(checks_log(full | {"settled_shape": {"tissue_step_max_mm": 0.1, "tissue_settled": None}}))
+    warned = json.loads(json.dumps(original))
+    warned["warnings"] = ["display surface: flipped faces, 3 in the final version at frame 21 (1 at the last frame). The plausibility checks look only "
+                          "at the tet mesh, so a PASSED run can still have them. Reported, not a check"]
+    log = checks_log(warned)
+    need("Reported, not a check: display surface: flipped faces, 3 in the final version at frame 21 (1 at the last frame)." in text_of(log), "warning",
+         f"the flipped-faces warning is not shown in the Checks section: {text_of(log)}")
+    need(not [r for r in log if r[0] == "label" and r[1] == "FAIL"] and not [r for r in log if r[0] == "label" and r[2] and "flipped" in r[1]], "warning",
+         "the warning is drawn as a failure")
+    need([r[2] for r in asrp_blender.check_rows(warned)] == [r[2] for r in asrp_blender.check_rows(original)], "warning", "the warning changed a check")
     bare = json.loads(json.dumps(original))
     bare.pop("surface_health", None)
     bare["settled_shape"] = {"available": False, "frame": None}
@@ -789,9 +805,9 @@ MOTIONS = {  # file: (layer the panel must show, frame in the middle of the moti
     "neutral_to_AA.json": ("final", 25, ("jaw", "teeth_lower"), ("skull", "teeth_upper")),  # last: its last control replaces the five objects
 }  # the order the cases run in (the panel's list order is TITLES)
 TITLES = {  # what the panel's list shows, in the order it shows it: from the owner's words, not from the add-on
-    "jaw_open_12deg.json": "Prototype 1: jaw opens 12 degrees (test motion)",
-    "neutral_to_AA.json": "Prototype 2: neutral to AA (lab motion)",
-    "head_shake.json": "Prototype 2: head shake (test motion)",
+    "jaw_open_12deg.json": "Prototype 1: jaw opens 12 deg",
+    "neutral_to_AA.json": "Prototype 2: neutral to AA",
+    "head_shake.json": "Prototype 2: head shake",
 }
 LIPS_TOLERANCE_MM = 1e-5
 BONE_TOLERANCE_MM = 1e-4  # the bones' quaternions are float32
@@ -867,7 +883,8 @@ BYSTANDER = "asrp_check_bystander"  # marks the objects this check puts in the s
 
 
 def mesh_objects():
-    return [o for o in bpy.data.objects if o.type == "MESH" and o.users_collection and BYSTANDER not in o]
+    return [o for o in bpy.data.objects if o.type == "MESH" and o.users_collection and BYSTANDER not in o
+            and o.get(asrp_blender.asset.ROLE_KEY) not in ("landmarks", "ziva_lips")]  # the landmark dots are the sixth object, not one of the five
 
 
 def bystander(name, size, at):
@@ -1113,6 +1130,9 @@ def case_three_steps():
     print(f"three steps, step 1 Open asset: {len(meshes)} mesh objects {sorted(objs)}, vertices "
           f"{ {r: len(o.data.vertices) for r, o in objs.items()} }, motions listed {[asrp_blender.asset.motion_label(m) for m in sc.asrp_motions]}")
     draw_new_panels()
+    check_landmarks_units_report(sc)
+    check_tet_choice(sc)
+    check_setup_rows(sc, "coarse")
     done = {}
     for file, (layer, mid, movers, still) in MOTIONS.items():
         motion = json.loads((REPO / "data" / "lab_export" / "trajectories" / file).read_text(encoding="utf-8"))
@@ -1130,7 +1150,11 @@ def case_three_steps():
               f"checks {[f'{r[0]}={r[2]}' for r in rows]}")
         done[file] = case
         check_panels_on_result(file, layer, report, rows)
+        check_b_not_run(rows, SESSION.passed)
+        check_landmarks_hidden_with_result(sc)
         if file == "jaw_open_12deg.json":
+            check_highlight(case)
+            check_check_setup(sc)
             expect_caught(case, "bones", "jaw does not move in the jaw motion", lambda: asset_now()["jaw"].animation_data_clear(),
                           names="the jaw")
             repair(case)
@@ -1139,14 +1163,17 @@ def case_three_steps():
                           names="the skull")
             repair(case)
         else:
+            check_compare_section(sc, case)
             expect_caught(case, "layer", "AA shown as the physics layer", lambda c=case: asrp_blender.asset.show_layer(sc, c["run_dir"], "physics"))
             repair(case)
             expect_caught(case, "sync", "lips one frame later than the bones", lambda: setattr(
                 [m for m in asset_now()["lips"].modifiers if m.type == "MESH_CACHE"][0], "frame_start", 1.0))
             repair(case)
             expect_caught(case, "identity", "result put on newly created objects", lambda c=case: recreate_objects(c["run_dir"]))
+    case_fine_choice(sc)
     # leave nothing behind
     asrp_blender.asset.remove_objects(list(asset_now().values()))
+    asrp_blender.asset.remove_landmarks(sc)
     sc.asrp_asset_objects.clear()
     print("three steps passed")
 
@@ -1197,6 +1224,12 @@ def check_run_section(run_dir, frames):
     word = "Pause" if real_playing else "Play"
     need(len(plays) == 1 and plays[0][2] == word, "after-run", f"the Run section has no {word} button after a run: {[(r[1], r[2]) for r in log if r[0] == 'op']}")
     text = " ".join(labels_of(log))
+    need("Complete" in labels_of(log), "after-run", f"after a run the Run section does not end in 'Complete': {labels_of(log)}")  # F6
+    res = labels_of(draw_panel(asrp_blender.ASRP_PT_results))
+    need("On the asset:" in res and Path(run_dir).name.replace(" ", "") in "".join(res).replace(" ", ""), "after-run", f"the run name is not on its own line: {res}")  # F3
+    adv = draw_panel(asrp_blender.ASRP_PT_advanced)
+    need(f"Project: {asrp_blender.core_project().name}" in " ".join(labels_of(adv)) and "Change project folder" in [r[2] for r in adv if r[0] == "op"], "after-run",
+         f"the Advanced section does not say which project folder is in use: {labels_of(adv)}")  # F4
     need(f"Run files: {asrp_blender.asset.relative_to_project(run_dir)}".replace(" ", "") in text.replace(" ", ""), "after-run",
          f"the Run section does not show the run folder: {text}")
     opens = [r for r in log if r[0] == "op" and r[1] == "wm.path_open"]
@@ -1217,11 +1250,13 @@ def draw_new_panels():
         assert log, panel
     # the words and the order of the panel
     titles = {c.__name__: c.bl_label for c in asrp_blender.classes if hasattr(c, "bl_label") and c.__name__.startswith("ASRP_PT_")}
-    assert [titles[n] for n in ("ASRP_PT_asset", "ASRP_PT_motion", "ASRP_PT_run", "ASRP_PT_results", "ASRP_PT_checks", "ASRP_PT_advanced")] == [
-        "1  Open the asset", "2  Choose a motion", "3  Run", "Results", "Checks", "Advanced"], titles
+    assert [titles[n] for n in ("ASRP_PT_asset", "ASRP_PT_setup", "ASRP_PT_motion", "ASRP_PT_run", "ASRP_PT_results", "ASRP_PT_compare", "ASRP_PT_checks", "ASRP_PT_advanced")] == [
+        "1  Open the asset", "Physics setup", "2  Choose a motion", "3  Run", "Results", "Compare with Ziva", "Checks", "Advanced"], titles
     order = [c.__name__ for c in asrp_blender.classes if c.__name__.startswith("ASRP_PT_") and getattr(c, "bl_parent_id", "") == "ASRP_PT_main"]
-    assert order == ["ASRP_PT_asset", "ASRP_PT_motion", "ASRP_PT_run", "ASRP_PT_results", "ASRP_PT_checks", "ASRP_PT_advanced"], order
-    for name in ("ASRP_PT_checks", "ASRP_PT_advanced", "ASRP_PT_run_files"):
+    assert order == ["ASRP_PT_asset", "ASRP_PT_setup", "ASRP_PT_motion", "ASRP_PT_run", "ASRP_PT_results", "ASRP_PT_compare", "ASRP_PT_checks",
+                     "ASRP_PT_advanced"], order
+    assert "DEFAULT_CLOSED" not in getattr(asrp_blender.ASRP_PT_setup, "bl_options", ())  # open by default
+    for name in ("ASRP_PT_compare", "ASRP_PT_checks", "ASRP_PT_advanced", "ASRP_PT_run_files"):
         assert "DEFAULT_CLOSED" in getattr(asrp_blender, name).bl_options, name
     assert asrp_blender.ASRP_PT_run_files.bl_parent_id == "ASRP_PT_advanced"
     main = draw_panel(asrp_blender.ASRP_PT_main)
@@ -1236,20 +1271,22 @@ def draw_new_panels():
     assert any(t.startswith("Open: ") for t in texts), texts
     scene_files = f"Scene files: {asrp_blender.asset.relative_to_project(Path(bpy.context.scene.asrp_asset_scene).parent)}"
     assert scene_files.replace(" ", "") in "".join(texts).replace(" ", ""), (scene_files, texts)  # a long path wraps over lines
-    opens = [r for r in draw_panel(asrp_blender.ASRP_PT_asset) if r[0] == "op" and r[1] == "wm.path_open"]
+    assert "This .blend is the scene. Save it to keep the asset and the last result." in " ".join(texts), texts
+    opens = [r for r in draw_panel(asrp_blender.ASRP_PT_asset) if r[0] == "op" and r[1] == "wm.path_open" and r[2] == "Open folder"]
     assert len(opens) == 1 and opens[0][2] == "Open folder" and opens[0][4].filepath == str(Path(bpy.context.scene.asrp_asset_scene).parent), opens
     # step 2: the title on the button, the details on a second, smaller line
     log = draw_panel(asrp_blender.ASRP_PT_motion)
     ops = [r for r in log if r[0] == "op"]
     assert [r[2] for r in ops] == list(TITLES.values()) and sum(1 for r in ops if r[3]) == 1 and ops[0][3], [(r[2], r[3]) for r in ops]
     details = [t for t in labels_of(log)]
-    assert details == ["      51 frames, 30 fps, test motion", "      47 frames, 30 fps, lab motion", "      87 frames, 30 fps, test motion"], details
+    assert details == ["  51 frames, 30 fps, test motion", "  47 frames, 30 fps, lab motion", "  87 frames, 30 fps, test motion"], details
+    assert all(len(t) <= LABEL_MAX for t in TITLES.values()), "a motion title is longer than its button holds"
     # no internal word where a plain one exists
     import re
     shown = " ".join(labels_of(draw_panel(asrp_blender.ASRP_PT_asset)) + details + [r[2] for r in ops])
     assert not re.search(r"\b(ours|lab_setting|ziva_default|teeth_upper|teeth_lower)\b", shown), shown
     log = draw_panel(asrp_blender.ASRP_PT_asset)
-    assert [r[1] for r in log if r[0] == "op"] == ["asrp.open_asset", "wm.path_open"]
+    assert [r[1] for r in log if r[0] == "op"] == ["asrp.open_asset", "wm.path_open", "wm.path_open"]
     assert [r[1] for r in draw_panel(asrp_blender.ASRP_PT_run) if r[0] == "op"] == ["asrp.run_motion"]
 
 
@@ -1270,6 +1307,229 @@ def check_panels_on_result(file, layer, report, rows):
     assert note == asrp_blender.all_passed(rows), (note, [r[2] for r in rows])
     print(f"  panels for {file}: Results offers {layers}, Checks shows the five rows, 'Surface ({layer})' and 'Worst frame ({layer})' lines, "
           f"all-pass note {'shown' if note else 'not shown (a check did not pass)'}")
+
+
+# --- round 2, part B: the tet mesh choice and Compare with Ziva ------------------------------------------------------------------
+
+NOT_VERIFIED: list = []  # checks that could not run on this machine: printed at the end, never counted as passed
+
+
+def tet_file_facts(name):
+    t = json.loads((REPO / "data" / "tetmesh" / name).read_text(encoding="utf-8"))
+    return len(t["tets"]), t.get("kind") or "fine", t.get("content_sha256")
+
+
+def check_tet_choice(sc):
+    """B1: the radio buttons, the line under them (the counts are the tet mesh files'), the message after a change, and what the
+    imported scene really has."""
+    coarse, fine = tet_file_facts("lips_lattice.json"), tet_file_facts("lips.json")
+    need(coarse[:2] == (126, "lattice") and fine[:2] == (26721, "fine"), "tet-choice", f"the tet mesh files are {coarse[:2]} and {fine[:2]}")
+    log = draw_panel(asrp_blender.ASRP_PT_asset)
+    props = [r for r in log if r[0] == "prop" and r[1] == "asrp_tet_choice"]
+    need(len(props) == 1 and sc.asrp_tet_choice == "coarse" and sc.asrp_asset_tet == "coarse", "tet-choice", "no tet mesh choice on the panel, or it is not Coarse by default")
+    items = {i.identifier: i.name for i in sc.bl_rna.properties["asrp_tet_choice"].enum_items}
+    need(items == {"coarse": "Coarse lattice (Ziva's tet size)", "fine": "Fine (lips move separately)"}, "tet-choice", f"the choices are {items}")
+    lines = {"coarse": f"{coarse[0]:,} tets. Moves the lips as one body, like Ziva. About 1 s per run.",
+             "fine": f"{fine[0]:,} tets. Upper and lower lip move separately. About 30 s per run."}
+    need(lines["coarse"].replace(" ", "") in " ".join(labels_of(log)).replace(" ", ""), "tet-choice", f"the coarse line is missing: {labels_of(log)}")
+    uid = {r: o.session_uid for r, o in asset_now().items()}
+    scene_before = sc.asrp_asset_scene
+    sc.asrp_tet_choice = "fine"
+    log = draw_panel(asrp_blender.ASRP_PT_asset)
+    text = " ".join(labels_of(log)).replace(" ", "")
+    need(lines["fine"].replace(" ", "") in text and lines["coarse"].replace(" ", "") not in text, "tet-choice", "the line under the choice does not change with it")
+    need("Press Open asset again to use this mesh.".replace(" ", "") in text, "tet-choice", "no message after changing the choice of an open asset")
+    need(sc.asrp_asset_scene == scene_before and {r: o.session_uid for r, o in asset_now().items()} == uid, "tet-choice", "changing the choice changed the open asset")
+    need("lattice" in " ".join(labels_of(draw_panel(asrp_blender.ASRP_PT_setup))), "tet-choice", "the Physics setup does not show the mesh the open asset has")
+    sc.asrp_tet_choice = "coarse"
+    need("Press Open asset again" not in " ".join(labels_of(draw_panel(asrp_blender.ASRP_PT_asset))), "tet-choice", "the message stays after the choice is back")
+    # the scene the panel imported: the lattice, all four attachments springs
+    data = scene_data(sc)
+    tet = data["soft_tissues"][0]["tet_mesh"]
+    need(tet["content_sha256"] == coarse[2], "tet-choice", "the imported scene's tet mesh is not the lattice file")
+    kinds = [a["kind"] for a in data["attachments"]]
+    need(kinds == ["spring"] * 4, "tet-choice", f"the attachments of the coarse import are {kinds}, expected four springs")
+    print(f"  tet choice: Coarse by default; the line says {lines['coarse']!r} / {lines['fine']!r} (counts from the files); a change after Open asset "
+          f"leaves the asset alone and says to press Open asset again; the coarse import has the lattice ({coarse[0]} tets) and {kinds}")
+
+
+def check_b_not_run(rows, passed):
+    """With the lattice, check (b) is NOT RUN by design: the panel shows it as not run, not as failed, and it is no failure."""
+    verdicts = {r[0]: r[2] for r in rows}
+    need(verdicts["b"] == "NOT RUN" and "FAIL" not in verdicts.values() and passed is True, "not-run", f"check b is {verdicts['b']}, run passed {passed}, verdicts {verdicts}")
+    log = draw_panel(asrp_blender.ASRP_PT_checks)
+    labels = labels_of(log)
+    need("NOT RUN" in labels and "FAIL" not in labels, "not-run", f"the Checks section shows {labels}")
+    need(not [r for r in labels_of(draw_panel(asrp_blender.ASRP_PT_run)) if "plausibility check failed" in r], "not-run", "the Run section says a check failed")
+    need(not any(r[0] == "label" and r[2] and "(b)" in r[1] for r in log), "not-run", "the NOT RUN check is drawn as a failure")
+
+
+def case_fine_choice(sc):
+    """With "Fine" the scene is what it was before (the fine tet mesh, a hard upper-lip attachment and springs) and a motion runs."""
+    sc.asrp_tet_choice = "fine"
+    try:
+        assert bpy.ops.asrp.open_asset() == {"FINISHED"}
+        need(sc.asrp_asset_tet == "fine", "tet-choice", "the open asset does not know it was imported with Fine")
+        data = scene_data(sc)
+        need(data["soft_tissues"][0]["tet_mesh"]["content_sha256"] == tet_file_facts("lips.json")[2], "tet-choice", "Fine did not import the fine tet mesh")
+        need([a["kind"] for a in data["attachments"]] == ["hard", "spring", "spring", "spring"], "tet-choice", "Fine did not import our attachments")
+        check_setup_rows(sc, "fine")
+        ident = snapshot(asset_now())
+        run_dir = three_steps_run("jaw_open_12deg.json")
+        file = "jaw_open_12deg.json"
+        layer, mid, movers, still = MOTIONS[file]
+        motion = json.loads((REPO / "data" / "lab_export" / "trajectories" / file).read_text(encoding="utf-8"))
+        verify_three_step(dict(file=file, motion=motion, run_dir=run_dir, layer=layer, frames=[mid, 36, 50], movers=movers, still=still, ident=ident))
+        print(f"  Fine: the imported scene is the fine mesh with attachments hard / spring / spring / spring; jaw_open_12deg ran from the panel and "
+              f"matches its cache (run {Path(run_dir).name})")
+    finally:
+        sc.asrp_tet_choice = "coarse"
+
+
+def drive_compare(limit=900):
+    t0 = time.monotonic()
+    while True:
+        again = asrp_blender.compare_tick()
+        if again is None:
+            return
+        assert time.monotonic() - t0 < limit, f"the comparison did not end in {limit} s: {list(asrp_blender.compare.SESSION.lines)[-5:]}"
+        time.sleep(0.2)
+
+
+def read_f32(path):
+    import array
+
+    data = array.array("f")
+    with open(path, "rb") as f:
+        data.fromfile(f, os.path.getsize(path) // 4)
+    return data
+
+
+def check_compare_section(sc, case):
+    """B2. Part one needs no outside data (the button, a wrong folder, plain-words errors). Part two runs `asrp compare` on the AA run
+    against the lab's Ziva export (found through tools/local_paths.py) and checks the report's numbers, Ziva's lips, the colours."""
+    cmp = asrp_blender.compare
+    asrp_blender.set_ziva_preference("")
+    log = draw_panel(asrp_blender.ASRP_PT_compare)
+    button = [r for r in log if r[0] == "op" and r[1] == "asrp.compare"]
+    need(len(button) == 1 and button[0][2] == "Compare" and not button[0][5], "compare", "Compare is enabled with no Ziva folder")
+    need([r[1] for r in log if r[0] == "op"] == ["asrp.choose_ziva", "asrp.compare"] and "Ziva reference folder" in [r[2] for r in log if r[0] == "op"], "compare", "buttons")
+    need("DEFAULT_CLOSED" in asrp_blender.ASRP_PT_compare.bl_options, "compare", "the section is open by default")
+    need([c.__name__ for c in asrp_blender.classes if getattr(c, "bl_parent_id", "") == "ASRP_PT_main"].index("ASRP_PT_compare") ==
+         [c.__name__ for c in asrp_blender.classes if getattr(c, "bl_parent_id", "") == "ASRP_PT_main"].index("ASRP_PT_results") + 1, "compare", "not right after Results")
+    try:
+        bpy.ops.asrp.compare()
+        raise AssertionError("Compare did not refuse without a folder")
+    except RuntimeError as exc:
+        need("Choose the Ziva reference folder" in str(exc), "compare", str(exc))
+    wrong = tmp / "not_a_ziva_folder"
+    wrong.mkdir(exist_ok=True)
+    asrp_blender.set_ziva_preference(str(wrong))
+    log = draw_panel(asrp_blender.ASRP_PT_compare)
+    need([r for r in log if r[1] == "asrp.compare"][0][5], "compare", "Compare is greyed out although a result and a folder are there")
+    assert bpy.ops.asrp.compare() == {"FINISHED"}
+    drive_compare()
+    need(cmp.SESSION.state == "failed" and cmp.SESSION.error and "Traceback" not in cmp.SESSION.error, "compare", f"a wrong folder: {cmp.SESSION.state} {cmp.SESSION.error!r}")
+    text = " ".join(labels_of(draw_panel(asrp_blender.ASRP_PT_compare)))
+    need("The comparison failed:" in text and not cmp.ready(sc), "compare", f"the error is not shown in words: {text}")
+    wrong_error = cmp.SESSION.error
+    # part two: the lab's data
+    import local_paths
+
+    trip = local_paths.ziva_trip()
+    folders = sorted((trip / "ziva_reference").glob("neutral_to_AA_export_*")) if trip is not None else []
+    if not folders:
+        NOT_VERIFIED.append("Compare with Ziva on the real AA export (numbers, Ziva's lips, difference colours): " + local_paths.HOW_TO_SET)
+        print("  compare: part one done (button, wrong folder -> plain error). NOT VERIFIED, not counted as passed: the Ziva data is not on this machine; "
+              + local_paths.HOW_TO_SET)
+        asrp_blender.set_ziva_preference("")
+        return
+    asrp_blender.set_ziva_preference(str(folders[0]))
+    cmp.SESSION.reset()
+    assert bpy.ops.asrp.compare() == {"FINISHED"}
+    drive_compare()
+    need(cmp.SESSION.state == "done", "compare", f"the comparison ended {cmp.SESSION.state}: {cmp.SESSION.error} {list(cmp.SESSION.lines)[-4:]}")
+    out = Path(sc.asrp_asset_run) / "compare"
+    report = json.loads((out / "compare_report.json").read_text(encoding="utf-8"))
+    need((out / "heatmap.json").is_file() and (out / "ziva_playback" / "playback.json").is_file(), "compare", "the comparison wrote no heat map or Ziva package")
+    last = report["frames"]["last"]
+    need(last == 46 and report["layers"]["final"].get("available") is not False, "compare", "the report has no numbers for the final layer: this check would prove nothing")
+    for layer in ("final", "physics"):
+        assert bpy.ops.asrp.set_layer(layer=layer) == {"FINISHED"}
+        block = report["layers"][layer]
+        text = " ".join(labels_of(draw_panel(asrp_blender.ASRP_PT_compare))).replace(" ", "")
+        need(f"{asrp_blender.asset.LAYER_WORDS[layer]}, frame {last}:".replace(" ", "") in text, "compare", f"the section does not name the layer on display ({layer}): {text}")
+        for want in (f"mean {block['mean_mm'][last]:.2f} mm, 95% {block['p95_mm'][last]:.2f} mm, max {block['max_mm'][last]:.2f} mm",
+                     f"Worst frame: {block['worst']['mean_mm']['frame']} (mean {block['worst']['mean_mm']['value']:.2f} mm)",
+                     "Reported only. There is no pass line."):
+            need(want.replace(" ", "") in text, "compare", f"the section does not say {want!r} for the {layer} layer: {text}")
+    assert bpy.ops.asrp.set_layer(layer="final") == {"FINISHED"}
+    # Ziva's lips
+    sc.asrp_show_ziva = True
+    z = sc.asrp_ziva_object
+    need(asrp_blender.asset.is_live(z) and z.name == "Ziva lips" and not z.hide_viewport and z.get(asrp_blender.asset.ROLE_KEY) == "ziva_lips", "ziva-lips", "no 'Ziva lips' object")
+    mod = [m for m in z.modifiers if m.type == "MESH_CACHE"][0]
+    need(mod.filepath.endswith("playback_final.pc2"), "ziva-lips", f"Ziva's lips do not follow the final layer: {mod.filepath}")
+    for layer, pc2 in (("final", "playback_final.pc2"), ("physics", "playback.pc2")):
+        assert bpy.ops.asrp.set_layer(layer=layer) == {"FINISHED"}
+        sc.frame_set(25)
+        bpy.context.view_layer.update()
+        cache = read_pc2(out / "ziva_playback" / pc2)
+        diff = max_diff(lips_local_mm(z), frame_of(cache, 25))
+        need(diff < LIPS_TOLERANCE_MM and mod.filepath.endswith(pc2), "ziva-lips", f"Ziva's lips at frame 25 differ from {pc2} by {diff:.3g} mm")
+    other = max_diff(frame_of(read_pc2(out / "ziva_playback" / "playback.pc2"), 25), frame_of(read_pc2(out / "ziva_playback" / "playback_final.pc2"), 25))
+    need(other > 0.05, "ziva-lips", "the two Ziva caches are the same at frame 25: this check could not tell the layers apart")
+    assert bpy.ops.asrp.set_layer(layer="final") == {"FINISHED"}
+    sc.asrp_show_ziva = False
+    need(z.hide_viewport and z.hide_render, "ziva-lips", "unticking Show Ziva's lips did not hide it")
+    # the difference colours
+    lips = asset_now()["lips"]
+    attrs_before = [a.name for a in lips.data.color_attributes]
+    spaces = list(asrp_blender.asset.view3d_spaces(bpy.context))
+    shading_before = [(k, sp.shading.type, sp.shading.color_type) for k, sp in spaces]
+    need(spaces, "heat", "no 3D view in this Blender")
+    sc.asrp_show_heat = True
+    need(cmp.heat_handler in bpy.app.handlers.frame_change_post, "heat", "no frame-change handler while the box is ticked")
+    header = json.loads((out / "heatmap.json").read_text(encoding="utf-8"))
+    values = read_f32(out / header["layers"]["final"]["file"])
+    n = header["vertex_count"]
+    need(len(values) == n * header["frames"] and n == len(lips.data.vertices), "heat", "the heat map does not fit the lips")
+    seen = {}
+    for frame in (25, 40):
+        sc.frame_set(frame)
+        block = values[frame * n:(frame + 1) * n]
+        peak = max(range(n), key=lambda v: block[v])
+        need(block[peak] > 1.0 and min(block) < block[peak], "heat", f"frame {frame}: the heat map is flat ({min(block)}..{block[peak]}): this check would prove nothing")
+        col = colour_of_attr(lips.data, cmp.HEAT_ATTR)
+        for v in (peak, 0, n // 2, n - 1, min(range(n), key=lambda v: block[v])):
+            t = min(block[v] / 5.0, 1.0)
+            got = col[4 * v:4 * v + 4]
+            need(max(abs(got[0] - t), abs(got[1]), abs(got[2] - (1 - t)), abs(got[3] - 1)) < 1e-5, "heat",
+                 f"frame {frame} vertex {v}: the colour is {tuple(got)}, the value {block[v]:.3f} mm should give ({t:.3f}, 0, {1 - t:.3f}, 1)")
+        seen[frame] = tuple(col[4 * peak:4 * peak + 3])
+    need(seen[25] != seen[40], "heat", "the colours did not change with the frame")
+    need(SCALE_LINE in labels_of(draw_panel(asrp_blender.ASRP_PT_compare)), "heat", "the scale line is missing")
+    sc.asrp_show_heat = False
+    need(cmp.heat_handler not in bpy.app.handlers.frame_change_post, "heat", "the frame-change handler stays after unticking")
+    need([a.name for a in lips.data.color_attributes] == attrs_before, "heat", "the colour attribute stays after unticking")
+    need([(k, sp.shading.type, sp.shading.color_type) for k, sp in asrp_blender.asset.view3d_spaces(bpy.context)] == shading_before, "heat", "the views are not as they were")
+    verify_three_step(case)  # the result on the asset is as it was
+    print(f"  compare: a wrong folder -> {wrong_error[:60]!r} shown in the section; on the real AA export the report was written and the section's numbers equal it "
+          f"(final: last frame mean {report['layers']['final']['mean_mm'][last]:.2f} mm; physics: {report['layers']['physics']['mean_mm'][last]:.2f} mm); "
+          f"Ziva lips equal playback_final.pc2 / playback.pc2 at frame 25; the colours of 5 vertices at 2 frames equal the .f32 values on the 0 to 5 mm scale; "
+          f"unticking removes the handler and restores the attributes and the views")
+    asrp_blender.set_ziva_preference("")
+
+
+SCALE_LINE = "Blue 0 mm, red 5 mm or more"
+
+
+def colour_of_attr(mesh, name):
+    import array
+
+    co = array.array("f", bytes(4 * 4 * len(mesh.vertices)))
+    mesh.color_attributes[name].data.foreach_get("color", co)
+    return co
 
 
 # --- finding the project: the order, and the add-on installed outside the repo ---------------------------------------------------
@@ -1371,6 +1631,8 @@ def run_child(phase: str, repo: Path, tmp: Path) -> None:
     """Inside the child Blender: the add-on is the installed copy (bl_ext...), not the repo's."""
     import importlib
 
+    if phase in ("save", "reopen", "missing"):
+        return blend_child(phase, repo, tmp)
     assert os.environ.get("BLENDER_USER_RESOURCES") and "ASRP_PROJECT" not in os.environ, "the child does not run in an isolated profile"
     assert Path(os.environ["BLENDER_USER_RESOURCES"]).resolve() == (tmp / "profile").resolve()
     ab = importlib.import_module("bl_ext.user_default.asrp_blender")
@@ -1383,11 +1645,13 @@ def run_child(phase: str, repo: Path, tmp: Path) -> None:
     if phase == "a":
         assert prefs.project_dir == "" and ab.core_project() is None, (prefs.project_dir, ab.core_project())
         main = draw_panel(ab.ASRP_PT_main)
-        assert "Choose the ASRP project folder (once)" in labels_of(main), main
+        mtext = " ".join(labels_of(main))
+        assert "Choose the ASRP project folder." in labels_of(main) and "Asked once. Blender remembers." in labels_of(main), main
+        assert mtext.count("stay grey") == 1, mtext  # the note is written once, under the chooser
         assert [r[1] for r in main if r[0] == "op"] == ["asrp.choose_project"], main
         for panel in (ab.ASRP_PT_asset, ab.ASRP_PT_motion, ab.ASRP_PT_run):  # steps 1 to 3 greyed out, with the reason
             log = draw_panel(panel)
-            assert "Choose the project folder first (top of this tab)." in " ".join(labels_of(log)), (panel.bl_label, log)
+            assert "Choose the project folder first" not in " ".join(labels_of(log)), (panel.bl_label, log)  # no note on every step
             assert all(not r[5] for r in log if r[0] == "op"), f"{panel.bl_label}: a button is enabled while no project is known"
         for name in ("open_asset", "run_motion"):  # pressed anyway (from a script): a plain sentence, not the old one
             try:
@@ -1410,7 +1674,7 @@ def run_child(phase: str, repo: Path, tmp: Path) -> None:
         assert bpy.ops.asrp.open_asset() == {"FINISHED"}
         sc = bpy.context.scene
         assert len(sc.asrp_asset_objects) == 5 and [m.file for m in sc.asrp_motions] == list(TITLES), [m.file for m in sc.asrp_motions]
-        print(f"CHILD phase a: loaded from {where.parent.name} outside the repo; no project -> 'Choose the ASRP project folder (once)', steps 1 to 3 "
+        print(f"CHILD phase a: loaded from {where.parent.name} outside the repo; no project -> 'Choose the ASRP project folder.' once, steps 1 to 3 "
               f"greyed out, open_asset refused in plain words; a wrong folder refused; the right one chosen; Open asset made "
               f"{len(sc.asrp_asset_objects)} objects, motions {[m.title for m in sc.asrp_motions]}, {sc.asrp_asset_material!r}")
     else:
@@ -1418,6 +1682,354 @@ def run_child(phase: str, repo: Path, tmp: Path) -> None:
         assert ab.core_project().resolve() == repo.resolve()
         assert not [r for r in draw_panel(ab.ASRP_PT_main) if r[0] == "label"]
         print(f"CHILD phase b: after a restart the add-on is still enabled ({len(enabled)} add-ons on) and the project folder is still {Path(prefs.project_dir).name!r}")
+
+
+# --- round 2: landmarks, units, report, physics setup, highlight --------------------------------------------------------------
+
+
+def scene_data(sc):
+    return json.loads(Path(sc.asrp_asset_scene).read_text(encoding="utf-8"))
+
+
+def check_landmarks_units_report(sc):
+    """R-01: the sixth object, the units line, the import report lines. The numbers are read from the scene folder's files here, not
+    taken from the add-on."""
+    data = scene_data(sc)
+    rest = data["landmarks"]["rest_positions_mm"]
+    lm = sc.asrp_asset_landmarks
+    need(asrp_blender.asset.is_live(lm) and lm.get(asrp_blender.asset.ROLE_KEY) == "landmarks", "landmarks", "Open asset made no landmarks object")
+    need("landmarks" not in asset_now() and len(asset_now()) == 5, "landmarks", "the landmarks object counts as one of the five")
+    need(len(rest) == 300, "landmarks", f"the scene has {len(rest)} landmarks, expected 300 (a check that sees nothing proves nothing)")
+    verts = lm.data.vertices
+    per = len(verts) // len(rest)
+    need(len(verts) == per * len(rest) and per >= 4, "landmarks", f"the landmarks object has {len(verts)} vertices for {len(rest)} landmarks")
+    worst = 0.0
+    for i, p in enumerate(rest):
+        centre = [sum(verts[i * per + k].co[a] for k in range(per)) / per for a in range(3)]
+        worst = max(worst, max(abs(centre[a] - p[a]) for a in range(3)))
+    need(worst < 1e-5, "landmarks", f"a landmark dot is {worst:.3g} mm from its rest position in scene.json")
+    size = max(max(v.co[a] for v in verts[:per]) - min(v.co[a] for v in verts[:per]) for a in range(3))
+    need(size >= 1.0, "landmarks", f"a landmark dot is {size:.3g} mm across: too small to see at the head's size")
+    need(abs(lm.scale[0] - 0.001) < 1e-9 and not lm.hide_viewport and not lm.hide_render, "landmarks", "the dots are not shown at rest")
+    log = draw_panel(asrp_blender.ASRP_PT_asset)
+    props = [r for r in log if r[0] == "prop" and r[1] == "asrp_show_landmarks"]
+    need(len(props) == 1 and props[0][2] == "Show landmarks" and sc.asrp_show_landmarks, "landmarks", "no Show landmarks checkbox, or it is not on by default")
+    sc.asrp_show_landmarks = False
+    need(lm.hide_viewport, "landmarks", "Show landmarks off does not hide the dots")
+    sc.asrp_show_landmarks = True
+    need(not lm.hide_viewport, "landmarks", "Show landmarks on does not show the dots")
+    # units
+    mm = data["units"]["mm_per_scene_unit"]["value"]
+    text = " ".join(labels_of(log))
+    need(f"Units: mm (1 scene unit = {mm:g} mm)" in text and mm == 0.962, "units", f"the Asset section does not say 'Units: mm (1 scene unit = 0.962 mm)': {text}")
+    # the import report
+    report = json.loads((Path(sc.asrp_asset_scene).parent / "import_report.json").read_text(encoding="utf-8"))
+    lips = next(m for m in report["meshes"] if m["role"] == "soft tissue")
+    need(lips["vertices"] == len(asset_now()["lips"].data.vertices) == 10240, "report", "the report's lip vertex count is not the lips object's")
+    for line in (f"Imported: {len(report['meshes'])} meshes, {report['landmarks']} landmarks", f"Lips: {lips['vertices']} vertices",
+                 f"Problems found: {len(report['check']['errors'])} errors, {len(report['check']['warnings'])} warnings"):
+        need(line.replace(" ", "") in text.replace(" ", ""), "report", f"the Asset section does not say {line!r}: {text}")
+    need("Problems found: 0 errors, 0 warnings" in text and report["landmarks"] == 300 and len(report["meshes"]) == 5, "report", "the report is not the expected one")
+    opens = [r for r in log if r[0] == "op" and r[1] == "wm.path_open" and r[2] == "Open import report"]
+    need(len(opens) == 1 and opens[0][4].filepath.endswith("import_report.json") and Path(opens[0][4].filepath).is_file(), "report",
+         "no Open import report button for an existing file")
+    need("Landmarks show the rest positions" not in text, "landmarks", "the hidden-while-a-result-plays line is shown with no result on the asset")
+    print(f"  landmarks: {len(rest)} dots of {per} vertices ({size:.2f} mm across) centred on the rest positions in scene.json (worst {worst:.1e} mm), "
+          f"Show landmarks on by default, units and report lines drawn")
+
+
+def check_landmarks_hidden_with_result(sc):
+    lm = sc.asrp_asset_landmarks
+    need(sc.asrp_asset_run and lm.hide_viewport and lm.hide_render, "landmarks", "the landmark dots are still shown while a result is on the asset")
+    text = " ".join(labels_of(draw_panel(asrp_blender.ASRP_PT_asset)))
+    need("Landmarks show the rest positions; hidden while a result plays." in text, "landmarks", f"the panel does not say why the dots are hidden: {text}")
+    sc.asrp_show_landmarks = True
+    need(lm.hide_viewport, "landmarks", "Show landmarks showed the dots over a result")
+
+
+EXPECT_SETUP = {  # what the Physics setup says about the lab asset (read off the card by hand, not from the add-on)
+    "tissues": ["lips: 26721 tets, fine mesh"],
+    "material": "neo-Hookean: 12 kPa, nu 0.4, 1060 kg/m3 (measured in Ziva)",
+    "bones": ["jaw: follows jaw01", "skull: follows head", "teeth_upper: display only (follows head)", "teeth_lower: display only (follows jaw01)"],
+    "attachments": ["lips to skull: 74 vertices, hard", "lips to jaw: 76 vertices, spring 1.94 N/mm (our value)",
+                    "lips to lip_corner_anchor: 348 vertices, spring 1.94 N/mm (our value)",
+                    "lips to lip_corner_anchor: 309 vertices, spring 1.94 N/mm (our value)"],
+}
+
+
+def expected_setup(data, choice):
+    """The sentences the Physics setup must say for the lab asset: Fine from the card (EXPECT_SETUP), Coarse from the numbers in the
+    imported scene.json (the soft attachments' stiffness is computed by the import, so it is read from the file)."""
+    if choice == "fine":
+        return EXPECT_SETUP
+    n = tet_file_facts("lips_lattice.json")[0]
+    atts = []
+    for a in data["attachments"]:
+        k = a["stiffness"]
+        atts.append(f"{a['from']} to {a['to']}: {len(a['weights'])} vertices, spring {k['value']:g} N/mm (measured in Ziva)")
+    return dict(EXPECT_SETUP, tissues=[f"lips: {n} tets, lattice mesh"], attachments=atts)
+
+
+def check_setup_rows(sc, choice="coarse"):
+    """R-02: the Physics setup rows, one button each, the sentences read from scene.json; the last line of the section."""
+    data = scene_data(sc)
+    expect = expected_setup(data, choice)
+    tet = json.loads((Path(sc.asrp_asset_scene).parent / data["soft_tissues"][0]["tet_mesh"]["path"]).read_text(encoding="utf-8"))
+    need(len(tet["tets"]) == (126 if choice == "coarse" else 26721) and tet.get("kind", "fine") == ("lattice" if choice == "coarse" else "fine"), "setup",
+         f"the lips tet mesh has {len(tet['tets'])} tets and kind {tet.get('kind')!r}")
+    need(asrp_blender.asset.read_tet_summary(REPO / "data" / "tetmesh" / "lips_lattice.json") == (126, "lattice"), "setup", "a lattice tet mesh is not reported as lattice")
+    log = draw_panel(asrp_blender.ASRP_PT_setup)
+    text = " ".join(labels_of(log)).replace(" ", "")
+    for key in ("tissues", "bones", "attachments"):
+        for line in expect[key]:
+            need(line.replace(" ", "") in text, "setup", f"the Physics setup does not say {line!r}: {labels_of(log)}")
+    need(expect["material"].replace(" ", "") in text, "setup", f"the material row is missing: {labels_of(log)}")
+    ops = [r for r in log if r[0] == "op" and r[1] == "asrp.highlight"]
+    need([(r[4].kind, r[4].target) for r in ops] == [("part", "lips")] + [("part", b) for b in ("jaw", "skull", "teeth_upper", "teeth_lower")] +
+         [("attachment", a["name"]) for a in data["attachments"]], "setup", f"the highlight buttons are {[(r[4].kind, r[4].target) for r in ops]}")
+    need(all(r[2] == "" for r in ops), "setup", "a highlight button has text (it should be a small icon button)")
+    need("Read-only in this version. Marking meshes as bone or tissue in Blender comes later.".replace(" ", "") in text, "setup", "the last line is missing")
+    need([r[1] for r in log if r[0] == "op" and r[1] != "asrp.highlight"] == ["asrp.clear_highlight", "asrp.check_setup"], "setup", "wrong buttons")
+    need(not [r for r in log if r[1] == "asrp.clear_highlight"][0][5], "setup", "Clear highlight is enabled with nothing highlighted")
+    print(f"  physics setup: {len(ops)} rows with a button each, tissue / bones / attachments say what scene.json says, last line present")
+
+
+def colour_of(mesh):
+    import array
+
+    attr = mesh.color_attributes[asrp_blender.asset.HIGHLIGHT_ATTR]
+    co = array.array("f", bytes(4 * 4 * len(mesh.vertices)))
+    attr.data.foreach_get("color", co)
+    return co
+
+
+def check_highlight(case):
+    """Highlight a part and an attachment while a result is on the asset: the result is not disturbed; Clear highlight puts the display
+    back exactly as it was."""
+    sc = bpy.context.scene
+    objs = asset_now()
+    lips = objs["lips"]
+    before_attrs = [a.name for a in lips.data.color_attributes]
+    before_active = lips.data.color_attributes.active_color.name if lips.data.color_attributes.active_color else None
+    spaces = list(asrp_blender.asset.view3d_spaces(bpy.context))
+    before_shading = [(k, sp.shading.type, sp.shading.color_type) for k, sp in spaces]
+    need(spaces, "highlight", "no 3D view in this Blender: the viewport part of the highlight cannot be checked (the check must be able to fail)")
+    run, layer, frame = sc.asrp_asset_run, sc.asrp_asset_layer, sc.frame_current
+    mods = [(o.name, [m.name for m in o.modifiers]) for o in objs.values()]
+    # a part: selected and active, nothing else
+    assert bpy.ops.asrp.highlight(kind="part", target="jaw") == {"FINISHED"}
+    need([o.name for o in bpy.context.view_layer.objects if o.select_get()] == [objs["jaw"].name] and bpy.context.view_layer.objects.active == objs["jaw"],
+         "highlight", "a part row did not select that object and make it active")
+    # an attachment: its vertices coloured, the others not
+    data = scene_data(sc)
+    att = data["attachments"][0]
+    verts = {int(w[0]) for w in att["weights"]}
+    need(len(verts) == 74, "highlight", f"the first attachment has {len(verts)} vertices, expected 74")
+    assert bpy.ops.asrp.highlight(kind="attachment", target=att["name"]) == {"FINISHED"}
+    co = colour_of(lips.data)
+    on = [i for i in range(len(lips.data.vertices)) if co[4 * i + 2] < 0.1]  # the yellow ones have no blue
+    need(set(on) == verts, "highlight", f"{len(on)} vertices are coloured, the attachment has {len(verts)}")
+    need(lips.data.color_attributes.active_color.name == asrp_blender.asset.HIGHLIGHT_ATTR and sc.asrp_highlight == att["name"], "highlight", "the highlight is not the active colour")
+    need(all(sp.shading.type == "SOLID" and sp.shading.color_type == "VERTEX" for _k, sp in asrp_blender.asset.view3d_spaces(bpy.context)), "highlight",
+         "the 3D views are not set to show the vertex colours")
+    # the result on the asset is as it was: verify_three_step reads the cache, the bones, the timeline
+    need((sc.asrp_asset_run, sc.asrp_asset_layer) == (run, layer) and sc.frame_current == frame, "highlight", "the highlight changed the result's state")
+    need(mods == [(o.name, [m.name for m in o.modifiers]) for o in objs.values()], "highlight", "the highlight changed the modifiers")
+    verify_three_step(case)
+    # another attachment replaces the first one
+    other = data["attachments"][1]
+    assert bpy.ops.asrp.highlight(kind="attachment", target=other["name"]) == {"FINISHED"}
+    on = {i for i in range(len(lips.data.vertices)) if colour_of(lips.data)[4 * i + 2] < 0.1}
+    need(on == {int(w[0]) for w in other["weights"]} and len(lips.data.color_attributes) == len(before_attrs) + 1, "highlight", "a second highlight did not replace the first")
+    # clear: exactly as it was
+    assert bpy.ops.asrp.clear_highlight() == {"FINISHED"}
+    after = [a.name for a in lips.data.color_attributes]
+    need(after == before_attrs and sc.asrp_highlight == "", "highlight", f"after Clear highlight the lips have the colour attributes {after}, before {before_attrs}")
+    active = lips.data.color_attributes.active_color.name if lips.data.color_attributes.active_color else None
+    need(active == before_active, "highlight", f"the active colour attribute is {active!r}, it was {before_active!r}")
+    now = [(k, sp.shading.type, sp.shading.color_type) for k, sp in asrp_blender.asset.view3d_spaces(bpy.context)]
+    need(now == before_shading, "highlight", f"the 3D views show {now} after Clear highlight, they showed {before_shading}")
+    verify_three_step(case)
+    print(f"  highlight: a part is selected and active; an attachment colours {len(verts)} vertices (others not), a second replaces it; the result is "
+          f"still the same (cache, bones, modifiers, timeline); Clear highlight restores the colour attributes {before_attrs} and the shading {before_shading[0][1:]}")
+
+
+def check_check_setup(sc):
+    """Check setup: the outcome of `asrp check` in plain English, on a good scene and on one with an attachment without vertices."""
+    assert bpy.ops.asrp.check_setup() == {"FINISHED"}
+    need(sc.asrp_setup_check == "Setup check: No problems found.", "check-setup", f"a good scene says {sc.asrp_setup_check!r}")
+    need("Setup check: No problems found." in " ".join(labels_of(draw_panel(asrp_blender.ASRP_PT_setup))), "check-setup", "the outcome is not drawn")
+    folder = Path(sc.asrp_asset_scene).parent
+    broken = folder.parent / (folder.name + "_broken")
+    shutil.copytree(folder, broken)
+    data = json.loads((broken / "scene.json").read_text(encoding="utf-8"))
+    data["attachments"][0]["weights"] = []
+    (broken / "scene.json").write_text(json.dumps(data), encoding="utf-8")
+    good = sc.asrp_asset_scene
+    sc.asrp_asset_scene = str(broken / "scene.json")
+    try:
+        assert bpy.ops.asrp.check_setup() == {"FINISHED"}
+        lines = sc.asrp_setup_check.splitlines()
+        log = draw_panel(asrp_blender.ASRP_PT_setup)
+    finally:
+        sc.asrp_asset_scene = good
+        shutil.rmtree(broken, ignore_errors=True)
+    need(lines and lines[0].startswith("Setup check: 1 errors") and len(lines) >= 2 and lines[1].startswith("Error: "), "check-setup",
+         f"a scene with an empty attachment says {lines}")
+    need(any(r[0] == "label" and r[2] and r[1].startswith("Error") for r in log), "check-setup", "the error line is not drawn in the alert colour")
+    sc.asrp_setup_check = ""
+    print(f"  check setup: good scene -> 'No problems found.'; an attachment without vertices -> {lines[0]!r}, then {lines[1][:70]!r}")
+
+
+# --- one .blend is one scene: save, reopen in another Blender process ---------------------------------------------------------
+
+
+def blend_child(phase, repo, tmp):
+    """Inside a child Blender of case_save_and_reopen: the add-on is the repo's, registered before the file is opened (as Blender
+    does at start-up)."""
+    assert os.environ.get("BLENDER_USER_RESOURCES") and "ASRP_PROJECT" not in os.environ
+    asrp_blender.register()
+    asrp_blender.save_preferences = lambda: True
+    sc = bpy.context.scene
+    blend, state_file = tmp / "saved" / "scene.blend", tmp / "saved" / "state.json"
+    try:
+        if phase == "save":
+            asrp_blender.asset.remove_objects([o for o in bpy.data.objects if o.type == "MESH"])
+            assert bpy.ops.asrp.open_asset() == {"FINISHED"}
+            assert sc.asrp_asset_landmarks is not None and not sc.asrp_asset_landmarks.hide_viewport
+            run_dir = three_steps_run("neutral_to_AA.json")
+            check_landmarks_hidden_with_result(sc)
+            assert SESSION.state == "complete"
+            state_file.write_text(json.dumps({"run_dir": str(run_dir), "scene": sc.asrp_asset_scene, "frame_end": sc.frame_end}), encoding="utf-8")
+            assert bpy.ops.wm.save_as_mainfile(filepath=str(blend)) == {"FINISHED"}
+            print(f"CHILD saved {blend.name} after Open asset and a run of neutral_to_AA ({sc.frame_end + 1} frames)")
+        elif phase == "reopen":
+            state = json.loads(state_file.read_text(encoding="utf-8"))
+            assert bpy.ops.wm.open_mainfile(filepath=str(blend)) == {"FINISHED"}
+            sc = bpy.context.scene
+            reopen_checks(sc, state, tmp)
+        else:
+            assert bpy.ops.wm.open_mainfile(filepath=str(blend)) == {"FINISHED"}
+            sc = bpy.context.scene
+            missing_checks(sc, tmp)
+    finally:
+        SESSION.close()
+        asrp_blender.unregister()
+
+
+def case_from_state(sc, file, state, layer):
+    motion = json.loads((REPO / "data" / "lab_export" / "trajectories" / file).read_text(encoding="utf-8"))
+    _layer, mid, movers, still = MOTIONS[file]
+    frames = [mid, 36 if motion["frames"] > 36 else motion["frames"] - 2, motion["frames"] - 1]
+    return dict(file=file, motion=motion, run_dir=state["run_dir"], layer=layer, frames=frames, movers=movers, still=still, ident=snapshot(asset_now()))
+
+
+def reopen_checks(sc, state, tmp):
+    objs = asset_now()
+    need(sorted(objs) == sorted(ROLES) and asrp_blender.asset_open(sc), "reopen", f"after reopening the panel knows the objects {sorted(objs)}")
+    need(asrp_blender.asset.is_live(sc.asrp_asset_landmarks), "reopen", "the landmarks object is gone after reopening")
+    texts = " ".join(labels_of(draw_panel(asrp_blender.ASRP_PT_asset)))
+    for part in ("Scene files:", "Material: 12 kPa, 0.4 (measured in Ziva)", "Units: mm (1 scene unit = 0.962 mm)", "Problems found: 0 errors, 0 warnings",
+                 "Landmarks show the rest positions; hidden while a result plays."):
+        need(part.replace(" ", "") in texts.replace(" ", ""), "reopen", f"after reopening the Asset section does not say {part!r}: {texts}")
+    need(not asrp_blender.asset.files_problem(sc), "reopen", "the files are there but the panel says they are gone")
+    need([m.title for m in sc.asrp_motions] == list(TITLES.values()), "reopen", "the motion list did not survive")
+    setup = " ".join(labels_of(draw_panel(asrp_blender.ASRP_PT_setup))).replace(" ", "")
+    need(all(x.replace(" ", "") in setup for x in expected_setup(scene_data(sc), "coarse")["attachments"]), "reopen", "the Physics setup did not survive")
+    need((sc.frame_start, sc.frame_end) == (0, state["frame_end"]) and sc.asrp_asset_layer == "final" and sc.asrp_asset_run == state["run_dir"], "reopen",
+         f"timeline {sc.frame_start}..{sc.frame_end}, layer {sc.asrp_asset_layer!r}")
+    # the result plays: the same function the three-step check uses
+    case = case_from_state(sc, "neutral_to_AA.json", state, "final")
+    verify_three_step(case)
+    run = draw_panel(asrp_blender.ASRP_PT_run)
+    need(any(r[0] == "op" and r[1] == "screen.animation_play" for r in run), "reopen", "no Play button on the reopened result")
+    # Physics only / Final shape
+    for layer in ("physics", "final"):
+        assert bpy.ops.asrp.set_layer(layer=layer) == {"FINISHED"}
+        verify_three_step(dict(case, layer=layer))
+    # another motion, Run: the result is replaced on the same five objects
+    run_dir = three_steps_run("jaw_open_12deg.json", rest_check=True)
+    case2 = case_from_state(sc, "jaw_open_12deg.json", {"run_dir": str(run_dir)}, "physics")
+    case2["ident"] = case["ident"]
+    verify_three_step(case2)
+    need(sc.asrp_asset_run == str(run_dir) and sc.asrp_asset_run != state["run_dir"], "reopen", "the second run did not replace the result")
+    print(f"CHILD reopened: panel knows the five objects and the landmarks, the Asset section keeps its lines, neutral_to_AA still plays (final and "
+          f"physics layers equal their caches, bones equal the motion file, timeline 0..{state['frame_end']}); jaw_open_12deg then ran and replaced it on the same objects")
+    # File > New: the panel is empty, nothing of the previous file is left
+    assert bpy.ops.wm.read_homefile() == {"FINISHED"}
+    sc = bpy.context.scene
+    need(SESSION.state == "idle", "new-file", f"the run banner of the old file is still there: {SESSION.state}")
+    need(not [o for o in bpy.data.objects if o.name.startswith("ASRP")], "new-file", "ASRP objects are left in the new file")
+    need(not sc.asrp_asset_objects and not sc.asrp_asset_scene and not sc.asrp_asset_run and not sc.asrp_motions and not sc.asrp_results, "new-file", "scene properties are left")
+    texts = {}
+    for panel in (asrp_blender.ASRP_PT_asset, asrp_blender.ASRP_PT_setup, asrp_blender.ASRP_PT_motion, asrp_blender.ASRP_PT_run,
+                  asrp_blender.ASRP_PT_results, asrp_blender.ASRP_PT_checks):
+        log = draw_panel(panel)
+        texts[panel.bl_label] = " ".join(labels_of(log))
+        need(not [r for r in log if r[0] == "op" and r[1] in ("screen.animation_play", "wm.path_open", "asrp.highlight", "asrp.set_layer")], "new-file",
+             f"{panel.bl_label} still has buttons of the old asset")
+    need("No asset is open" in texts["1  Open the asset"] and "Scene files" not in texts["1  Open the asset"], "new-file", texts["1  Open the asset"])
+    need("Open the asset first" in texts["Physics setup"] and "Open the asset first" in texts["2  Choose a motion"], "new-file", "the empty state of steps 2 is wrong")
+    need("Complete" not in texts["3  Run"] and "No result is shown" in texts["Results"] and "No result is shown" in texts["Checks"], "new-file", str(texts))
+    print("CHILD File > New: the panel is in its empty state (no asset, no motions, no result, no banner, no ASRP objects)")
+
+
+def missing_checks(sc, tmp):
+    """The scene and run folders the .blend points to are gone: plain words, Open asset offered, no traceback."""
+    need(not Path(sc.asrp_asset_scene).exists(), "missing", "the scene folder is still there: this check would prove nothing")
+    problem = asrp_blender.asset.files_problem(sc)
+    need(problem and "scene files of this asset are gone" in problem and "Open asset again" in problem, "missing", f"the problem sentence is {problem!r}")
+    log = draw_panel(asrp_blender.ASRP_PT_asset)
+    text = " ".join(labels_of(log))
+    need("scene files of this asset are gone".replace(" ", "") in text.replace(" ", ""), "missing", f"the Asset section does not say so: {text}")
+    open_buttons = [r for r in log if r[0] == "op" and r[1] == "asrp.open_asset"]
+    need(len(open_buttons) == 1 and open_buttons[0][5], "missing", "Open asset is not offered (enabled)")
+    need(not [r for r in log if r[0] == "op" and r[1] == "wm.path_open"], "missing", "an Open folder button for a folder that is gone")
+    for panel in (asrp_blender.ASRP_PT_setup, asrp_blender.ASRP_PT_motion, asrp_blender.ASRP_PT_run, asrp_blender.ASRP_PT_results,
+                  asrp_blender.ASRP_PT_checks, asrp_blender.ASRP_PT_advanced):
+        draw_panel(panel)  # must not raise
+    runlog = draw_panel(asrp_blender.ASRP_PT_run)
+    need([r for r in runlog if r[1] == "asrp.run_motion"] and not [r for r in runlog if r[1] == "asrp.run_motion"][0][5], "missing", "Run is enabled with no scene files")
+    need(not [r for r in runlog if r[1] == "screen.animation_play"], "missing", "a Play button for files that are gone")
+    results = " ".join(labels_of(draw_panel(asrp_blender.ASRP_PT_results)))
+    need("are gone" in results, "missing", f"the Results section does not say the result is gone: {results}")
+    checks = " ".join(labels_of(draw_panel(asrp_blender.ASRP_PT_checks)))
+    need("gone" in checks, "missing", f"the Checks section does not say the run folder is gone: {checks}")
+    try:
+        bpy.ops.asrp.run_motion()
+        raise AssertionError("Run did not refuse")
+    except RuntimeError as exc:
+        need("gone" in str(exc) and "Traceback" not in str(exc), "missing", f"Run's refusal is {exc}")
+    try:
+        bpy.ops.asrp.check_setup()
+    except RuntimeError:
+        pass  # a refusal is fine; a traceback in the panel is not (draw above did not raise)
+    # Open asset again repairs it
+    assert bpy.ops.asrp.open_asset() == {"FINISHED"}
+    need(not asrp_blender.asset.files_problem(sc) and len(asset_now()) == 5 and not sc.asrp_asset_run, "missing", "Open asset did not repair the scene")
+    print("CHILD files gone: the panel says the scene files and the result are gone in plain words, offers Open asset (enabled), disables Run, "
+          "draws every section without an error, and Open asset puts it right")
+
+
+def case_save_and_reopen(tmp):
+    """A real save and a real second Blender process (headless, isolated profile): Open asset, run, save; reopen; then the folders gone."""
+    profile = tmp / "profile_blend"
+    profile.mkdir()
+    (tmp / "saved").mkdir()
+    runs = tmp / "blend_runs"
+    out = []
+    for phase in ("save", "reopen"):
+        done = subprocess.run([blender_exe(), "--background", "--python-exit-code", "1", "--python", str(THIS), "--", CHILD_MARK, phase, str(REPO), str(tmp)],
+                              capture_output=True, text=True, encoding="utf-8", errors="replace", env=isolated(profile, ASRP_RUNS_DIR=runs), timeout=TIMEOUT_S)
+        lines = [x for x in done.stdout.splitlines() if x.startswith("CHILD ")]
+        assert done.returncode == 0 and lines, f"the save / reopen check, phase {phase}, failed (exit {done.returncode}):\n{done.stdout[-3500:]}\n{done.stderr[-1500:]}"
+        out += lines
+    shutil.move(str(runs), str(tmp / "moved_runs"))  # the scene folder and the run folder are gone
+    done = subprocess.run([blender_exe(), "--background", "--python-exit-code", "1", "--python", str(THIS), "--", CHILD_MARK, "missing", str(REPO), str(tmp)],
+                          capture_output=True, text=True, encoding="utf-8", errors="replace", env=isolated(profile, ASRP_RUNS_DIR=runs), timeout=TIMEOUT_S)
+    lines = [x for x in done.stdout.splitlines() if x.startswith("CHILD ")]
+    assert done.returncode == 0 and lines, f"the files-gone check failed (exit {done.returncode}):\n{done.stdout[-3500:]}\n{done.stderr[-1500:]}"
+    print("case 13 one .blend is one scene (real save, three further Blender processes):\n  " + "\n  ".join(x[6:] for x in out + lines))
 
 
 if CHILD_MARK in sys.argv:  # a child Blender of case_installed_copy: runs one phase and ends
@@ -1436,6 +2048,26 @@ try:
         case_installed_copy(tmp)
         print("INSTALLED ONLY PASSED")
         raise SystemExit(0)
+    if "--compare-only" in sys.argv:  # Open asset, the AA run, then the Compare with Ziva checks (a quick way to see them fail)
+        asrp_blender.asset.remove_objects([o for o in bpy.data.objects if o.type == "MESH"])
+        assert bpy.ops.asrp.open_asset() == {"FINISHED"}
+        run_dir = three_steps_run("neutral_to_AA.json")
+        check_compare_section(bpy.context.scene, case_from_state(bpy.context.scene, "neutral_to_AA.json", {"run_dir": str(run_dir)}, "final"))
+        for line in NOT_VERIFIED:
+            print(f"NOT VERIFIED (not counted as passed): {line}")
+        print("COMPARE ONLY PASSED" + (f" ({len(NOT_VERIFIED)} part(s) NOT VERIFIED)" if NOT_VERIFIED else ""))
+        raise SystemExit(0)
+    if "--layout-only" in sys.argv:
+        box = tmp / "box"
+        subprocess.run([UV, "run", "--project", str(REPO), "python", str(THIS), "--make-scene", str(box)], capture_output=True, text=True, check=True)
+        run1 = case_complete(box, tmp / "runs", tmp)
+        case_layout(run1, tmp)
+        print("LAYOUT ONLY PASSED")
+        raise SystemExit(0)
+    if "--blend-only" in sys.argv:
+        case_save_and_reopen(tmp)
+        print("BLEND ONLY PASSED")
+        raise SystemExit(0)
     if "--three-steps-only" in sys.argv:
         case_three_steps()
         print("THREE STEPS ONLY PASSED")
@@ -1448,6 +2080,7 @@ try:
     case_english_only()
     case_project_order(tmp)
     case_installed_copy(tmp)
+    case_save_and_reopen(tmp)
     run1 = case_complete(box, runs, tmp)
     case_layout(run1, tmp)
     case_start_fails(box, runs, "complete")
@@ -1462,7 +2095,9 @@ try:
     case_deleted_object()
     case_file_load_mid_run(box, runs, tmp)
     case_three_steps()
-    print("PANEL CHECK PASSED")
+    for line in NOT_VERIFIED:
+        print(f"NOT VERIFIED (not counted as passed): {line}")
+    print("PANEL CHECK PASSED" + (f" ({len(NOT_VERIFIED)} part(s) NOT VERIFIED)" if NOT_VERIFIED else ""))
 finally:
     SESSION.close()
     asrp_blender.unregister()

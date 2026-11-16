@@ -3,7 +3,7 @@
   "fps": 30,
   "frames": 51,
   "source": "our test motion, not a lab motion (T-06a, ours): jaw01 still for frames 0-14, opens to 12 degrees at frame 32, closed again at frame 50; tools/placeholder_jaw_motion.py",
-  "title": "Prototype 1: jaw opens 12 degrees (test motion)",
+  "title": "Prototype 1: jaw opens 12 deg",
   "source_tag": "ours",
   "settle_until_frame": 14,
   "drivers": {

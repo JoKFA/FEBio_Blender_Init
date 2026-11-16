@@ -364,12 +364,12 @@ def main(argv: list[str] | None = None) -> int:
     conv.add_argument("--driver", default="jaw01", help="the scene's jaw driver (default jaw01)")
     conv.add_argument("--hold-frames", type=int, default=10,
                       help="frames the last pose is held (default 10, as in the Ziva reference runs)")
-    conv.add_argument("--title", help="the name the Blender panel shows for this motion (one line, at most 60 characters)")
+    conv.add_argument("--title", help="the name the Blender panel shows for this motion (one line, at most 34 characters)")
     conv.set_defaults(func=cmd_convert_motion)
 
     st = sub.add_parser("set-motion-title", help="put a title (the name the Blender panel shows) into a trajectory.json")
     st.add_argument("file", help="the trajectory file")
-    st.add_argument("title", help="one line, at most 60 characters")
+    st.add_argument("title", help="one line, at most 34 characters")
     st.set_defaults(func=cmd_set_motion_title)
 
     lm = sub.add_parser("list-motions", help="list the trajectory files of an export folder, one JSON line each")

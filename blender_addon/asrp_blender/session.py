@@ -247,6 +247,94 @@ class RunSession:
         self.state = "idle"
 
 
+class CompareSession:
+    """One `asrp compare` started from the panel (Compare with Ziva), followed to its end like a run: a reader thread feeds a queue,
+    poll() drains it from a timer. state: idle | running | done | failed. The command prints `ERROR  <text>` and one final
+    `compare DONE` / `compare FAILED` line (src/asrp_core/cli.py)."""
+
+    def __init__(self, launcher=None):
+        self.launcher = launcher or core_command
+        self.proc = None
+        self.reset()
+
+    def reset(self):
+        self.kill_tree()
+        self.state, self.error, self.exit_code = "idle", "", None
+        self.out: Path | None = None
+        self.started_at = self.ended_at = 0.0
+        self.handled = False
+        self.lines = deque(maxlen=200)
+        self._queue: queue.Queue = queue.Queue()
+        self._eof = False
+        self._exit_seen_at = None
+
+    @property
+    def running(self) -> bool:
+        return self.state == "running"
+
+    @property
+    def elapsed(self) -> float:
+        return 0.0 if self.state == "idle" else (self.ended_at or time.monotonic()) - self.started_at
+
+    def start(self, run_dir: str, ziva: str, out: str) -> None:
+        if self.running:
+            raise RuntimeError("A comparison is already going")
+        self.reset()
+        try:
+            cmd = self.launcher("compare", str(run_dir), str(ziva), "--out", str(out))
+            env = {**os.environ, "PYTHONUNBUFFERED": "1", "PYTHONIOENCODING": "utf-8"}
+            kw = {"creationflags": subprocess.CREATE_NO_WINDOW} if os.name == "nt" else {}
+            self.proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding="utf-8",
+                                         errors="replace", bufsize=1, env=env, stdin=subprocess.DEVNULL, **kw)
+        except (RuntimeError, OSError) as exc:
+            self.state, self.error, self.handled = "failed", f"The comparison could not be started: {exc}", True
+            raise
+        self.out = Path(out)
+        self.state = "running"
+        self.started_at = time.monotonic()
+        threading.Thread(target=RunSession._read, args=(self.proc, self._queue), daemon=True).start()
+
+    def poll(self) -> str:
+        if self.state != "running":
+            return self.state
+        while True:
+            try:
+                line = self._queue.get_nowait()
+            except queue.Empty:
+                break
+            if line is None:
+                self._eof = True
+            else:
+                self.lines.append(line)
+                if line.startswith("ERROR"):
+                    self.error = line[len("ERROR"):].strip()
+        code = self.proc.poll()
+        if code is not None:
+            if self._exit_seen_at is None:
+                self._exit_seen_at = time.monotonic()
+            if self._eof or time.monotonic() - self._exit_seen_at > EOF_GRACE_S:
+                self.exit_code, self.ended_at = code, time.monotonic()
+                done = code == 0 and any(x.startswith("compare DONE") for x in self.lines)
+                if not done and not self.error:
+                    tail = [x for x in self.lines if x.strip()][-1:]
+                    self.error = tail[0] if tail else f"The comparison ended with exit code {code} and printed nothing"
+                self.state = "done" if done else "failed"
+        return self.state
+
+    def kill_tree(self) -> None:
+        proc = self.proc
+        if proc is None or proc.poll() is not None:
+            return
+        if os.name == "nt":
+            subprocess.run(["taskkill", "/PID", str(proc.pid), "/T", "/F"], capture_output=True, creationflags=subprocess.CREATE_NO_WINDOW)
+        else:
+            proc.terminate()
+
+    def close(self) -> None:
+        self.kill_tree()
+        self.state = "idle"
+
+
 EXIT_WAIT_S = 3.0  # how long Blender's exit waits for a cancelled run to stop (the core needs about 2 s) before killing the tree
 
 
