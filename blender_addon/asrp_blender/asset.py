@@ -38,9 +38,9 @@ TET_LINES = {"coarse": "Moves the lips as one body, like Ziva. About 1 s per run
              "fine": "Upper and lower lip move separately. About 30 s per run."}
 TISSUE_SETTINGS = "lab"  # Open asset imports with Ziva's measured material values (the T-34 report used them)
 IMPORT_TIMEOUT_S = 900  # the first import after installing may have to build the Python environment
-# After Open asset every 3D view looks at the asset from the front and a little to the right and above (the asset's
+# After Open asset every 3D view looks at the asset straight from the front (a mouth is judged from the front; the asset's
 # face looks along +Y), from this many times the asset's radius: the head then fills most of the view.
-VIEW_FROM = (0.55, 1.0, 0.25)
+VIEW_FROM = (0.0, 1.0, 0.0)
 VIEW_DISTANCE_OVER_RADIUS = 2.6
 
 
@@ -632,6 +632,14 @@ def open_asset(context) -> dict:
         if is_live(item.obj):
             remove_objects([item.obj])
     remove_landmarks(scene)
+    # The new objects were made while the old ones still held the names, so Blender called them "ASRP jaw.001".
+    # The old ones are gone now: give the new ones the plain names the user saw the first time.
+    for role, obj in made.items():
+        obj.name = f"{ASSET_PREFIX}{role}"
+        obj.data.name = obj.name
+    if landmarks is not None:
+        landmarks.name = LANDMARKS_NAME
+        landmarks.data.name = LANDMARKS_NAME
     register_objects(scene, made, scene_json)
     scene.asrp_asset_landmarks = landmarks
     scene.asrp_asset_material = material_line(data)

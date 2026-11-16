@@ -236,16 +236,19 @@ def test_no_path_of_this_machine_is_on_the_page():
 # --- the page's structure -----------------------------------------------------------------------------------
 
 
-def test_the_page_has_its_sections_and_the_walk_place_holds_exactly_one_line():
+def test_the_page_has_its_sections_and_the_walk_by_hand_shows_its_screenshots():
     text = DOC.read_text(encoding="utf-8")
     for heading in ("## 1. 这是什么", "## 2. 怎么用", "## 3. 算出来是什么样，离 Ziva 多远", "## 4. 已知的差距",
                     "## 5. 仍然成立的核对"):
         assert text.count("\n" + heading + "\n") == 1, heading
-    marker = "<!-- WALK: screenshots and what was seen go here; the coordinator fills this in -->"
-    assert text.count(marker) == 1
+    assert "<!-- WALK" not in text  # the place the page was written with is filled in
     after = text.split("### 用鼠标走一遍（截图）\n", 1)[1]
     body = re.split(r"\n#{1,3} ", after, maxsplit=1)[0]
-    assert body.strip() == marker
+    walked = re.findall(r"\]\(\.\./data/preview/(walk_[\w.-]+\.png)\)", body)
+    assert len(walked) >= 8 and len(set(walked)) == len(walked), walked
+    # every screenshot of the walk that is in the repository is on the page, and the other way round
+    assert sorted(walked) == sorted(p.name for p in PREVIEW.glob("walk_*.png"))
+    assert "不是脚本" in body and "没有看的" in body  # says it was done by hand, and what the walk did not look at
 
 
 def test_every_picture_the_page_shows_exists_and_every_picture_made_is_shown():
@@ -258,14 +261,16 @@ def test_every_picture_the_page_shows_exists_and_every_picture_made_is_shown():
 
 def test_the_panel_labels_the_page_quotes_are_the_add_ons():
     """The page quotes the panel's English text as it is on screen: each label is in the add-on's source, or is a
-    motion title the panel reads from the motion files. The two radio buttons of step 1 are built elsewhere and
-    are described as docs/06 will have them, so they are not checked here."""
+    motion title the panel reads from the motion files."""
     text = DOC.read_text(encoding="utf-8")
     source = "\n".join(p.read_text(encoding="utf-8") for p in (REPO / "blender_addon").rglob("*.py"))
     for label in ("1  Open the asset", "2  Choose a motion", "3  Run", "Open asset", "Run", "Cancel", "Results", "Checks",
-                  "Physics only", "Final shape", "Choose project folder", "Open folder", "Pause",
+                  "Physics only", "Final shape", "Choose project folder", "Pause",
                   "Choose the ASRP project folder.", "Computes the whole motion, then replays it. Not frame-by-frame.",
-                  "Open: ", "Material: ", "measured in Ziva", "Frame "):
+                  "Open: ", "Material: ", "measured in Ziva", "Frame ",
+                  "Coarse lattice (Ziva's tet size)", "Fine (lips move separately)", "Asset details", "Physics setup",
+                  "Check setup", "Read-only in this version.", "Compare with Ziva", "Ziva reference folder", "Compare",
+                  "Reported only. There is no pass line.", "Show difference as colours", "Show Ziva's lips"):
         assert label in text, f"the page no longer quotes {label!r}"
         assert label in source, f"the add-on has no {label!r}"
     for name in ("jaw_open_12deg", "neutral_to_AA", "head_shake"):

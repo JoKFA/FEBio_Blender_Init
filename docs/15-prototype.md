@@ -54,17 +54,34 @@
 
 | 面板上的小节 | 你做什么 | 你会看到什么 |
 |---|---|---|
-| **1  Open the asset** | 选 Coarse lattice (Ziva's tet size) 或 Fine (lips move separately)，按 **Open asset**。导入要等几秒，没有进度条 | 视口里出现颅骨、下颌、上牙、下牙、嘴唇五个物体（骨头灰白，嘴唇红）；面板写 "Open: lips, jaw, skull, upper teeth, lower teeth" 和 "Material: 12 kPa, 0.4 (measured in Ziva)"；Blender 启动场景里那个 2 米的方块被隐藏，视角对准资产 |
-| **2  Choose a motion** | 在列表里点一条：三个标题见第 1 节的表。每条标题下一行小字写帧数、帧率、"lab motion" 或 "test motion" | 压下的那一条是选中的 |
-| **3  Run** | 按 **Run** | 进度条和 "Frame N / M"，可以按 **Cancel**；算完后状态写 Complete，结果自动在那五个物体上播放（Space 键或 **Pause** 暂停），下面有 **Open folder** 打开这次运行的文件夹 |
-| **Results** | 想换一层：按 **Physics only** 或 **Final shape** | 嘴唇换成另一层的形状，骨头不变。中性到 AA 默认显示 Final shape，甩头和张嘴 12° 默认显示 Physics only |
-| **Checks** | 展开看 | 五项合理性检查各是 PASS、FAIL 或 NOT RUN，失败的带说明；下面几行是只报告不判断的表面数字 |
+| **1  Open the asset** | 选 Coarse lattice (Ziva's tet size) 或 Fine (lips move separately)，按 **Open asset**。导入要等几秒，没有进度条 | 视口里出现颅骨、下颌、上牙、下牙、嘴唇五个物体（骨头灰白，嘴唇红）和嘴唇上的 300 个 landmark 小点；面板写 "Open: lips, jaw, skull, upper teeth, lower teeth"；Blender 启动场景里那个 2 米的方块被隐藏，视角对准资产。单位、材料（"Material: 12 kPa, 0.4 (measured in Ziva)"）、导入报告收在 **Asset details** 里 |
+| **Physics setup**（默认收着） | 展开看；每一行右边的小按钮在视口里点亮对应的东西，**Check setup** 检查场景设置 | 软组织、四块骨头各自在物理里做什么、四组粘连各连着多少个顶点。这一版只读："Read-only in this version." |
+| **2  Choose a motion** | 在列表里点一条：三个标题见第 1 节的表。每条标题下一行小字写帧数、帧率、"lab motion" 或 "test motion"。打开资产后默认选中的是实验室的中性到 AA | 压下的那一条是选中的 |
+| **3  Run** | 按 **Run** | 进度条和 "Frame N / M"，可以按 **Cancel**；算完后状态写 Complete，结果自动在那五个物体上播放（Space 键或 **Pause** 暂停）。粗格子一两秒算完，细网格约半分钟 |
+| **Results** | 想换一层：按 **Physics only** 或 **Final shape** | 嘴唇换成另一层的形状，骨头不变。中性到 AA 默认显示 Final shape，甩头和张嘴 12° 只有 Physics only |
+| **Compare with Ziva**（默认收着） | 第一次按 **Ziva reference folder** 选 Ziva 的导出文件夹（实验室的数据，在项目之外，只选一次）；按 **Compare** | 面板写出最后一帧的平均、95%、最大差（mm）和最差的一帧，以及 "Reported only. There is no pass line."；勾 **Show difference as colours** 把每个顶点的差画在嘴唇上（蓝 0 mm，红 5 mm 以上），勾 **Show Ziva's lips** 把 Ziva 的嘴唇作为第二个物体放进来 |
+| **Checks**（默认收着） | 展开看 | 五项合理性检查各是 PASS、FAIL 或 NOT RUN，失败的带说明；下面几行是只报告不判断的表面数字 |
+| 存盘 | Blender 自己的 File > Save（Ctrl+S） | 一个 `.blend` 就是一个场景：存盘、关掉、再打开，资产、结果、选中的运动和对比的数字都还在。结果的文件在项目的 `runs/` 里，`.blend` 记着它们在哪；那些文件夹被删掉时面板会说明，并让你重新 Open asset |
 
 两层的区别：**Physics only** 是 FEBio 算出来的嘴唇；**Final shape** 是在它上面叠实验室控制器的 landmark 层，是研究员在 Ziva 里最后看到的形状（[04](04-architecture.md) 第 2 节）。
 
 ### 用鼠标走一遍（截图）
 
-<!-- WALK: screenshots and what was seen go here; the coordinator fills this in -->
+2026-11-15 在开发机上，从开始菜单打开 Blender 5.2，只用鼠标和键盘照上面的步骤走的（不是脚本替人按按钮）。一共走了三遍，前两遍发现的问题改完以后走的第三遍，截图是第三遍的。窗口 1920 × 1080，侧边栏是默认宽度。
+
+| 步骤 | 截图 |
+|---|---|
+| 装好、选过一次项目文件夹以后的面板。三步、Results、Compare with Ziva、Checks 一屏看得全 | ![面板，还没打开资产](../data/preview/walk_1_panel.png) |
+| 按 Open asset 以后：五个物体和 landmark 小点出现，方块被隐藏；默认选中实验室的中性到 AA | ![打开资产以后](../data/preview/walk_2_asset_open.png) |
+| 按 Run：约两秒以后写 Complete 并自动播放。停在第 36 帧（运动的最后一帧），最终形状 | ![中性到 AA，第 36 帧](../data/preview/walk_3_aa_result.png) |
+| Compare with Ziva：选过参考文件夹、按 Compare 以后，面板上的数和第 3.3 节表里粗格子对整张脸第 46 帧的数相同 | ![对比的数字](../data/preview/walk_4_compare_numbers.png) |
+| 勾 Show difference as colours：蓝的地方离 Ziva 近，红的地方差 5 mm 以上 | ![差别画成颜色](../data/preview/walk_5_difference_colours.png) |
+| 勾 Show Ziva's lips：灰蓝色的是 Ziva 的嘴唇，和我们的红色嘴唇叠在同一个位置 | ![Ziva 的嘴唇](../data/preview/walk_6_ziva_lips.png) |
+| Ctrl+S 存成 `.blend`，退出 Blender，重新打开 Blender，从启动画面的最近文件里打开它：场景、第 36 帧的结果、对比的数字都在 | ![存盘再打开以后](../data/preview/walk_7_reopened.png) |
+| 原型机一（张嘴 12°），粗格子，第 32 帧，正面：嘴唇像一整块跟着下颌走，嘴只开一条缝 | ![张嘴 12°，粗格子](../data/preview/walk_8_jaw_coarse.png) |
+| 原型机一，改选 Fine、重新 Open asset、Run（约 40 秒）：上下唇分开，露出牙齿 | ![张嘴 12°，细网格](../data/preview/walk_9_jaw_fine.png) |
+
+走查里没有看的：检查不通过、运行失败和取消时面板的样子；Windows 以外的系统；别人的电脑。走查发现并已经改掉的问题，记在 [09](09-roadmap-and-tasks.md) T-35 卡的末尾。
 
 ### 同一件事，用命令行做（给开发的人）
 
@@ -229,8 +246,8 @@ README 顶上的动图是更早的一次运行（材料还是我们定的 15 kPa
 | 检查 | 它问什么 |
 |---|---|
 | (a) Motion completed | 整段运动算完了吗；FEBio 中途缩小步长重算几次 |
-| (b) Attachments follow bones | 硬粘连的顶点是不是跟着骨头走（没有硬粘连的网格上"没运行"） |
-| (b2) Springs follow bodies | 弹簧的锚点是不是跟着下颌和嘴角锚走 |
+| (b) Hard attachments | 硬粘连的顶点是不是跟着骨头走（没有硬粘连的网格上"没运行"） |
+| (b2) Spring anchors | 弹簧的锚点是不是跟着下颌和嘴角锚走 |
 | (c) Gravity sag | 自由的嘴唇顶点往下沉了吗，沉的量在估计值的十分之一到十倍之内 |
 | (d) Tet mesh valid | 每个四面体全程没有翻转 |
 
@@ -240,8 +257,8 @@ README 顶上的动图是更早的一次运行（材料还是我们定的 15 kPa
 | 检查（面板 Checks 小节的名字） | 粗格子（面板默认）：中性到 AA | 细网格：中性到 AA |
 |---|---|---|
 | (a) Motion completed | 通过 | 通过 |
-| (b) Attachments follow bones | 没运行：no hard attachment in this scene | 通过 |
-| (b2) Springs follow bodies | 通过 | 通过 |
+| (b) Hard attachments | 没运行：no hard attachment in this scene | 通过 |
+| (b2) Spring anchors | 通过 | 通过 |
 | (c) Gravity sag | 通过 | 通过 |
 | (d) Tet mesh valid | 通过 | 通过 |
 | FEBio 缩小步长重算的次数 | 0 | 0 |

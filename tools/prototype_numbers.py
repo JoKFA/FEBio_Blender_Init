@@ -48,7 +48,7 @@ REFERENCE_NAME = {"full_face": "Ziva 整张脸（参照）", "lips_only": "Ziva 
 FRAMES = (36, 46)  # the end of the AA motion, and the last frame of the hold
 SAG_FRAME = 14
 SAME_MM = 1e-4  # two layers closer than this are "the same": the reports hold float32 numbers rounded to 6 places
-CHECKS = (("a", "Motion completed"), ("b", "Attachments follow bones"), ("b2", "Springs follow bodies"),
+CHECKS = (("a", "Motion completed"), ("b", "Hard attachments"), ("b2", "Spring anchors"),
           ("c", "Gravity sag"), ("d", "Tet mesh valid"))
 
 # Numbers of the page's running text that belong to other documents: (the document, the exact string, which must be in

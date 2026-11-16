@@ -247,7 +247,7 @@ CHECK_KEYS = ("a", "b", "b2", "c", "d")
 VERSION_WORDS = {"physics": "physics only", "final": "final shape"}  # in the stored entry label
 VERSION_BUTTONS = {"physics": "Physics only", "final": "Final shape"}  # on the version rows of the Results panel
 # Short fixed names for the checks (the report's own names are long and get cut off in the side bar).
-CHECK_LABELS = {"a": "Motion completed", "b": "Attachments follow bones", "b2": "Springs follow bodies",
+CHECK_LABELS = {"a": "Motion completed", "b": "Hard attachments", "b2": "Spring anchors",
                 "c": "Gravity sag", "d": "Tet mesh valid"}
 ROLE_WORDS = {"teeth_upper": "upper teeth", "teeth_lower": "lower teeth"}  # the objects as a person says them
 STATE_WORDS = {
@@ -323,7 +323,7 @@ def report_warnings(report) -> list[str]:
 
 
 def check_label(key: str, name: str) -> str:
-    """The row text of a check: "(b) Attachments follow bones". An unknown key shows the report's own name."""
+    """The row text of a check: "(b) Hard attachments". An unknown key shows the report's own name."""
     return f"({key}) {CHECK_LABELS.get(key, name)}"
 
 
@@ -683,6 +683,7 @@ class ASRP_OT_open_asset(bpy.types.Operator):
         except (ValueError, OSError, RuntimeError, subprocess.TimeoutExpired) as exc:
             self.report({"ERROR"}, str(exc))
             return {"CANCELLED"}
+        SESSION.reset()  # the asset is new: "Complete" of a run on the asset before it is not this asset's status
         hidden = context.scene.asrp_asset_hidden
         self.report({"INFO"}, f"Opened {len(made)} objects: {', '.join(made)}" + (f"; hid {hidden}" if hidden else ""))
         return {"FINISHED"}

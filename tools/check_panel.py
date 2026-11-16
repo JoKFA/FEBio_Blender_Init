@@ -580,7 +580,7 @@ def case_layout(run1, tmp):
 
     log = checks_log(original)
     texts = [r[1] for r in log if r[0] == "label"]
-    expect = ["(a) Motion completed", "(b) Attachments follow bones", "(b2) Springs follow bodies",
+    expect = ["(a) Motion completed", "(b) Hard attachments", "(b2) Spring anchors",
               "(c) Gravity sag", "(d) Tet mesh valid"]
     assert [t for t in texts if t in expect] == expect, texts
     assert not [t for t in texts if t.startswith(("(a)", "(b)", "(b2)", "(c)", "(d)")) and t not in expect], texts  # no long name
@@ -1257,6 +1257,15 @@ def case_three_steps():
                 [m for m in asset_now()["lips"].modifiers if m.type == "MESH_CACHE"][0], "frame_start", 1.0))
             repair(case)
             expect_caught(case, "identity", "result put on newly created objects", lambda c=case: recreate_objects(c["run_dir"]))
+    # Open asset on top of an asset that carries a finished run (seen by hand on 2026-11-15: the new objects were called
+    # "ASRP jaw.001" and step 3 still said "Complete" although the new asset had no result)
+    need(SESSION.state == "complete", "reopen", f"this check needs a finished run before it; the state is {SESSION.state!r}")
+    assert bpy.ops.asrp.open_asset() == {"FINISHED"}
+    names = sorted(o.name for o in bpy.data.objects if o.name.startswith(asrp_blender.asset.ASSET_PREFIX))
+    need(len(names) == 6 and all("." not in n for n in names), "reopen", f"after a second Open asset the objects are called {names}")
+    need(SESSION.state == "idle" and "Complete" not in " ".join(labels_of(draw_panel(asrp_blender.ASRP_PT_run))), "reopen",
+         f"after a second Open asset step 3 still shows the status of the run on the asset before it (state {SESSION.state!r})")
+    print(f"three steps, Open asset again over a finished run: the six objects have their plain names {names} and step 3 shows no old status")
     case_fine_choice(sc)
     # leave nothing behind
     asrp_blender.asset.remove_objects(list(asset_now().values()))
@@ -1397,7 +1406,7 @@ def check_panels_on_result(file, layer, report, rows):
     pressed = [r[2] for r in results if r[0] == "op" and r[1] == "asrp.set_layer" and r[3]]
     assert pressed == [asrp_blender.asset.LAYER_WORDS[layer]], pressed
     texts = " ".join(r[1] for r in draw_panel(asrp_blender.ASRP_PT_checks) if r[0] == "label")
-    for label in ("(a) Motion completed", "(b) Attachments follow bones", "(b2) Springs follow bodies", "(c) Gravity sag",
+    for label in ("(a) Motion completed", "(b) Hard attachments", "(b2) Spring anchors", "(c) Gravity sag",
                   "(d) Tet mesh valid"):
         assert label in texts, (label, texts)
     assert f"Surface ({layer}):" in texts and f"Worst frame ({layer}):" in texts, texts
@@ -2125,6 +2134,10 @@ def missing_checks(sc, tmp):
     # Open asset again repairs it
     assert bpy.ops.asrp.open_asset() == {"FINISHED"}
     need(not asrp_blender.asset.files_problem(sc) and len(asset_now()) == 5 and not sc.asrp_asset_run, "missing", "Open asset did not repair the scene")
+    # an asset opened a second time has the plain names again (seen by hand: "ASRP jaw.001"), and the status of the run
+    # on the asset before it is gone (seen by hand: "Complete" under a fresh asset with no result)
+    names = sorted(o.name for o in bpy.data.objects if o.name.startswith(asrp_blender.asset.ASSET_PREFIX))
+    need(all("." not in n for n in names) and len(names) == 6, "reopen-names", f"after a second Open asset the objects are called {names}")
     print("CHILD files gone: the panel says the scene files and the result are gone in plain words, offers Open asset (enabled), disables Run, "
           "draws every section without an error, and Open asset puts it right")
 
