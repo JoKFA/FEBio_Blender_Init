@@ -41,13 +41,18 @@ What it writes, all in mm, N, MPa, s (mass in tonnes):
 - **Guard**: a display vertex farther than MAX_DISTANCE_EDGES × the median tet edge from its tet is
   an error; nothing is written (the correspondence cannot be trusted, docs/05 section 3 rule 5).
 - **Dynamic analysis** at the scene's fps and substeps, one must point per frame (FEBio then writes
-  frames 1..N and no frame 0, pit 15), adaptive stepping as in spikes/s2_lips_febio.py (up to
+  frames 1..N and no frame 0, pit 15), adaptive stepping as in tests/s2_lips_febio.py (up to
   MAX_RETRIES retries, the step may shrink to dt × DTMIN_FRACTION), generalized-α with spectral radius
   rhoi = the scene's `solver.numerical_damping_rhoi`, or RHOI = 0 when the scene does not set it (the strongest
   damping of fast modes FEBio offers; T-07's runs used it; a value we chose).
 - **Physical damping** (T-28): the scene's `solver.damping` is the rate C (1/s) of FEBio's "mass damping" body load
-  (f = -C ρ v, every mode's amplitude decays as exp(-C t / 2); checked on a cube, spikes/t28_damped_cube.py). 0
+  (f = -C ρ v, every mode's amplitude decays as exp(-C t / 2); checked on a cube, docs/05 section 4). 0
   writes nothing, so such a scene gives the .feb it gave before. It acts on the absolute velocity.
+- **Motion between frames** (T-33): the scene's `solver.motion_between_frames` is "linear" (the default, also when the key
+  is absent: the curves above, byte for byte) or "smooth": each of the six curves of a prescribed body is a monotone
+  cubic Hermite curve through the frame values (`smooth_samples`), written as straight pieces, SMOOTH_SAMPLES_PER_SUBSTEP
+  points per solver substep. FEBio's own `SMOOTH` interpolation exists (manual 3.18.1) but the manual does not say
+  which tangents it uses, so the curve is computed here, where it can be checked.
 - **Drivers at rest** (T-28): a body following a driver marked `absent_means_rest` that the trajectory leaves out
   is written as a fixed body.
 
@@ -83,6 +88,7 @@ RIGID_DENSITY = 1e-9  # t/mm^3; no meaning, every rigid body is fixed or fully p
 # δ >= 10 x the largest slip; the first lip run slipped 0.30 mm (FEBio coordinates) on the lower lip, which is
 # 0.19 of one edge (1.62 mm) and 0.04 of five. T-07: for stiff springs δ from 0.1 to 10 mm changes nothing.
 SPRING_OFFSET_EDGES = 5.0
+SMOOTH_SAMPLES_PER_SUBSTEP = 4  # solver.motion_between_frames "smooth": points of a curve per solver substep (T-33)
 
 
 class GenerateError(ValueError):
@@ -155,6 +161,7 @@ class Model:
     rhoi: float = 0.0  # FEBio's rhoi as written: the scene's numerical_damping_rhoi, else RHOI
     rhoi_from_scene: bool = False
     mass_damping: float = 0.0  # 1/s, the scene's solver.damping; 0 writes no damping body load
+    smooth_motion: bool = False  # the scene's solver.motion_between_frames is "smooth" (T-33); False: linear
 
 
 def _x(name: str) -> str:
@@ -187,6 +194,46 @@ def rotation_vector(r: np.ndarray) -> np.ndarray:
     if angle < 1e-12:
         return w / 2
     return w * (angle / (2 * math.sin(angle)))
+
+
+def hermite_tangents(values) -> list[float]:
+    """Slopes (per frame interval) of a monotone cubic Hermite curve through `values`, one per frame (T-33). Inside:
+    the slope through the two neighbours, limited to 3 x the smaller of the two secants, and 0 at a local extreme or a
+    plateau (the same rule tools/head_shake_motion.py draws its curve with), so the curve never leaves the band
+    between two neighbouring values (no overshoot: a bone held still stays still). At the two ends: the one secant."""
+    v = [float(x) for x in values]
+    n = len(v)
+    if n < 2:
+        return [0.0] * n
+    secant = [v[i + 1] - v[i] for i in range(n - 1)]
+    out = [secant[0]]
+    for i in range(1, n - 1):
+        a, b = secant[i - 1], secant[i]
+        if a * b <= 0:
+            out.append(0.0)
+            continue
+        limit = 3 * min(abs(a), abs(b))
+        out.append(math.copysign(min(abs((v[i + 1] - v[i - 1]) / 2), limit), a))
+    out.append(secant[-1])
+    return out
+
+
+def smooth_samples(times, values, per_frame: int) -> list[tuple[float, float]]:
+    """The monotone cubic Hermite curve (`hermite_tangents`) through (times, values), sampled at `per_frame` equal pieces
+    in every interval between two frames: [(t, value)] with the frame points themselves among the samples, to the bit."""
+    m = hermite_tangents(values)
+    pts = [(times[0], float(values[0]))]
+    for i in range(len(times) - 1):
+        t0, t1, v0, v1 = times[i], times[i + 1], float(values[i]), float(values[i + 1])
+        for j in range(1, per_frame + 1):
+            if j == per_frame:
+                pts.append((t1, v1))
+                continue
+            s = j / per_frame
+            pts.append((t0 + (t1 - t0) * s,
+                        (2 * s**3 - 3 * s**2 + 1) * v0 + (s**3 - 2 * s**2 + s) * m[i]
+                        + (-2 * s**3 + 3 * s**2) * v1 + (s**3 - s**2) * m[i + 1]))
+    return pts
 
 
 def _reference(s: scene_module.Scene, driver: str | None) -> np.ndarray:
@@ -252,10 +299,10 @@ def build(scene_path, trajectory_path, *, delta: float | None = None,
     fps = float(s.solver.fps.value)
     substeps = int(s.solver.substeps_per_frame.value)
     # Physical damping (T-28): solver.damping is the mass damping rate C (1/s) of FEBio's "mass damping" body load,
-    # f = -C rho v; checked on a cube against theory (spikes/t28_damped_cube.py). It is a rate, so k does not touch it.
+    # f = -C rho v; checked on a cube against theory (docs/05 section 4). It is a rate, so k does not touch it.
     mass_damping = float(s.solver.damping.value)
     rhoi_param = s.solver.numerical_damping_rhoi
-    rhoi = RHOI if rhoi_param is None else float(rhoi_param.value)  # RHOI read now, not at import (spikes set it)
+    rhoi = RHOI if rhoi_param is None else float(rhoi_param.value)  # RHOI read now, not at import (the tests set it)
     if traj.frames < 2:
         raise GenerateError("the trajectory needs at least 2 frames (frame 0 is the rest pose)")
     motions = scene_module.driver_motion(s, traj)
@@ -285,8 +332,13 @@ def build(scene_path, trajectory_path, *, delta: float | None = None,
             transforms = motions[driver]
             rest = np.array(transforms[0], dtype=float)
             if np.abs(rest - np.eye(4).ravel()).max() > REST_TOLERANCE:
-                raise GenerateError(f"driver {driver!r}: frame 0 is not the rest pose (identity); the model starts "
-                                    "at rest, so a trajectory must too")
+                raise GenerateError(
+                    f"driver {driver!r}: frame 0 is not the rest pose (identity). A run always starts from the rest "
+                    "shape with nothing moving, so a motion must start there too. A motion segment that starts from "
+                    "another pose (for example the lab's AA-to-neutral transition) cannot be run on its own: put it "
+                    "after the segment that leads to its start, in ONE trajectory that begins at rest (for example "
+                    "neutral to AA, then AA to neutral). Continuing a run from a saved state is not supported yet "
+                    "(docs/09 T-10 and T-30)")
         bodies[a.target] = Body(a.target, "fixed" if driver is None else "prescribed", driver,
                                 _reference(s, driver), transforms)
 
@@ -337,6 +389,7 @@ def build(scene_path, trajectory_path, *, delta: float | None = None,
                   {n: t for n, (t, _) in hard.items()}, [], list(s.solver.gravity_mm_per_s2.value))
     model.warnings = list(checked.warnings)
     model.rhoi, model.rhoi_from_scene, model.mass_damping = rhoi, rhoi_param is not None, mass_damping
+    model.smooth_motion = s.solver.motion_between_frames is not None and s.solver.motion_between_frames.value == "smooth"
     model.feb_text = _feb(model)
     # docs/05 pit 16: FEBio reads "np.float64(0.1)" as 0 and says nothing
     found = re.search(r"\bnp\.|float64", model.feb_text)
@@ -443,7 +496,8 @@ def _feb(m: Model) -> str:
                                   ("Ru", [w[0] for w in turns], "rigid_rotation"),
                                   ("Rv", [w[1] for w in turns], "rigid_rotation"),
                                   ("Rw", [w[2] for w in turns], "rigid_rotation")]:
-            curves.append(list(zip(times, values)))
+            curves.append(smooth_samples(times, values, m.substeps * SMOOTH_SAMPLES_PER_SUBSTEP) if m.smooth_motion
+                          else list(zip(times, values)))
             rigid.append(f'    <rigid_bc name="{_x(b.name)}_{dof}" type="{kind}">\n      <rb>{rb}</rb>\n'
                          f'      <dof>{dof}</dof>\n      <value lc="{len(curves)}">1.0</value>\n    </rigid_bc>')
 
@@ -574,5 +628,5 @@ def _report(m: Model) -> dict:
         "hard_nodes": len(m.hard),
         "solver": {"rhoi": m.rhoi, "rhoi_from": "scene.solver.numerical_damping_rhoi" if m.rhoi_from_scene
                    else "generator default (generate.RHOI)", "mass_damping_per_s": m.mass_damping,
-                   "substeps_per_frame": m.substeps},
+                   "substeps_per_frame": m.substeps} | ({"motion_between_frames": "smooth"} if m.smooth_motion else {}),
     }

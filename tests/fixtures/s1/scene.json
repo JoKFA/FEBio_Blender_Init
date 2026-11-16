@@ -1,7 +1,7 @@
 {
   "format_version": "asrp-scene/1",
   "origin": {
-    "asset": "spike S1 (spikes/s1_dynamic_jaw.py)",
+    "asset": "spike S1 (tests/s1_dynamic_jaw.py)",
     "export": "none: built in code",
     "tool": "tests/fixtures/s1/build.py",
     "notes": "S1's skull is a set of fixed nodes; here it is a fixed bone whose mesh is the top face"

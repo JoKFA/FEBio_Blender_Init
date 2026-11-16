@@ -29,20 +29,37 @@ CANCEL_WAIT_S = 10.0  # a cancel asked for before the run folder is known: kill 
 EOF_GRACE_S = 5.0  # the process is gone but the pipe is still open (a grandchild holds it): stop waiting after this
 
 
+NO_PROJECT = ("The ASRP project folder is not chosen yet. Open the ASRP tab in the side bar (N key) "
+              "and press Choose project folder.")
+WRONG_FOLDER = ("This is not the ASRP project folder. The right folder is the one you downloaded ASRP into: it holds the file "
+                "pyproject.toml and the folder src/asrp_core.")
+preference_project = lambda: ""  # noqa: E731  the add-on puts a function here that reads its preference (this module has no bpy)
+
+
+def project_problem(folder) -> str | None:
+    """None when `folder` is an ASRP project (it holds pyproject.toml and src/asrp_core), else the sentence that says so."""
+    folder = Path(folder)
+    return None if (folder / "pyproject.toml").is_file() and (folder / "src" / "asrp_core").is_dir() else WRONG_FOLDER
+
+
 def core_project() -> Path | None:
-    """The asrp project whose venv runs the core: $ASRP_PROJECT, else the repo this add-on lives in."""
+    """The asrp project whose venv runs the core: $ASRP_PROJECT, else the folder chosen in the add-on preference, else
+    the repo this add-on lives in (when it is loaded from one). None when there is none."""
     override = os.environ.get("ASRP_PROJECT")
     if override:
         return Path(override)
+    chosen = preference_project()
+    if chosen and project_problem(chosen) is None:
+        return Path(chosen)
     repo = Path(__file__).resolve().parents[2]
-    return repo if (repo / "pyproject.toml").is_file() else None
+    return repo if project_problem(repo) is None else None
 
 
 def core_command(*args: str) -> list[str]:
     project = core_project()
     uv = shutil.which("uv")
     if project is None:
-        raise RuntimeError("ASRP project not found; set ASRP_PROJECT")
+        raise RuntimeError(NO_PROJECT)
     if uv is None:
         raise RuntimeError("Cannot find uv on PATH")
     return [uv, "run", "--project", str(project), "asrp", *args]
@@ -72,6 +89,7 @@ class RunSession:
         self.cancel_requested = False
         self.cancel_requested_at = 0.0
         self.handled = False  # the UI has taken the outcome (loaded the results)
+        self.target = "files"  # where a complete run's results go: "asset" (the five objects of Open asset) or "files" (new objects)
         self.load_error = ""
         self.started_at = 0.0
         self.ended_at = 0.0
@@ -226,6 +244,94 @@ class RunSession:
                         self.proc.wait(timeout=wait)
                     except subprocess.TimeoutExpired:
                         self.kill_tree()
+        self.state = "idle"
+
+
+class CompareSession:
+    """One `asrp compare` started from the panel (Compare with Ziva), followed to its end like a run: a reader thread feeds a queue,
+    poll() drains it from a timer. state: idle | running | done | failed. The command prints `ERROR  <text>` and one final
+    `compare DONE` / `compare FAILED` line (src/asrp_core/cli.py)."""
+
+    def __init__(self, launcher=None):
+        self.launcher = launcher or core_command
+        self.proc = None
+        self.reset()
+
+    def reset(self):
+        self.kill_tree()
+        self.state, self.error, self.exit_code = "idle", "", None
+        self.out: Path | None = None
+        self.started_at = self.ended_at = 0.0
+        self.handled = False
+        self.lines = deque(maxlen=200)
+        self._queue: queue.Queue = queue.Queue()
+        self._eof = False
+        self._exit_seen_at = None
+
+    @property
+    def running(self) -> bool:
+        return self.state == "running"
+
+    @property
+    def elapsed(self) -> float:
+        return 0.0 if self.state == "idle" else (self.ended_at or time.monotonic()) - self.started_at
+
+    def start(self, run_dir: str, ziva: str, out: str) -> None:
+        if self.running:
+            raise RuntimeError("A comparison is already going")
+        self.reset()
+        try:
+            cmd = self.launcher("compare", str(run_dir), str(ziva), "--out", str(out))
+            env = {**os.environ, "PYTHONUNBUFFERED": "1", "PYTHONIOENCODING": "utf-8"}
+            kw = {"creationflags": subprocess.CREATE_NO_WINDOW} if os.name == "nt" else {}
+            self.proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding="utf-8",
+                                         errors="replace", bufsize=1, env=env, stdin=subprocess.DEVNULL, **kw)
+        except (RuntimeError, OSError) as exc:
+            self.state, self.error, self.handled = "failed", f"The comparison could not be started: {exc}", True
+            raise
+        self.out = Path(out)
+        self.state = "running"
+        self.started_at = time.monotonic()
+        threading.Thread(target=RunSession._read, args=(self.proc, self._queue), daemon=True).start()
+
+    def poll(self) -> str:
+        if self.state != "running":
+            return self.state
+        while True:
+            try:
+                line = self._queue.get_nowait()
+            except queue.Empty:
+                break
+            if line is None:
+                self._eof = True
+            else:
+                self.lines.append(line)
+                if line.startswith("ERROR"):
+                    self.error = line[len("ERROR"):].strip()
+        code = self.proc.poll()
+        if code is not None:
+            if self._exit_seen_at is None:
+                self._exit_seen_at = time.monotonic()
+            if self._eof or time.monotonic() - self._exit_seen_at > EOF_GRACE_S:
+                self.exit_code, self.ended_at = code, time.monotonic()
+                done = code == 0 and any(x.startswith("compare DONE") for x in self.lines)
+                if not done and not self.error:
+                    tail = [x for x in self.lines if x.strip()][-1:]
+                    self.error = tail[0] if tail else f"The comparison ended with exit code {code} and printed nothing"
+                self.state = "done" if done else "failed"
+        return self.state
+
+    def kill_tree(self) -> None:
+        proc = self.proc
+        if proc is None or proc.poll() is not None:
+            return
+        if os.name == "nt":
+            subprocess.run(["taskkill", "/PID", str(proc.pid), "/T", "/F"], capture_output=True, creationflags=subprocess.CREATE_NO_WINDOW)
+        else:
+            proc.terminate()
+
+    def close(self) -> None:
+        self.kill_tree()
         self.state = "idle"
 
 

@@ -6,7 +6,7 @@
   "axes_from_maya": "none: S1 is built in mm, Z up",
   "mm_per_scene_unit": 1.0,
   "source": {"path": "tissue.obj", "sha256": "7a88c92d2e27af12ea737aa6603278792b4667b444e756e177bae6c8921f6ee3"},
-  "params": {"tool": "Kuhn split of a hex grid, spikes/s1_dynamic_jaw.py"},
+  "params": {"tool": "Kuhn split of a hex grid, tests/s1_dynamic_jaw.py"},
   "content_sha256": "55e30fcd7526f091f326460fb4a15c1dc300b09080f0dab4fe6f1d35904994c7",
   "nodes": [
     [0.0, 0.0, 0.0],

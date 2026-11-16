@@ -2,7 +2,7 @@
 
     uv run python tests/fixtures/s1/build.py [out_dir]
 
-The model is the one spikes/s1_dynamic_jaw.py builds (imported, not copied): a soft-tissue column
+The model is the one tests/s1_dynamic_jaw.py builds (imported, not copied): a soft-tissue column
 on a rigid jaw block, its top face held by a fixed "skull", the jaw turning about the x axis
 through PIVOT, gravity from t = 0. tests/test_scene.py rebuilds it in a temp folder and expects
 the committed files byte for byte, so these files always say what S1 is.
@@ -21,7 +21,7 @@ import numpy as np
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[2]
-sys.path.insert(0, str(REPO / "spikes"))
+sys.path.insert(0, str(REPO / "tests"))
 
 import s1_dynamic_jaw as s1  # noqa: E402
 
@@ -62,7 +62,7 @@ def build(out: Path) -> None:
     content = tetmesh.save(out / "tissue_tet.json", tet, {
         "units": "mm", "up_axis": "Z", "axes_from_maya": "none: S1 is built in mm, Z up",
         "mm_per_scene_unit": 1.0, "source": {"path": "tissue.obj", "sha256": tissue_sha},
-        "params": {"tool": "Kuhn split of a hex grid, spikes/s1_dynamic_jaw.py"},
+        "params": {"tool": "Kuhn split of a hex grid, tests/s1_dynamic_jaw.py"},
     })
 
     jaw_ids, jaw_faces = surface(nodes, jaw_tets)
@@ -91,7 +91,7 @@ def build(out: Path) -> None:
     jaw_volume = (s1.XS[-1] - s1.XS[0]) * (s1.YS[-1] - s1.YS[0]) * (0.0 - s1.ZS[0])
 
     model = scene.Scene(
-        origin={"asset": "spike S1 (spikes/s1_dynamic_jaw.py)", "export": "none: built in code",
+        origin={"asset": "spike S1 (tests/s1_dynamic_jaw.py)", "export": "none: built in code",
                 "tool": "tests/fixtures/s1/build.py",
                 "notes": "S1's skull is a set of fixed nodes; here it is a fixed bone whose mesh is the top face"},
         units=scene.Units(ours(1.0, "S1 is built in mm"), ours(1.0), "none: S1 is built in mm, Z up"),
@@ -130,7 +130,7 @@ def build(out: Path) -> None:
     motion = trajectory.Trajectory(
         fps=s1.FPS, frames=len(angles),
         drivers={DRIVER: trajectory.hinge_transforms(s1.PIVOT, (1.0, 0.0, 0.0), angles)},
-        source="spikes/s1_dynamic_jaw.py jaw_angle (settle, open, hold), via asrp_core.trajectory.hinge_transforms",
+        source="tests/s1_dynamic_jaw.py jaw_angle (settle, open, hold), via asrp_core.trajectory.hinge_transforms",
     )
     trajectory.write(out / "trajectory.json", motion)
 

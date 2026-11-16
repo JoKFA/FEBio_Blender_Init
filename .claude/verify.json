@@ -1,5 +1,0 @@
-{
-  "command": "uv run python tools/verify.py",
-  "timeout": 600,
-  "shell": "bash"
-}

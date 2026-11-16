@@ -5,8 +5,8 @@
 Reads the inventory tools/mb_inventory.py wrote from the v36 .mb, takes the attachments that
 tools/asset_report.py's read_attachments() finds for the four lip groups, and writes
 data/lab_export/lip_attachments.json. The weights are read by asset_report.attachment_weights(): an
-element the file does not store takes ATTACHMENT_WEIGHT_DEFAULT (1.0, ADR-32). That is a strong
-inference until the 'default' field of ziva_maps.json confirms it (A-33).
+element the file does not store takes ATTACHMENT_WEIGHT_DEFAULT (1.0, ADR-32). That default was
+confirmed on 2026-11-12 by the 'default' field of ziva_maps.json (A-33).
 
 Analysis tool, not product code. Importing the product module (asrp import-asset) is T-06a's job.
 """
@@ -22,7 +22,7 @@ REPO = Path(__file__).resolve().parents[1]
 DEFAULT_INVENTORY = "data/asset_inventory.json"
 DEFAULT_OUT = "data/lab_export/lip_attachments.json"
 FORMAT_VERSION = 1
-NOTE = "强推断，待 ziva_maps.json 确认"
+NOTE = "2026-11-12 已证实：权重表的默认值是 1.0（A-33）"
 
 # (attachment, label, source body, target body, expected vertex count from docs/09 T-03).
 # zTissue4 / zTissue5 are the two mouth-corner nodes; the names are the ones in the inventory.

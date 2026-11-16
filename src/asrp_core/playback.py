@@ -126,3 +126,59 @@ def write_surface_bundle(
     path = out / "playback.json"
     path.write_text(json.dumps(manifest), encoding="utf-8", newline="\n")
     return path
+
+
+def read_pc2(path: Path) -> np.ndarray:
+    """A PC2 file back as float32 (frames, points, 3); what `write_pc2` wrote, and what Blender's Mesh Cache
+    modifier reads. The header is checked against the file's length."""
+    raw = Path(path).read_bytes()
+    head = struct.calcsize("<12siiffi")
+    if len(raw) < head:
+        raise ValueError(f"{path} is shorter than a PC2 header")
+    magic, version, points, _start, _rate, samples = struct.unpack("<12siiffi", raw[:head])
+    if magic != b"POINTCACHE2\0" or version != 1:
+        raise ValueError(f"{path} is not a version 1 PC2 file")
+    if len(raw) != head + samples * points * 12:
+        raise ValueError(f"{path} says {samples} frames of {points} points but its length does not fit")
+    return np.frombuffer(raw, dtype="<f4", offset=head).reshape(samples, points, 3)
+
+
+def write_reference_bundle(
+    out: Path,
+    vertices: Sequence[Sequence[float]],
+    faces: Sequence[Sequence[int]],
+    frames: Sequence[Sequence[Sequence[float]]],
+    fps: float,
+    source: dict,
+    topology_note: str,
+    material: str = "ziva",
+    final_frames: Sequence[Sequence[Sequence[float]]] | None = None,
+) -> Path:
+    """The same bundle for a result that was not solved here (T-11: Ziva's lips from an export). The files are
+    the ones `write_surface_bundle` writes (playback.json, playback.pc2, playback_final.pc2 with "versions"), so
+    the add-on loads them like a run of ours. `source` is written as it is; the add-on names the object from
+    source["feb"], so give it a name there (the export folder's). `topology_note` goes into the manifest as
+    "topology": a fixed-topology package cannot carry a connectivity that changes per frame, and it says so."""
+    if "feb" not in source:
+        raise ValueError("source needs a 'feb' entry: the add-on names the object after it")
+    manifest = {
+        "format": FORMAT,
+        "units": "mm",
+        "fps": fps,
+        "frame_count": len(frames),
+        "node_ids": None,
+        "vertices": [[float(c) for c in v] for v in vertices],
+        "faces": [[int(i) for i in f] for f in faces],
+        "face_materials": [0] * len(faces),
+        "materials": [material],
+        "cache": "playback.pc2",
+        "source": source,
+        "topology": topology_note,
+    }
+    if final_frames is not None:
+        manifest["versions"] = {"physics": "playback.pc2", "final": "playback_final.pc2"}
+        write_pc2(out / "playback_final.pc2", final_frames)
+    write_pc2(out / "playback.pc2", frames)
+    path = out / "playback.json"
+    path.write_text(json.dumps(manifest), encoding="utf-8", newline="\n")
+    return path

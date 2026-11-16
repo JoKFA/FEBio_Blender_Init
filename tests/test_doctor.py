@@ -37,8 +37,8 @@ def test_missing_tool_is_warning(monkeypatch, tmp_path):
 
 
 def test_non_ascii_path_is_flagged():
-    assert doctor.check_ascii_path(Path(r"E:\Codebase\3D模拟")).status == "warn"
-    assert doctor.check_ascii_path(Path(r"E:\Codebase\asrp")).status == "ok"
+    assert doctor.check_ascii_path(Path(r"D:\work\模拟")).status == "warn"
+    assert doctor.check_ascii_path(Path(r"D:\work\asrp")).status == "ok"
 
 
 def test_cli_json_reports_every_check(capsys, monkeypatch):

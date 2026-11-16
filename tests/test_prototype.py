@@ -106,7 +106,7 @@ def test_the_run_report_lists_every_temporary_value_and_the_unbuilt_attachments(
     where = {p["where"]: p for p in report["parameters"]}
     in_scene = list(scene.parameters(json.loads((runs[0].run_dir / "scene.json").read_text(encoding="utf-8"))))
     assert len(in_scene) == 18 and all(f"scene.{w}" in where for w, _ in in_scene)
-    assert where["scene.soft_tissues[lips].material.E_mpa"]["value"] == 0.015
+    assert where["scene.soft_tissues[lips].material.E_mpa"]["value"] == 0.012  # Ziva's measured value, the default since T-37
     assert all(p["source"] in scene.SOURCES for p in report["parameters"])
     assert sum(p["source"] == "ours" for p in report["parameters"]) > 15
     assert len(report["simplifications"]) == 3 and "6 muscles" in report["simplifications"][0]

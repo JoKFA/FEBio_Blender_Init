@@ -43,7 +43,7 @@ def test_header_carries_format_and_inventory_hash():
     out = build(SYNTHETIC, "abc", groups=[("a1", "up", "lip", "bone", 3)])
     assert out["format_version"] == 1
     assert out["inventory_sha256"] == "abc"
-    assert out["groups"][0]["note"] == "强推断，待 ziva_maps.json 确认"
+    assert out["groups"][0]["note"] == "2026-11-12 已证实：权重表的默认值是 1.0（A-33）"
 
 
 def test_wrong_vertex_count_is_refused():

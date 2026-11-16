@@ -10,5 +10,5 @@
   "max_translation_applied_mm": 16.066541438947915,
   "seed": 0,
   "lab_commit": "506cd69",
-  "command": "uv run python tools/landmark_layer_check.py"
+  "command": "uv run python tests/landmark_layer_check.py"
 }

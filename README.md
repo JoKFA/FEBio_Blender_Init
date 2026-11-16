@@ -2,15 +2,17 @@
 
 ![The lab's real lips opening and closing as the jaw turns, computed by FEBio and played back in Blender](data/preview/prototype_motion.gif)
 
-*The lab's real lips, pulled by the jaw (red: lips computed by FEBio; blue: jaw; grey: skull). Placeholder jaw motion, temporary material values, no landmark layer yet.*
+*The lab's real lips, pulled by the jaw (red: lips computed by FEBio; blue: jaw; grey: skull). Prototype one: a test jaw motion, not the lab's own. Which values this picture used and how it was made: [docs/15-prototype.md](docs/15-prototype.md).*
 
-ASRP replaces Ziva (the physics backend under the lab's facial controller) with FEBio, and Maya (the host) with Blender. The prototype takes the lab's real lip mesh, lets the jaw pull it through 51 frames, solves it with FEBio in under a minute and plays it back in Blender; the measured timings, the other numbers and their limits are on one page: **[docs/15-prototype.md](docs/15-prototype.md)** (Chinese).
+ASRP replaces Ziva (the physics plug-in under the lab's facial controller) with FEBio, and Maya with Blender, so that the lab's research can go on after Ziva's end of sale and the whole computation is open and checkable. It is for developers who join the project and for the lab's lead. This page covers how to install, run and check the code; what the project is and where it stands is in [docs/01-overview.md](docs/01-overview.md).
 
-**What comes next.** The next milestone is prototype two: a landmark layer on top of the prototype, shown on two motions (neutral to the lab's "AA" mouth shape, and a head shake) plus ten back-and-forth repeats (docs/09 section 1). Its first task is T-09. What the project owner still has to decide is listed in one place, docs/11 section 1 (P-06 to P-10). What can only be learnt on the Ziva machine is in docs/12 part 2. All of these documents are in Chinese.
+**Scope.** The prototypes cover the lab's bones plus the lips (one tissue), for two motions: neutral to the phoneme "AA", and a head shake. The other 40 tissues of the face are not developed yet (phase two). The lab's own tools (the controller, the "piano" expression UI in Maya, the paper's experiments) are the lab's; we read their files and give their training code one function, `final_shape`, that returns the lip shape without Maya.
+
+**Where to read more.** Tasks and their status: [docs/09-roadmap-and-tasks.md](docs/09-roadmap-and-tasks.md). Open questions and risks: [docs/11-risks-and-questions.md](docs/11-risks-and-questions.md). What was measured on the lab's Ziva machine: [docs/13-explanations.md](docs/13-explanations.md) entry E-11. The prototype's numbers and their limits: **[docs/15-prototype.md](docs/15-prototype.md)**. All of these documents are in Chinese.
 
 ## Run the prototype
 
-After the setup below (`uv sync`, `uv run asrp doctor` all `ok`), three commands, under a minute on the reference machine, no Maya or Ziva needed (the output folders are git-ignored):
+After the setup below (`uv sync`, `uv run asrp doctor` all `ok`), three commands, no Maya or Ziva needed (the output folders are git-ignored). The motion is a test hinge motion made by `tools/placeholder_jaw_motion.py`, not the lab's own motion:
 
 ```bash
 uv run asrp import-asset data/lab_export runs/prototype_scene
@@ -18,7 +20,7 @@ uv run python tools/placeholder_jaw_motion.py runs/prototype_scene/scene.json ru
 uv run asrp run runs/prototype_scene/scene.json runs/prototype_scene/placeholder_jaw.json
 ```
 
-The last line printed is `run COMPLETE: 51 frames; plausibility PASSED`. The result is `runs/<date>_placeholder-jaw_001/`; how to play it in Blender and what is in the folder: [docs/15-prototype.md](docs/15-prototype.md).
+The last line printed is `run COMPLETE: 51 frames; plausibility PASSED`. The result is `runs/<date>_placeholder-jaw_001/`; how to play it in Blender and what is in the folder: [docs/15-prototype.md](docs/15-prototype.md). Run times are on one page only, docs/15 section 3.
 
 - `src/asrp_core/`: solver core. Runs in its own process with its own venv; no `bpy`.
 - `blender_addon/asrp_blender/`: thin Blender add-on. UI only; calls the core as a subprocess.
@@ -35,7 +37,7 @@ The last line printed is `run COMPLETE: 51 frames; plausibility PASSED`. The res
 | `uv run asrp import-asset <export folder> <new folder>` | turn the lab export in `data/lab_export` into a `scene.json` |
 | `uv run asrp run <scene.json> <trajectory.json> [--threads N]` | generate the FEBio model, solve it, run the five plausibility checks (a, b, b2, c, d), write a run folder (generated mode). FEBio uses 4 threads by default; `--threads 1` makes the playback files bit-identical between runs |
 | `uv run asrp run --feb <model.feb>` | stand-in mode: run an existing `.feb` as is, same run folder |
-| `uv run python tools/verify.py` | everything below under "Checks" |
+| `uv run python tools/verify.py [--level docs\|core\|full\|auto]` | the project check, see "Checks" below; no argument means `full` |
 
 `asrp run` options: `--runs-dir` (default `runs`, an English-only path), `--name`, `--timeout`.
 
@@ -50,7 +52,7 @@ uv run asrp doctor
 FEBio binaries need a free registration at febio.org (GitHub releases are source only).
 Override tool locations with `ASRP_FEBIO` / `ASRP_BLENDER`.
 
-The lab's Maya scene goes in `assets/` and solver runs in `runs/`: both are git-ignored and must never be committed. Exports and derived data go in `data/`; `data/lab_export/`, `data/preview/`, `data/briefing/` and `data/tetmesh/` are committed because this repo is private (docs ADR-19). The lab's `.mb` files, paper and video are never committed.
+The lab's Maya scene goes in `assets/` and solver runs in `runs/`: both are git-ignored and must never be committed. Exports and derived data go in `data/`; `data/lab_export/`, `data/preview/` and `data/tetmesh/` are committed because this repo is private (docs ADR-19). The lab's `.mb` files, paper and video are never committed.
 
 ## Scene files
 
@@ -73,26 +75,46 @@ uv run asrp check runs/lab_scene/scene.json
 uv run python tools/verify.py
 ```
 
-Runs the tests, `asrp doctor`, Blender's own validation of the add-on manifest, the Blender add-on round trip (`tools/check_blender_addon.py`) and the playback check (`tools/check_playback.py`, which runs S1 through real FEBio, loads the result with the add-on, and compares Blender's evaluated mesh with the FEBio log frame by frame). Blender is located like `asrp doctor` does (`ASRP_BLENDER`, PATH, default install).
+With no argument this is the full level, the definition of done before a merge request. Every level starts with `ruff check` and the check that no lab or vendor file is tracked by git (`tools/check_no_lab_files.py`). Three levels, each including the one before (docs/08 section 6):
+
+| Level | Adds | When |
+|---|---|---|
+| `--level docs` | the tests about the documents and the gate itself | only documents changed |
+| `--level core` | all unit tests, without the slow real-lip test | code or tests changed |
+| `full` (no argument) | the test suite with `ASRP_SLOW=1` (the real-lip run), `asrp doctor`, Blender's own validation of the add-on manifest, the add-on round trip (`tools/check_blender_addon.py`), the playback check (`tools/check_playback.py`: S1 through real FEBio, loaded with the add-on, Blender's evaluated mesh compared with the FEBio log frame by frame) and the panel check | before a merge request; `blender_addon/` changed |
+
+`--level auto` picks a level from the changed files (`uv run python tools/verify.py --level auto`; each machine's own settings, not part of the repo, can call it after every change). Only `full` sets `ASRP_SLOW=1`. Blender is located like `asrp doctor` does (`ASRP_BLENDER`, PATH, default install).
 
 ## Install the Blender add-on
 
-Run from the repo root, and again after changing the add-on:
+Do "Setup (Windows)" above first: the panel runs the core program through `uv`, and Run needs FEBio. Then build the add-on package once (from the repo root; again after changing the add-on). The only command line step:
 
 ```bash
 mkdir -p dist
 "C:/Program Files/Blender Foundation/Blender 5.2/blender.exe" --factory-startup --command extension build --source-dir blender_addon/asrp_blender --output-dir dist
+```
+
+In PowerShell, put `&` in front of the quoted path. This writes `dist/asrp_blender-0.0.1.zip`.
+
+Then, with the mouse, in Blender (Start menu, no environment variable, nothing else to type):
+
+1. Edit > Preferences > Add-ons, the small arrow at the top right (Add-ons menu) > Install from Disk..., pick `dist/asrp_blender-0.0.1.zip`. Make sure the box in front of ASRP is ticked.
+2. Close the Preferences. In the 3D view press N, open the ASRP tab. The first time it says "Choose the ASRP project folder.": press Choose project folder and pick the folder you downloaded ASRP into (the one that holds `pyproject.toml` and `src`). Blender remembers it; it is also in Preferences > Add-ons > ASRP.
+3. Steps 1 to 3 of the panel (Open the asset, Choose a motion, Run) are then ready.
+
+The same from the command line (installs into your Blender profile and ticks the add-on):
+
+```bash
 "C:/Program Files/Blender Foundation/Blender 5.2/blender.exe" --command extension install-file -r user_default -e dist/asrp_blender-0.0.1.zip
 ```
 
-In PowerShell, put `&` in front of the quoted path.
-Installed this way the add-on lives outside the repo, so Check Backend needs `ASRP_PROJECT` set to the repo path. Load Result does not.
+The project is found in this order: the environment variable `ASRP_PROJECT` (if set), the folder chosen in the add-on preferences, the repo the add-on file lives in (when it is loaded from the repo, as the checks do).
 
 ## Playing a result in Blender
 
-A solved run is a folder with `playback.json` (surface mesh, mm) and `playback.pc2` (per-frame positions). `runs/` is git-ignored, so a fresh clone has to run something first: the lab lips (the three commands above) or the small S1 test block (`uv run python spikes/s1_dynamic_jaw.py`, writes `runs/s1_dynamic_jaw`).
+A solved run is a folder with `playback.json` (surface mesh, mm) and `playback.pc2` (per-frame positions). `runs/` is git-ignored, so a fresh clone has to run something first: the lab lips (the three commands above) or the small S1 test block (`uv run python tests/s1_dynamic_jaw.py`, writes `runs/s1_dynamic_jaw`).
 
-In Blender (with the add-on installed, above): delete the default cube, then sidebar (N) > ASRP > Load Result, pick the run folder (the one that contains `playback.json`), View > Frame Selected (numpad `.`), press play. The object is scaled 0.001 so mm data shows in metres. Load Result brings in the lips only; the skull and jaw in the pictures come from `tools/render_prototype.py`:
+In Blender (with the add-on installed, above): delete the default cube, then sidebar (N) > ASRP > Advanced > Load result, pick the run folder (the one that contains `playback.json`), View > Frame Selected (numpad `.`), press play. The object is scaled 0.001 so mm data shows in metres. Load result brings in the lips only; the skull and jaw in the pictures come from `tools/render_prototype.py`:
 
 ```bash
 "C:/Program Files/Blender Foundation/Blender 5.2/blender.exe" --background --factory-startup --python-exit-code 1 --python tools/render_prototype.py -- runs/<run folder> --out runs/<run folder>/render
@@ -100,21 +122,11 @@ In Blender (with the add-on installed, above): delete the default cube, then sid
 
 It checks the Blender result against the solver's numbers, then renders three side views (rest, settled, jaw fully open). Add `--frames-dir <folder>` to render every frame (that is how `data/preview/prototype_motion.gif` was made).
 
-To render a few frames of the S1 block from the side (the camera and context props fit S1's geometry only). In PowerShell, put `&` in front of the quoted path:
+## Lab asset
 
-```bash
-"C:/Program Files/Blender Foundation/Blender 5.2/blender.exe" --background --factory-startup --python-exit-code 1 --python tools/render_playback.py -- runs/s1_dynamic_jaw runs/s1_dynamic_jaw/render 0 15 30 45
-```
+The product needs neither Maya nor Ziva. These tools migrate the lab's scene once; the results in `data/lab_export/` are committed, so they are only needed when the scene changes (docs ADR-18, docs/03 and docs/12 part 1). In PowerShell, put `&` in front of the commands below that start with a quoted path.
 
-## Spikes
-
-`spikes/` holds throwaway experiments that settle one assumption each; results are recorded in the assumption ledger (docs/11-risks-and-questions.md).
-
-## Lab asset (not product code)
-
-Migration tools, run once per scene (docs ADR-18): the product needs neither Maya nor Ziva. The results in `data/lab_export/` and `data/preview/` are committed, so these are only needed when the scene changes. `data/briefing/asrp-briefing.html` is the newcomer's guide to all of this: open it locally, because GitHub doesn't run HTML. In PowerShell, put `&` in front of the commands below that start with a quoted path.
-
-Read the scene without Maya: nodes, attributes, connections, keyframes. This step doesn't decode mesh geometry (see docs/03-asset.md). The report needs the Ziva scene (v36): the non-Ziva copy has no Ziva nodes to report on.
+Read the scene without Maya: nodes, attributes, connections, keyframes. The report needs the Ziva scene (v36): the non-Ziva copy has no Ziva nodes to report on.
 
 ```bash
 uv run python tools/mb_inventory.py "assets/<ziva scene>.mb" data/asset_inventory.json
@@ -128,10 +140,10 @@ Export meshes, weights and joints from the non-Ziva scene with plain Maya, then 
 uv run python tools/check_lab_export.py data/lab_export "assets/<non-ziva scene>.mb"
 ```
 
-Bring the export into Blender and render the preview. This checks the meshes landed right; there is no physics in it.
+Bring the export into Blender and render the preview (this checks the meshes landed right; there is no physics in it):
 
 ```bash
 "C:/Program Files/Blender Foundation/Blender 5.2/blender.exe" --background --factory-startup --python-exit-code 1 --python tools/blender_import_preview.py -- data/lab_export data/preview
 ```
 
-What only Ziva can give us comes from `tools/ziva_machine_export.py`, run once in Maya's Script Editor on the Ziva machine (steps in docs/12-lab-export-checklist.md). `tools/rehearse_ziva_export.py` rehearses its plumbing without Ziva.
+What only Ziva can give comes from `tools/ziva_machine_export.py`, run in Maya's Script Editor on the Ziva machine; What was taken on 2026-11-12, how, and what is still to fetch: docs/12 and docs/13 E-11.

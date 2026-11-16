@@ -1,6 +1,9 @@
-"""Write the placeholder jaw motion of T-06a as a normal trajectory.json (no lab motion yet, D2).
+"""Write the placeholder jaw motion of T-06a as a normal trajectory.json (our test motion, not a lab motion).
 
     uv run python tools/placeholder_jaw_motion.py <scene.json> <out trajectory.json>
+
+The committed data/lab_export/trajectories/jaw_open_12deg.json is this tool's output for a freshly imported scene
+(`asrp import-asset data/lab_export <folder> --tissue-settings lab`); the panel lists it as "Prototype 1: jaw opens 12 deg".
 
 Frames 0-14 the jaw stays still (gravity only, as in the lab's pipeline); frames 14-32 it opens to
 OPEN_DEG about the jaw driver's hinge (the scene's jaw01 pivot and axis), frames 32-50 it closes
@@ -61,8 +64,8 @@ def build(scene_path: Path, driver: str = "jaw01", open_deg: float = OPEN_DEG) -
     return trajectory.Trajectory(
         fps=s.solver.fps.value, frames=FRAMES,
         drivers={driver: trajectory.hinge_transforms(hinge.pivot_mm, hinge.axis, angles)},
-        source_tag="ours", settle_until_frame=STILL_UNTIL,
-        source=(f"placeholder (T-06a, ours): {driver} still for frames 0-{STILL_UNTIL}, opens to {open_deg:g} degrees "
+        source_tag="ours", settle_until_frame=STILL_UNTIL, title=f"Prototype 1: jaw opens {open_deg:g} deg",
+        source=(f"our test motion, not a lab motion (T-06a, ours): {driver} still for frames 0-{STILL_UNTIL}, opens to {open_deg:g} degrees "
                 f"at frame {OPEN_AT}, closed again at frame {FRAMES - 1}; tools/placeholder_jaw_motion.py"),
     )
 

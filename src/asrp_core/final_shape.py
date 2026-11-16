@@ -10,7 +10,7 @@ The conversion to mm, Z up happens inside, once, through asrp_core.asset.coords.
 
     from asrp_core import final_shape
 
-    model = final_shape.load("runs/<a completed lips run>")      # once
+    model = final_shape.rest_model("scene/scene.json")           # once; no FEBio run needed
     jaw = np.eye(3)
     for step in range(n_steps):
         jaw = relative_rotation(step) @ jaw      # the caller composes the per-step rotations; a turn about
@@ -19,16 +19,16 @@ The conversion to mm, Z up happens inside, once, through asrp_core.asset.coords.
         lips = final_shape.final_shape(model, jaw, positions)     # (10240, 3), the mesh's vertex order
         objective = ...
 
-Two bases. `load` takes the shape after the gravity-only settle from a completed run (base "settled",
-ADR-30). `rest_model` takes the rest (bind) lips from the scene's mesh (base "rest"): with it the
-function is the formula the lab's LBS proxy uses (bind pose + weights @ translations), which is what
-the tests compare against.
+Two bases. `rest_model` takes the rest (bind) lips from the scene's mesh (base "rest"). This is the
+entry for the lab's existing training: the 145 training results the lab saved (`deltaB_temp.pkl`,
+`s_next`) all sit on the rest shape, with no gravity settle, and this function reproduces them to
+0.000007 mm (measured 2026-11-13, docs/13 E-13). `load` takes the shape after the gravity-only settle
+from a completed run (base "settled"); it is for new experiments that ask for it, NOT for the lab's
+existing training: with it the AA result crosses the lab's lip convergence threshold.
 
-Not known yet (open question Q20, docs/11): whether Ziva re-solves within the same frame when the
-jaw turns. This first version reads it as "no": the base does not depend on the jaw rotation, so the
-jaw input is validated and then has no effect on the result (`jaw_changes_base="no"`). The other
-reading is an explicit option, `"resolve"`, which raises until Q20 has an answer; no third behaviour
-is guessed.
+Measured on the Ziva machine (Q20, docs/13 E-11): Ziva does not re-solve within the same frame when
+the jaw turns. So the base does not depend on the jaw rotation; the jaw input is validated and then
+has no effect on the result. `jaw_changes_base` accepts only "no"; there is no re-solve mode.
 """
 
 import json
@@ -52,8 +52,8 @@ class FinalShapeError(ValueError):
     """The inputs or the run folder cannot be used; the message says what is wrong and what to do."""
 
 
-class JawIgnoredWarning(UserWarning):
-    """A jaw rotation was passed that this version does not use (Q20). Python shows it once per call site."""
+class SettledBaseWarning(UserWarning):
+    """`load` was used: its base is the settled shape, which is NOT the base of the lab's existing training."""
 
 
 @dataclass(frozen=True)
@@ -114,7 +114,17 @@ def load(run_dir, *, allow_failed_checks: bool = False, allow_unsettled: bool = 
     """Load the model from a COMPLETED run folder: its scene.json (landmarks, units), the skin file the
     scene references, and the shape after the gravity-only settle (physics/settled_frame<n>.json).
     The model's base is "settled". A run whose plausibility checks did not all pass is refused unless
-    allow_failed_checks=True: its settled shape may be wrong, and nothing downstream would show it."""
+    allow_failed_checks=True: its settled shape may be wrong, and nothing downstream would show it.
+
+    NOT for the lab's existing training: the results the lab's training saved sit on the rest shape
+    (`rest_model`). This entry is for new experiments that ask for a settled base, and it says so with a
+    SettledBaseWarning. A run report without a `tissue_settled` field (an older run) is refused like one
+    that says the tissue was still moving: whether the tissue had stopped is then not known; allow_unsettled=True
+    accepts both."""
+    warnings.warn(
+        "final_shape.load: the base is the shape after the gravity-only settle. The lab's saved training results "
+        "sit on the REST shape; for the lab's existing training use final_shape.rest_model(scene.json) "
+        "(docs/13 E-13)", SettledBaseWarning, stacklevel=2)
     run_dir = Path(run_dir)
     if not run_dir.is_dir():
         raise FinalShapeError(f"{run_dir} is not a folder; give the folder of a run made by asrp run")
@@ -139,13 +149,19 @@ def load(run_dir, *, allow_failed_checks: bool = False, allow_unsettled: bool = 
             f"the run in {run_dir} has no settled shape: {reason or 'run_report.json does not say why'}. "
             "Make the run with a trajectory whose settle_until_frame ends a stretch where nothing moves"
         )
-    if settled.get("tissue_settled") is False and not allow_unsettled:  # absent (an older run): not known, accepted
+    if settled.get("tissue_settled") is False and not allow_unsettled:
         raise FinalShapeError(
             f"the run in {run_dir} has a settled shape, but the tissue was still moving at that frame: "
             f"{settled.get('tissue_step_max_mm')!r} mm in the last frame of the settle, above the "
             f"{settled.get('tissue_settled_limit_mm')!r} mm limit. A base that is still moving gives a different lip "
             "shape depending on when it is read. Give the motion a longer settle, or pass allow_unsettled=True if you "
             "accept it"
+        )
+    if settled.get("tissue_settled") is not True and not allow_unsettled:  # absent: an older report, not known
+        raise FinalShapeError(
+            f"the run in {run_dir} does not say whether the tissue had stopped moving at the settled frame "
+            "(run_report.json has no settled_shape.tissue_settled, so the run is from an older version). Run again "
+            "with this version, or pass allow_unsettled=True if you accept a base that may still be moving"
         )
     frame = settled.get("frame")
     scene, skin, rest_scene = _scene_parts(run_dir / "scene.json")
@@ -164,16 +180,47 @@ def load(run_dir, *, allow_failed_checks: bool = False, allow_unsettled: bool = 
 
 
 def rest_model(scene_json_path) -> LipModel:
-    """The model with the rest (bind) lips as the base, read from the scene's own lip mesh (the surface mesh the scene lists, mm, Z up). For checking
-    against the lab's formula (bind pose + weights @ translations); the model's base is "rest"."""
+    """The model for the lab's existing training: the rest (bind) lips as the base, read from the scene's
+    own lip mesh (the surface mesh the scene lists, mm, Z up). No FEBio run is needed. With it the function
+    is the lab's formula (bind pose + weights @ translations) and reproduces the 145 lip results the lab's
+    training program saved (worst 0.000007 mm, tests/test_lab_facts.py). The model's base is "rest".
+
+    Which soft tissue is the lips is decided by identity, not by position or vertex count: the skin file names
+    the Maya mesh its weights were made for (`mesh`), and the tissue taken is the one whose source object is that
+    mesh (`mesh_<name>.obj`). A skin file that does not name its mesh (an older import) is matched by topology:
+    exactly one tissue whose mesh has the weights' vertex count and whose faces stay inside it; with two or none
+    the scene is refused rather than guessed."""
     scene_path = Path(scene_json_path)
     scene, skin, rest_scene = _scene_parts(scene_path)
     if not scene.soft_tissues:
         raise FinalShapeError(f"{scene_path} has no soft tissue, so there is no lip mesh to start from")
-    mesh_path = scene_path.parent / scene.soft_tissues[0].mesh.path
-    if not mesh_path.is_file():
-        raise FinalShapeError(f"the lip mesh {mesh_path} does not exist; re-import the asset")
-    base_mm, _faces = coords.read_obj(mesh_path)  # the scene's surface mesh is already mm, Z up
+    v = skin.weights.shape[0]
+    meshes = {}
+    for tissue in scene.soft_tissues:
+        mesh_path = scene_path.parent / tissue.mesh.path
+        if not mesh_path.is_file():
+            raise FinalShapeError(f"the mesh {mesh_path} of soft tissue {tissue.name!r} does not exist; re-import the asset")
+        meshes[tissue.name] = (mesh_path, *coords.read_obj(mesh_path))  # the surface mesh is already mm, Z up
+    if skin.mesh:
+        wanted = f"mesh_{skin.mesh}.obj"
+        found = [t for t in scene.soft_tissues if Path(t.source_obj.file).name == wanted]
+        if len(found) != 1:
+            raise FinalShapeError(
+                f"the skin weights are for the mesh {skin.mesh!r}, and {len(found)} soft tissues of {scene_path} come "
+                f"from {wanted} (the tissues come from "
+                f"{', '.join(sorted({Path(t.source_obj.file).name for t in scene.soft_tissues}))}); this scene's "
+                "lips cannot be told from another mesh, re-import the asset")
+        tissue = found[0]
+    else:
+        found = [t for t in scene.soft_tissues if len(meshes[t.name][1]) == v
+                 and all(0 <= i < v for f in meshes[t.name][2] for i in f)]
+        if len(found) != 1:
+            raise FinalShapeError(
+                f"the skin file does not name its mesh, and {len(found)} soft tissues of {scene_path} have the "
+                f"weights' {v} vertices with faces inside them; re-import the asset so the skin file says which "
+                "mesh it is for")
+        tissue = found[0]
+    mesh_path, base_mm, _faces = meshes[tissue.name]
     return _model(scene, skin, rest_scene, base_mm, "rest", where=f"the lip mesh {mesh_path}")
 
 
@@ -226,28 +273,24 @@ def final_shape(model: LipModel, jaw_rotation, landmark_positions, *, jaw_change
 
     model: from `load` or `rest_model`.
     jaw_rotation: 3x3 rotation matrix (world axes), the jaw's rotation relative to rest; None is identity.
-        It is validated. With jaw_changes_base="no" it does not change the result.
+        It is validated and does not change the result (see jaw_changes_base).
     landmark_positions: (K, 3) ABSOLUTE world positions, scene units, Y up, in the model's order
         (oor_01 .. oor_300).
-    jaw_changes_base: "no" (default): the base shape does not depend on the jaw rotation. This is the
-        reading "Ziva does not re-solve within the same frame", which is NOT verified (open question Q20
-        in docs/11). "resolve": the base would be recomputed for the jaw angle; not supported yet, raises.
+    jaw_changes_base: only "no": the base shape does not depend on the jaw rotation. Measured on the
+        Ziva machine (Q20, docs/13 E-11): turning the jaw within a frame does not make Ziva re-solve.
+        "resolve" raises: there is no such mode.
 
     Returns (V, 3) float64: the world position (scene units, Y up) of every lip vertex, in the mesh's
     vertex order. Stateless and deterministic; the inputs are not modified and nothing is written."""
     if jaw_changes_base == "resolve":
         raise FinalShapeError(
-            "jaw_changes_base='resolve' is not supported yet: whether Ziva re-solves when the jaw turns within "
-            "a frame is open question Q20 (docs/11), and the answer decides what the base shape depends on. "
-            "Use jaw_changes_base='no' (the base does not depend on the jaw) until Q20 is answered"
+            "jaw_changes_base='resolve' does not exist: Q20 was measured on the Ziva machine (docs/13 E-11), "
+            "Ziva does not re-solve when the jaw turns within a frame, so the base shape does not depend on the "
+            "jaw. Use jaw_changes_base='no' (the default)"
         )
     if jaw_changes_base not in JAW_CHANGES_BASE:
         raise FinalShapeError(f"jaw_changes_base must be one of {JAW_CHANGES_BASE}, got {jaw_changes_base!r}")
-    if _check_rotation(jaw_rotation):  # a real turn that will change nothing: say so, once per process
-        warnings.warn(
-            "final_shape: the jaw rotation is checked but does not change the result (jaw_changes_base='no'): "
-            "whether Ziva re-solves when the jaw turns within a frame is open question Q20 (docs/11)",
-            JawIgnoredWarning, stacklevel=2)
+    _check_rotation(jaw_rotation)  # validated; it does not change the result (Q20, measured)
     k = len(model.names)
     try:
         positions = np.asarray(landmark_positions, dtype=np.float64)
