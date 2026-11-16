@@ -25,7 +25,7 @@ NODE_DATA_FILE = "positions.txt"
 
 # FEBio's multi-threaded solver gives positions that differ in the last logged digit (about 1e-10 mm on the lips)
 # from run to run; with one thread the log is the same every time (docs/05 pit 17, T-06a). Four threads halve the
-# time of the lip run (56 s -> 27 s, spikes/audit_threads.py), so that is the default; `--threads 1` gives
+# time of the lip run (56 s -> 27 s, ADR-38), so that is the default; `--threads 1` gives
 # bit-identical results. The standard at the default: the same input twice agrees within 1e-9 mm at every node
 # and frame.
 DEFAULT_THREADS = 4
@@ -126,7 +126,7 @@ class NodeHistory:
 
 
 def read_node_data(log: Path, name: str, delim: str = ",") -> NodeHistory:
-    """Collect one <node_data name=...> series from a logfile, as a dict per frame. For the spikes and tools
+    """Collect one <node_data name=...> series from a logfile, as a dict per frame. For the tests and tools
     on small models; a run's own positions come through `read_node_series`."""
     times: list[float] = []
     values: list[dict[int, tuple[float, ...]]] = []

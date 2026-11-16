@@ -16,7 +16,7 @@ its two neighbours, (v[i+1] - v[i-1]) / (t[i+1] - t[i-1]), limited to 3 x the sm
 secants so the curve does not overshoot the keys. Before the first and after the last key the value holds. The
 trajectory gets the curve's value at every whole frame; between frames the generator moves the bodies linearly.
 
-settle_until_frame is 14 (the motion starts after frame 16; the controller's starting point is frame 14, ADR-30);
+settle_until_frame is 14 (the motion starts after frame 16; the gravity-only settle ends at frame 14);
 source_tag "ours": the keys are the lab's, the curve between them is our reading of Maya's auto tangents.
 """
 
@@ -96,7 +96,7 @@ def build(scene_path: Path) -> trajectory.Trajectory:
     moves = [[1.0, 0.0, 0.0, x, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0] for x in xs]
     return trajectory.Trajectory(
         fps=s.solver.fps.value, frames=frames(), drivers={HEAD: moves, JAW: [list(r) for r in moves]},
-        source_tag="ours", settle_until_frame=SETTLE,
+        source_tag="ours", settle_until_frame=SETTLE, title="Prototype 2: head shake",
         source=(f"head shake (T-28, ours): {HEAD} and {JAW} translate along x, keys of the lab's "
                 f"passive_dynamics_test.py (0 at frames 0 and {START}, {LOOPS} loops of {FRAMES_PER_LOOP} frames, "
                 f"+-{AMPLITUDE_UNITS:g} scene units = +-{AMPLITUDE_UNITS * mm:.4g} mm), cubic Hermite with our reading of "

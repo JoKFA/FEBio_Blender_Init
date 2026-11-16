@@ -1,5 +1,5 @@
 """T-07 steps 1-2 with real FEBio: springs and gravity give the textbook answer, and springs stiffen into
-a hard bond. The full table and the limits are in spikes/s3_attachment.py; this is the fast part.
+a hard bond. The full table and the limits are in tests/s3_attachment.py; this is the fast part.
 """
 
 import pytest

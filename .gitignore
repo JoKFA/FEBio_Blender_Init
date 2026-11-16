@@ -35,5 +35,11 @@ data/*
 # Blender
 *.blend1
 
-# Worktrees of work in progress (each is a checkout of its own branch)
-.claude/worktrees/
+# The local AI development setup is each machine's own (T-38): instruction files, hooks, settings, worktrees
+# (tools/check_no_lab_files.py refuses them if tracked)
+AGENTS.md
+CLAUDE.md
+.claude/
+
+# This machine only: where the outside data lives. Never committed (tools/check_no_lab_files.py refuses it).
+.local/

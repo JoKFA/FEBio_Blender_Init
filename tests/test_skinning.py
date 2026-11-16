@@ -1,8 +1,8 @@
 import importlib.util
 import json
-import os
 from pathlib import Path
 
+import local_paths
 import numpy as np
 import pytest
 
@@ -12,9 +12,10 @@ from asrp_core.asset import skin as skin_module
 
 REPO = Path(__file__).resolve().parents[1]
 EXPORT = REPO / "data" / "lab_export"
-LAB_DATA = Path(os.environ.get("ASRP_LAB_DATA", "E:/Codebase/_lab/data"))
+LAB_DATA = local_paths.lab_data()  # None when this machine does not say where the lab's files are
 HAVE_EXPORT = (EXPORT / "mesh_report.json").is_file() and (REPO / "data" / "tetmesh" / "lips.json").is_file()
-HAVE_LAB = (LAB_DATA / "oor_skin_weights.json").is_file() and (LAB_DATA / "oor_bind_pose.json").is_file()
+HAVE_LAB = LAB_DATA is not None and (LAB_DATA / "oor_skin_weights.json").is_file() and (
+    LAB_DATA / "oor_bind_pose.json").is_file()
 
 
 def small_skin(weights=((1.0, 0.0), (0.25, 0.75), (0.0, 1.0))) -> skinning.Skin:
@@ -136,6 +137,10 @@ def test_load_refuses_a_wrong_format_wrong_shapes_and_weights_that_do_not_sum_to
         skinning.load(write(weights=[[[0, 0.5], [1, 0.4]]]))
     with pytest.raises(skinning.SkinError, match="landmark 2"):
         skinning.load(write(weights=[[[2, 1.0]]]))
+    with pytest.raises(skinning.SkinError, match="negative"):
+        skinning.load(write(weights=[[[0, 1.5], [1, -0.5]]]))
+    with pytest.raises(skinning.SkinError, match="not a finite number"):  # json.dumps writes NaN, json.loads reads it
+        skinning.load(write(weights=[[[0, float("nan")], [1, 0.5]]]))
     with pytest.raises(skinning.SkinError, match="does not exist"):
         skinning.load(tmp_path / "nope.json")
 
@@ -148,8 +153,8 @@ def check(tmp_path_factory):
     if not HAVE_EXPORT:
         pytest.skip("needs data/lab_export and data/tetmesh/lips.json")
     if not HAVE_LAB:
-        pytest.skip(f"needs the lab's own files in {LAB_DATA} (set ASRP_LAB_DATA); they stay outside the repo")
-    spec = importlib.util.spec_from_file_location("landmark_layer_check", REPO / "tools" / "landmark_layer_check.py")
+        pytest.skip("NOT VERIFIED: needs the lab's own files; " + local_paths.HOW_TO_SET)
+    spec = importlib.util.spec_from_file_location("landmark_layer_check", REPO / "tests" / "landmark_layer_check.py")
     tool = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(tool)
     return tool.run(LAB_DATA, tmp_path_factory.mktemp("layer"))
@@ -178,3 +183,65 @@ def test_landmarks_at_zero_keep_a_negative_zero():
     base = np.array([[-0.0, 1.0, -0.0], [2.0, -0.0, 3.0]])
     out = skinning.deform(base, np.array([[1.0, 0.0], [0.5, 0.5]]), np.zeros((2, 3)))
     assert out.tobytes() == base.tobytes() and out is not base
+
+
+# --- the geometry matrix (T-37 item 12) -------------------------------------------------------------------
+
+
+def skin_with_geometry_matrix(scale=2.0) -> skinning.Skin:
+    skin = small_skin(((0.5, 0.5),))
+    skin.geom = np.diag([scale, scale, scale, 1.0])
+    skin.geom[:3, 3] = [10.0, 0.0, 0.0]
+    return skin
+
+
+def test_deform_matrices_uses_the_geometry_matrix_for_local_vertices():
+    # geom doubles and shifts: local (1, 0, 0) is world (12, 0, 0). Landmark 0 moves (4, 0, 0) in the world, weight 0.5:
+    # world result (14, 0, 0), back in local space (2, 0, 0). Ignoring the geometry matrix would give (3, 0, 0).
+    skin = skin_with_geometry_matrix()
+    world = np.stack([np.eye(4), np.eye(4)])
+    world[0, :3, 3] = [4.0, 0.0, 0.0]
+    local = skinning.deform_matrices(np.array([[1.0, 0.0, 0.0]]), skin, world, local=True)
+    assert np.allclose(local, [[2.0, 0.0, 0.0]])
+    assert not np.allclose(skinning.deform_matrices(np.array([[1.0, 0.0, 0.0]]), skin, world), local)
+    # vertices already in the world (what the import writes) are not put through it: (12, 0, 0) -> (14, 0, 0)
+    assert np.allclose(skinning.deform_matrices(np.array([[12.0, 0.0, 0.0]]), skin, world), [[14.0, 0.0, 0.0]])
+
+
+def test_local_and_world_vertices_give_the_same_surface():
+    rng = np.random.default_rng(4)
+    skin = small_skin(((0.2, 0.8), (1.0, 0.0), (0.5, 0.5)))
+    turn = np.eye(4)
+    turn[:3, :3] = [[0, -1, 0], [1, 0, 0], [0, 0, 1]]
+    skin.geom = turn @ np.diag([2.0, 3.0, 4.0, 1.0])
+    skin.geom[:3, 3] = [1.0, -2.0, 5.0]
+    world = np.stack([np.eye(4), np.eye(4)])
+    world[:, :3, 3] = rng.normal(size=(2, 3))
+    local_vertices = rng.normal(size=(3, 3))
+    world_vertices = (np.concatenate([local_vertices, np.ones((3, 1))], axis=1) @ skin.geom.T)[:, :3]
+    from_local = skinning.deform_matrices(local_vertices, skin, world, local=True)
+    from_world = skinning.deform_matrices(world_vertices, skin, world)
+    assert np.allclose((np.concatenate([from_local, np.ones((3, 1))], axis=1) @ skin.geom.T)[:, :3], from_world)
+
+
+def test_the_real_geometry_matrix_takes_the_lips_back_to_their_local_space_and_out_again(tmp_path):
+    from asrp_core import scene
+    from asrp_core.asset import lab
+
+    if not HAVE_EXPORT:
+        pytest.skip("needs data/lab_export and data/tetmesh/lips.json")
+    result = lab.import_asset(REPO / "data" / "lab_export", tmp_path, REPO / "data" / "tetmesh" / "lips.json")
+    model = scene.load(result.scene_path)
+    skin = skinning.load(tmp_path / model.landmarks.weights.path)
+    assert skin.mesh == "middleres_OrbicularisOris"
+    assert not np.allclose(skin.geom, np.eye(4))  # the lab's geometry matrix is not the identity (it scales by 2.54)
+    lips, _ = coords.read_obj(tmp_path / model.soft_tissues[0].mesh.path)
+    homogeneous = np.concatenate([lips, np.ones((len(lips), 1))], axis=1)
+    local = (homogeneous @ np.linalg.inv(skin.geom).T)[:, :3]
+    assert np.abs(local - lips).max() > 10.0  # the two spaces really differ on this asset
+    rng = np.random.default_rng(1)
+    world = skinning.translations_to_world(skin, rng.normal(size=(len(skin.names), 3)) * 3.0)
+    from_world = skinning.deform_matrices(lips, skin, world)
+    from_local = skinning.deform_matrices(local, skin, world, local=True)
+    back = (np.concatenate([from_local, np.ones((len(lips), 1))], axis=1) @ skin.geom.T)[:, :3]
+    assert np.abs(back - from_world).max() < 1e-6 and np.abs(from_world - lips).max() > 0.5

@@ -177,18 +177,20 @@ def test_the_four_lip_attachments_are_in_the_scene_as_docs_05_section_3_says(imp
     # The stiffness is T-07's rule: 100 x E x h, h = median tet edge x k.
     mesh, _ = tetmesh.load(TET)
     h = tetmesh.quality(mesh).median_edge_mm * 0.67
-    assert springs[0].value == pytest.approx(100 * 0.015 * h, rel=5e-3)
+    assert springs[0].value == pytest.approx(100 * 0.012 * h, rel=5e-3)  # E is Ziva's 12 kPa by default (T-37)
     assert result.report["attachments_file"] == {
         "name": "lip_attachments.json",
         "sha256": hashlib.sha256((EXPORT / "lip_attachments.json").read_bytes()).hexdigest()}
     assert [a["kind"] for a in result.report["attachments"]] == ["hard", "spring", "spring", "spring"]
-    assert any(m.startswith("Attachments (A-33)") and "provisional" in m for m in result.report["missing"])
+    assert any(m.startswith("Attachments") and "confirmed" in m and "ours, not Ziva's" in m
+               for m in result.report["missing"])  # the vertex sets are settled; type and stiffness are ours
+    assert not any("has not arrived" in m or "waiting for" in m for m in result.report["missing"])
 
 
 @needs_export
 def test_an_attachments_file_for_another_mesh_is_refused(tmp_path):
     export = tmp_path / "export"
-    shutil.copytree(EXPORT, export, ignore=shutil.ignore_patterns("manual_maya_obj"))
+    shutil.copytree(EXPORT, export, ignore=shutil.ignore_patterns())
     data = json.loads((export / "lip_attachments.json").read_text())
     data["groups"][0]["vertices"] = data["groups"][0]["vertices"][:-1]
     (export / "lip_attachments.json").write_text(json.dumps(data))
@@ -214,7 +216,7 @@ def test_the_report_names_the_factor_the_axes_and_every_parameter_source(importe
     where = {p["where"]: p["source"] for p in r["parameters"]}
     assert len(where) == 18  # 13 before the attachments, plus alpha and four stiffnesses
     assert where["solver.fps"] == "lab_setting"
-    assert where["soft_tissues[lips].material.E_mpa"] == "ours"
+    assert where["soft_tissues[lips].material.E_mpa"] == "lab_setting"  # the default is Ziva's measured value (T-37)
     assert all(s in scene.SOURCES for s in where.values())
 
 
@@ -263,7 +265,7 @@ def test_obj_files_not_in_scene_coordinates_are_refused(tmp_path):
 @needs_export
 def test_an_incomplete_export_is_refused(tmp_path):
     export = tmp_path / "export"
-    shutil.copytree(EXPORT, export, ignore=shutil.ignore_patterns("manual_maya_obj", "mesh_middleres_skull.obj"))
+    shutil.copytree(EXPORT, export, ignore=shutil.ignore_patterns("mesh_middleres_skull.obj"))
     with pytest.raises(lab.AssetError, match="mesh_middleres_skull.obj is missing"):
         lab.import_asset(export, tmp_path / "out", TET)
 
@@ -290,3 +292,109 @@ def test_the_scene_does_not_depend_on_where_it_was_written(imported, tmp_path):
     out, _ = imported
     lab.import_asset(EXPORT.resolve(), tmp_path / "elsewhere", TET.resolve())
     assert (tmp_path / "elsewhere" / "scene.json").read_bytes() == (out / "scene.json").read_bytes()
+
+
+@needs_export
+def test_the_default_material_is_the_labs_measured_one_and_ours_stays_selectable(imported, tmp_path):
+    """T-37 item 1: the import default is Ziva's measured 12 kPa, 0.4 (source lab_setting); --tissue-settings ours is the
+    earlier 15 kPa, 0.45. Everything Ziva has no counterpart for stays ours, and says so."""
+    default_out, default = imported
+    now = scene.load(default_out / "scene.json")
+    before = scene.load(lab.import_asset(EXPORT, tmp_path / "ours", TET, tissue_settings="ours").scene_path)
+    a, b = now.soft_tissues[0].material, before.soft_tissues[0].material
+    assert {k: (p.value, p.source) for k, p in a.params.items()} == {
+        "E_mpa": (0.012, "lab_setting"), "nu": (0.4, "lab_setting"), "density_t_per_mm3": (1.06e-9, "lab_setting")}
+    assert {k: (p.value, p.source) for k, p in b.params.items()} == {
+        "E_mpa": (0.015, "ours"), "nu": (0.45, "ours"), "density_t_per_mm3": (1.06e-9, "ours")}
+    assert a.model == b.model == "neo-Hookean" and "StVK" in a.params["E_mpa"].note  # the model is NOT Ziva's
+    assert (now.solver.substeps_per_frame.value, now.solver.substeps_per_frame.source) == (1, "lab_setting")
+    assert (before.solver.substeps_per_frame.value, before.solver.substeps_per_frame.source) == (1, "ours")
+    # damping and gravity: not Ziva's, in both, and the notes say why (no stiffness damping is built; the unit is open)
+    for s in (now, before):
+        assert s.solver.damping.source == "ours" and "NO stiffness damping is built" in s.solver.damping.note
+        assert s.solver.gravity_mm_per_s2.source == "ours" and "NOT verified" in s.solver.gravity_mm_per_s2.note
+        assert s.solver.gravity_mm_per_s2.value == [0.0, 0.0, -9810.0]
+    # The spring rule follows the Young's modulus that is written, once, at import.
+    springs = {x.name: x.stiffness.value for x in now.attachments if x.kind == "spring"}
+    old = {x.name: x.stiffness.value for x in before.attachments if x.kind == "spring"}
+    assert springs.keys() == old.keys() and len(springs) == 3
+    assert all(abs(springs[n] / old[n] - 0.012 / 0.015) < 0.01 for n in springs)
+    assert [(x.name, x.kind) for x in now.attachments] == [(x.name, x.kind) for x in before.attachments]
+    # explicit "lab" is the default, byte for byte
+    lab.import_asset(EXPORT, tmp_path / "lab", TET, tissue_settings="lab")
+    assert (tmp_path / "lab" / "scene.json").read_bytes() == (default_out / "scene.json").read_bytes()
+    assert any("--tissue-settings ours" in m and "15 kPa" in m for m in
+               json.loads((tmp_path / "ours" / "import_report.json").read_text(encoding="utf-8"))["missing"])
+    assert not any("not asked for them" in m or "changes in T-37" in m for m in default.report["missing"])
+    with pytest.raises(lab.AssetError, match="tissue_settings"):
+        lab.import_asset(EXPORT, tmp_path / "bad", TET, tissue_settings="ziva")
+
+
+@needs_export
+def test_a_hand_edit_of_E_does_not_move_the_springs_and_the_import_says_so(imported, tmp_path):
+    """T-37 item 15: the spring stiffness is fixed at import. The note must be true, and be where the user looks."""
+    out, result = imported
+    raw = json.loads((out / "scene.json").read_text(encoding="utf-8"))
+    assert "does NOT recompute" in raw["origin"]["notes"]
+    assert any("does NOT recompute" in m for m in result.report["missing"])
+    [spring] = [a for a in raw["attachments"] if a["name"] == "lower_lip_on_jaw"]
+    assert "editing E in scene.json does not change it" in spring["stiffness"]["note"]
+    before = scene.load(out / "scene.json")
+    raw["soft_tissues"][0]["material"]["E_mpa"]["value"] = 0.5  # a hand edit, the same file otherwise
+    edited = tmp_path / "edited"
+    shutil.copytree(out, edited)
+    (edited / "scene.json").write_text(json.dumps(raw), encoding="utf-8")
+    after = scene.load(edited / "scene.json")
+    assert after.soft_tissues[0].material.params["E_mpa"].value == 0.5
+    assert [a.stiffness.value for a in after.attachments] == [a.stiffness.value for a in before.attachments]
+
+
+@needs_export
+def test_the_default_attachments_are_unchanged_and_ziva_soft_is_four_springs(imported, tmp_path):
+    """--attachments ziva-soft: Ziva's 0.1 N/mm3 (1e8 N/m3) x the group's mean lip-surface area per vertex x k^2."""
+    out, _ = imported
+    soft_dir = tmp_path / "soft"
+    result = lab.import_asset(EXPORT, soft_dir, TET, attachment_rule="ziva-soft")
+    explicit = lab.import_asset(EXPORT, tmp_path / "ours", TET, attachment_rule="ours")
+    assert (explicit.scene_path.read_bytes() == (out / "scene.json").read_bytes())  # the default is unchanged
+    s = scene.load(soft_dir / "scene.json")
+    by_name = {a.name: a for a in s.attachments}
+    assert {n: (a.kind, len(a.weights)) for n, a in by_name.items()} == {
+        "upper_lip_on_skull": ("spring", 74), "lower_lip_on_jaw": ("spring", 76),
+        "left_corner_on_anchor": ("spring", 348), "right_corner_on_anchor": ("spring", 309)}
+    # The mean areas, worked out here from the raw OBJ and the file's vertex sets (a third of each triangle around a
+    # vertex, geometric mm2), and the numbers measured on 2026-11-15 by the coordinator's spike (mm2, k = 0.67 unused).
+    scene_xyz = raw_vertices(EXPORT / "mesh_middleres_OrbicularisOris.obj")
+    mm = coords.to_mm_zup(scene_xyz, 0.962)
+    _, faces = coords.read_obj(EXPORT / "mesh_middleres_OrbicularisOris.obj")
+    per_vertex = np.zeros(len(mm))
+    for f in faces:
+        for i in range(1, len(f) - 1):
+            tri = (f[0], f[i], f[i + 1])
+            area = 0.5 * np.linalg.norm(np.cross(mm[tri[1]] - mm[tri[0]], mm[tri[2]] - mm[tri[0]]))
+            for v in tri:
+                per_vertex[v] += area / 3
+    groups = {g["attachment"]: g for g in json.loads((EXPORT / "lip_attachments.json").read_text())["groups"]}
+    expected_area = {"upper_lip_on_skull": ("zAttachment1", 2.339), "lower_lip_on_jaw": ("zAttachment2", 2.526),
+                     "left_corner_on_anchor": ("zAttachment9", 0.907), "right_corner_on_anchor": ("zAttachment10", 0.960)}
+    for name, (maya, spike) in expected_area.items():
+        mean = float(np.mean([per_vertex[v] for v, _ in groups[maya]["vertices"]]))
+        assert mean == pytest.approx(spike, abs=6e-4), (name, mean)
+        stiffness = by_name[name].stiffness
+        assert stiffness.value == pytest.approx(0.1 * mean * 0.67 ** 2, rel=5e-3), name
+        assert stiffness.source == "lab_setting" and "area rule" in stiffness.note and "Ziva's" in stiffness.note
+    reported = {a["name"]: a for a in result.report["attachments"]}
+    assert all(a["kind"] == "spring" and a["source"] == "lab_setting" and a["mean_vertex_area_mm2"] > 0
+               for a in reported.values())
+    assert result.check.ok and result.check.warnings == []
+    assert any(m.startswith("Attachments") and "ziva-soft" in m for m in result.report["missing"])
+    assert not any("does NOT recompute" in m for m in result.report["missing"])  # these springs do not follow E
+    with pytest.raises(lab.AssetError, match="attachments is 'stiff'"):
+        lab.import_asset(EXPORT, tmp_path / "bad", TET, attachment_rule="stiff")
+    # the same through the command, and the generator accepts a scene with no hard attachment at all
+    cli_out = tmp_path / "cli"
+    assert cli.main(["import-asset", str(EXPORT), str(cli_out), "--attachments", "ziva-soft"]) == 0
+    assert (cli_out / "scene.json").read_bytes() == (soft_dir / "scene.json").read_bytes()
+    from asrp_core import generate
+    model = generate.build(soft_dir / "scene.json", EXPORT / "trajectories" / "neutral_to_AA.json")
+    assert {g.kind for g in model.groups} == {"spring"} and model.springs and model.feb_text

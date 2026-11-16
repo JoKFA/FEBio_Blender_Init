@@ -2,7 +2,7 @@
   "format_version": "asrp-trajectory/1",
   "fps": 30,
   "frames": 46,
-  "source": "spikes/s1_dynamic_jaw.py jaw_angle (settle, open, hold), via asrp_core.trajectory.hinge_transforms",
+  "source": "tests/s1_dynamic_jaw.py jaw_angle (settle, open, hold), via asrp_core.trajectory.hinge_transforms",
   "drivers": {
     "jaw_hinge": [
       [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0],

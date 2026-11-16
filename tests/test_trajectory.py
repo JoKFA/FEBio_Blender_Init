@@ -31,7 +31,7 @@ def test_a_quarter_turn_about_a_known_hinge_moves_points_where_hand_working_says
 
 
 def test_the_hinge_matches_the_s1_spike_rotation():
-    spec = importlib.util.spec_from_file_location("s1", Path(__file__).resolve().parents[1] / "spikes" / "s1_dynamic_jaw.py")
+    spec = importlib.util.spec_from_file_location("s1", Path(__file__).resolve().parent / "s1_dynamic_jaw.py")
     s1 = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(s1)
     angles = [0.0, -0.05, s1.JAW_OPEN, 0.3]
@@ -78,6 +78,19 @@ def test_source_tag_is_optional_round_trips_and_a_bad_value_is_refused(tmp_path)
         assert trajectory.read(tmp_path / "again.json").source_tag == tag
     with pytest.raises(TrajectoryError, match="source_tag is 'mine'.*lab_setting, ziva_default, ours"):
         trajectory.read(write(tmp_path, example() | {"source_tag": "mine"}))
+
+
+def test_title_is_optional_round_trips_and_must_be_one_short_line(tmp_path):
+    assert trajectory.read(write(tmp_path, example())).title is None
+    assert "title" not in trajectory.read(write(tmp_path, example())).to_json()
+    t = trajectory.read(write(tmp_path, example() | {"title": "Prototype 1: jaw opens 12 deg"}))
+    assert t.title == "Prototype 1: jaw opens 12 deg" and "title" not in t.extra
+    trajectory.write(tmp_path / "again.json", t)
+    assert trajectory.read(tmp_path / "again.json").title == t.title
+    for bad in ("", "  ", " padded", "two\nlines", "x" * 35, 5, ["a"]):
+        with pytest.raises(TrajectoryError, match=r"title is .*1 to 34 characters"):
+            trajectory.read(write(tmp_path, example() | {"title": bad}))
+    assert trajectory.read(write(tmp_path, example() | {"title": "x" * 34})).title == "x" * 34
 
 
 def test_settle_until_frame_is_optional_round_trips_and_must_be_a_frame_of_the_file(tmp_path):

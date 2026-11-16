@@ -34,6 +34,7 @@ class Skin:
     bind_pre: np.ndarray  # (K, 4, 4)
     geom: np.ndarray  # (4, 4)
     weights: np.ndarray  # (V, K) float64, dense; row v holds vertex v's weight on each landmark
+    mesh: str = ""  # the export's name of the mesh the weights belong to ("" for a file that does not say)
 
 
 def load(path) -> Skin:
@@ -68,6 +69,10 @@ def load(path) -> Skin:
             if not 0 <= i < k:
                 raise SkinError(f"{path}: vertex {v} names landmark {i}, but there are {k}; re-run the asset import")
             dense[v, i] += w
+    if not np.isfinite(dense).all():  # NaN would slip through the sum check below: abs(nan - 1) > tol is False
+        raise SkinError(f"{path}: a weight is not a finite number; re-run the asset import")
+    if (dense < 0).any():  # a negative weight can still sum to 1 with the others
+        raise SkinError(f"{path}: a weight is negative; re-run the asset import")
     sums = dense.sum(axis=1)
     bad = np.flatnonzero(np.abs(sums - 1.0) > SUM_TOLERANCE)
     if len(bad):
@@ -75,7 +80,9 @@ def load(path) -> Skin:
             f"{path}: {len(bad)} vertices have weights that do not sum to 1 (first: vertex {int(bad[0])}, "
             f"sum {sums[bad[0]]!r}); the skin file is damaged, re-run the asset import"
         )
-    return Skin(names, rest_world.reshape(k, 4, 4), bind_pre.reshape(k, 4, 4), geom.reshape(4, 4), dense)
+    mesh = data.get("mesh")
+    return Skin(names, rest_world.reshape(k, 4, 4), bind_pre.reshape(k, 4, 4), geom.reshape(4, 4), dense,
+                mesh if isinstance(mesh, str) else "")
 
 
 def deform(base, weights, translations) -> np.ndarray:
@@ -106,10 +113,16 @@ def deform(base, weights, translations) -> np.ndarray:
     return base + weights @ t
 
 
-def deform_matrices(vertices, skin: Skin, world) -> np.ndarray:
+def deform_matrices(vertices, skin: Skin, world, *, local: bool = False) -> np.ndarray:
     """General linear blend skinning: v' = sum_i w_i (world_i @ bind_pre_i @ [v, 1])[:3].
 
-    vertices: (V, 3) mm; world: (K, 4, 4) landmark world matrices. Returns (V, 3) float64."""
+    vertices: (V, 3) mm; world: (K, 4, 4) landmark world matrices. Returns (V, 3) float64.
+
+    The skin's geometry matrix (`skin.geom`, Maya's geomMatrix: the mesh's own transform when it was bound) takes the
+    mesh's local points into the space the landmarks live in. By default (`local=False`) the vertices are already
+    in that space, which is how the import writes every mesh (the export applied the mesh's world matrix, ADR-18),
+    so the geometry matrix is not applied. With `local=True` the vertices are in the mesh's local space: they go
+    through geom first and the result comes back through its inverse, v' = geom^-1 @ (sum_i ... @ geom @ [v, 1])."""
     vertices = np.asarray(vertices, dtype=np.float64)
     world = np.asarray(world, dtype=np.float64)
     k = len(skin.names)
@@ -118,6 +131,8 @@ def deform_matrices(vertices, skin: Skin, world) -> np.ndarray:
     if world.shape != (k, 4, 4):
         raise SkinError(f"world must be ({k}, 4, 4), got shape {world.shape}")
     homogeneous = np.concatenate([vertices, np.ones((len(vertices), 1))], axis=1)  # (V, 4)
+    if local:
+        homogeneous = homogeneous @ skin.geom.T
     full = world @ skin.bind_pre  # (K, 4, 4)
     out = np.zeros_like(vertices)
     for i in range(k):
@@ -126,6 +141,8 @@ def deform_matrices(vertices, skin: Skin, world) -> np.ndarray:
         if len(used):
             moved = homogeneous[used] @ full[i].T  # (n, 4)
             out[used] += column[used, None] * moved[:, :3]
+    if local:
+        out = (np.concatenate([out, np.ones((len(out), 1))], axis=1) @ np.linalg.inv(skin.geom).T)[:, :3]
     return out
 
 

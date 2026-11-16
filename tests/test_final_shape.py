@@ -9,9 +9,9 @@ re-solve within the same frame when the jaw turns), both in docs/11.
 
 import dataclasses
 import json
-import os
 from pathlib import Path
 
+import local_paths
 import numpy as np
 import pytest
 
@@ -19,11 +19,15 @@ from asrp_core import final_shape as fs
 from asrp_core import scene, skinning
 from asrp_core.asset import coords, lab
 
+# `load` warns that its base is not the lab's training base; one test asserts that, the others need not repeat it.
+pytestmark = pytest.mark.filterwarnings("ignore::asrp_core.final_shape.SettledBaseWarning")
+
 REPO = Path(__file__).resolve().parents[1]
-LAB_DATA = Path(os.environ.get("ASRP_LAB_DATA", "E:/Codebase/_lab/data"))
+LAB_DATA = local_paths.lab_data()  # None when this machine does not say where the lab's files are
 HAVE_EXPORT = (REPO / "data" / "lab_export" / "mesh_report.json").is_file() and (
     REPO / "data" / "tetmesh" / "lips.json").is_file()
-HAVE_LAB = (LAB_DATA / "oor_skin_weights.json").is_file() and (LAB_DATA / "oor_bind_pose.json").is_file()
+HAVE_LAB = LAB_DATA is not None and (LAB_DATA / "oor_skin_weights.json").is_file() and (
+    LAB_DATA / "oor_bind_pose.json").is_file()
 SCALE = 0.962
 
 
@@ -103,11 +107,11 @@ def test_any_valid_jaw_rotation_leaves_the_result_unchanged():
         assert fs.final_shape(model, r, positions, jaw_changes_base="no").tobytes() == plain.tobytes()
 
 
-def test_resolve_is_not_supported_and_names_q20():
+def test_there_is_no_resolve_mode_and_the_error_says_q20_was_measured():
     model = synthetic()
     with pytest.raises(fs.FinalShapeError, match="Q20") as e:
         fs.final_shape(model, np.eye(3), moved(model), jaw_changes_base="resolve")
-    assert "not supported yet" in str(e.value)
+    assert "does not exist" in str(e.value) and "measured" in str(e.value)
 
 
 def test_another_jaw_option_is_an_error():
@@ -168,7 +172,7 @@ def test_landmarks_that_are_not_numbers_are_an_error():
 
 
 def make_run(folder: Path, *, status="complete", settled=None, with_landmarks=True, sag=-0.7, passed=True,
-             scene_names=None) -> tuple[Path, fs.LipModel]:
+             scene_names=None, skin_mesh="lips", decoy=False) -> tuple[Path, fs.LipModel]:
     """A tiny run folder: scene.json with 4 landmarks and a lip mesh of 6 vertices, its skin file, the report
     and the settled shape. Returns the folder and the model that `load` should give back."""
     rng = np.random.default_rng(11)
@@ -183,7 +187,7 @@ def make_run(folder: Path, *, status="complete", settled=None, with_landmarks=Tr
     (folder / "physics").mkdir()
     eye = [np.eye(4).ravel().tolist()] * k
     skin = {"format": "asrp-skin/1", "units": "mm", "axes": coords.AXES, "convention": "column vectors, row by row",
-            "mesh": "lips", "names": names, "rest_world": eye, "bind_pre": eye, "geom": np.eye(4).ravel().tolist(),
+            "mesh": skin_mesh, "names": names, "rest_world": eye, "bind_pre": eye, "geom": np.eye(4).ravel().tolist(),
             "weights": [[[i, float(w[r, i])] for i in range(k)] for r in range(v)]}
     (folder / "landmarks" / "skin_mm.json").write_text(json.dumps(skin), encoding="utf-8", newline="\n")
     (folder / "meshes" / "lips.obj").write_text(
@@ -200,6 +204,14 @@ def make_run(folder: Path, *, status="complete", settled=None, with_landmarks=Tr
     for name in ("tissue_tet.json", "skull.obj", "plate.obj"):
         (folder / name).write_bytes((folder / "box" / name).read_bytes())
     model.soft_tissues[0].mesh = sha("meshes/lips.obj")
+    model.soft_tissues[0].source_obj = scene.SourceObj("mesh_lips.obj", "0" * 64)
+    if decoy:  # another tissue with the same vertex count, listed FIRST: position and count cannot tell them apart
+        (folder / "meshes" / "decoy.obj").write_text(
+            "".join(f"v {float(x) + 5.0!r} {float(y)!r} {float(z)!r}\n" for x, y, z in rest_mm) + "f 1 2 3\nf 4 5 6\n",
+            encoding="ascii", newline="\n")
+        model.soft_tissues.insert(0, dataclasses.replace(
+            model.soft_tissues[0], name="decoy", mesh=sha("meshes/decoy.obj"),
+            source_obj=scene.SourceObj("mesh_decoy.obj", "0" * 64)))
     scene.write(folder / "scene.json", model)
     base = rest_mm + np.array([0.0, 0.0, sag])
     (folder / "physics" / "settled_frame14.json").write_text(json.dumps({
@@ -207,7 +219,7 @@ def make_run(folder: Path, *, status="complete", settled=None, with_landmarks=Tr
         "tet_nodes": [], "display": base.tolist()}), encoding="utf-8", newline="\n")
     report = {"format": "asrp-run-report/1", "status": status, "passed": passed,
               "checks": {"c": {"name": "gravity sag", "passed": passed, "message": "test"}},
-              "settled_shape": settled or {"available": True, "frame": 14}}
+              "settled_shape": settled or {"available": True, "frame": 14, "tissue_settled": True}}
     (folder / "run_report.json").write_text(json.dumps(report), encoding="utf-8", newline="\n")
     return folder, fs.LipModel(names, w, rest_scene, base, "settled", SCALE)
 
@@ -259,7 +271,7 @@ def real(tmp_path_factory):
     if not HAVE_EXPORT:
         pytest.skip("needs data/lab_export and data/tetmesh/lips.json (the committed export)")
     if not HAVE_LAB:
-        pytest.skip(f"needs the lab's own files in {LAB_DATA} (set ASRP_LAB_DATA); they stay outside the repo")
+        pytest.skip("NOT VERIFIED: needs the lab's own files; " + local_paths.HOW_TO_SET)
     out = tmp_path_factory.mktemp("asset")
     result = lab.import_asset(REPO / "data" / "lab_export", out, REPO / "data" / "tetmesh" / "lips.json")
     return fs.rest_model(result.scene_path)
@@ -339,15 +351,15 @@ def test_a_loaded_model_cannot_be_edited_in_place(tmp_path):
     assert isinstance(model.names, tuple)
 
 
-def test_a_real_jaw_turn_warns_that_it_changes_nothing_and_the_identity_does_not():
+def test_a_jaw_turn_changes_nothing_and_does_not_warn():
+    """Q20 was measured (docs/13 E-11): Ziva does not re-solve within a frame, so there is nothing to warn about."""
     model = synthetic()
-    with pytest.warns(fs.JawIgnoredWarning, match="Q20"):
-        fs.final_shape(model, rotation(), moved(model))
     import warnings
     with warnings.catch_warnings():
         warnings.simplefilter("error")
-        fs.final_shape(model, np.eye(3), moved(model))
-        fs.final_shape(model, None, moved(model))
+        turned = fs.final_shape(model, rotation(), moved(model))
+        assert turned.tobytes() == fs.final_shape(model, np.eye(3), moved(model)).tobytes()
+        assert turned.tobytes() == fs.final_shape(model, None, moved(model)).tobytes()
 
 
 def test_importing_the_module_needs_neither_blender_nor_a_subprocess():
@@ -368,4 +380,34 @@ def test_a_base_whose_tissue_was_still_moving_is_refused_unless_asked_for(tmp_pa
         fs.load(folder)
     assert fs.load(folder, allow_unsettled=True).base == "settled"
     still, _ = make_run(tmp_path / "still", settled={**moving, "tissue_settled": True, "tissue_step_max_mm": 4e-7})
-    assert fs.load(still).base == "settled"  # and a run report from before the key existed is accepted (other tests)
+    with pytest.warns(fs.SettledBaseWarning, match="REST shape"):  # load says it is not the lab's training base
+        assert fs.load(still).base == "settled"
+
+
+def test_a_run_report_that_does_not_say_whether_the_tissue_stopped_is_refused_unless_asked_for(tmp_path):
+    """T-37 item 11: an absent `tissue_settled` (an older report) is "not known", and a base that may still be moving
+    must not be taken on trust."""
+    folder, _ = make_run(tmp_path / "old", settled={"available": True, "frame": 14})
+    with pytest.raises(fs.FinalShapeError, match="does not say whether the tissue had stopped"):
+        fs.load(folder)
+    assert fs.load(folder, allow_unsettled=True).base == "settled"
+
+
+def test_rest_model_takes_the_lips_by_identity_not_by_position(tmp_path):
+    """T-37 item 11: a decoy tissue with the same vertex count, listed first, is not the lips."""
+    folder, _ = make_run(tmp_path / "decoy", decoy=True)
+    assert [t.name for t in scene.load(folder / "scene.json").soft_tissues] == ["decoy", "tissue"]
+    model = fs.rest_model(folder / "scene.json")
+    lips, _ = coords.read_obj(folder / "meshes" / "lips.obj")
+    assert np.abs(model.base_mm - lips).max() < 1e-12
+
+
+def test_rest_model_refuses_a_scene_whose_lips_it_cannot_identify(tmp_path):
+    folder, _ = make_run(tmp_path / "other", skin_mesh="some_other_mesh")  # the skin is for a mesh the scene lacks
+    with pytest.raises(fs.FinalShapeError, match="skin weights are for the mesh 'some_other_mesh'"):
+        fs.rest_model(folder / "scene.json")
+    folder, _ = make_run(tmp_path / "unnamed", skin_mesh="", decoy=True)  # an old skin file, two tissues that fit
+    with pytest.raises(fs.FinalShapeError, match="does not name its mesh, and 2 soft tissues"):
+        fs.rest_model(folder / "scene.json")
+    folder, _ = make_run(tmp_path / "unnamed_one", skin_mesh="")  # an old skin file, one tissue that fits: topology
+    assert fs.rest_model(folder / "scene.json").base == "rest"

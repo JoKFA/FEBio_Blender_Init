@@ -4,17 +4,21 @@ import atexit
 import json
 import subprocess
 import textwrap
+import time
 from pathlib import Path
 
 import bpy
 from bpy.app.handlers import persistent
 
+from . import asset, compare, session
 from .session import (
     ENDED,
     EXIT_WAIT_S,
+    NO_PROJECT,
     RunSession,
     core_command,
     core_project,
+    project_problem,
     register_exit_handler,
 )
 
@@ -22,6 +26,105 @@ STATUS_ICONS = {"ok": "CHECKMARK", "warn": "INFO", "error": "ERROR"}
 PLAYBACK_FORMAT = "asrp-playback/1"
 MM_TO_BLENDER = 0.001  # bundles are in mm; Blender's default unit is 1 m
 DOMAIN_COLORS = {"tissue": (0.8, 0.25, 0.2, 1.0), "jaw": (0.9, 0.88, 0.8, 1.0)}
+
+
+# --- the project folder (the preference of this add-on) ----------------------------------------------------------------------
+# core_project() (session.py) looks at $ASRP_PROJECT, then at the folder chosen here, then at the repo the add-on lives in.
+
+_SESSION_PROJECT = ""  # a folder chosen while the add-on is not enabled through Blender's add-on list (no preference to write to)
+
+
+def preferences():
+    """This add-on's preferences, or None when the add-on is not in Blender's list of enabled add-ons."""
+    try:
+        return bpy.context.preferences.addons[__package__].preferences
+    except (KeyError, AttributeError):
+        return None
+
+
+def preference_project() -> str:
+    prefs = preferences()
+    chosen = prefs.project_dir if prefs is not None else ""
+    return bpy.path.abspath(chosen) if chosen else _SESSION_PROJECT
+
+
+def set_project_preference(folder: str) -> None:
+    global _SESSION_PROJECT
+    prefs = preferences()
+    if prefs is not None:
+        prefs.project_dir = folder
+    else:
+        _SESSION_PROJECT = folder
+
+
+_SESSION_ZIVA = ""
+
+
+def ziva_folder() -> str:
+    """The Ziva reference folder chosen once (add-on preference only; never written into the .blend or a repo file)."""
+    prefs = preferences()
+    chosen = prefs.ziva_dir if prefs is not None else ""
+    return bpy.path.abspath(chosen) if chosen else _SESSION_ZIVA
+
+
+def set_ziva_preference(folder: str) -> None:
+    global _SESSION_ZIVA
+    prefs = preferences()
+    if prefs is not None:
+        prefs.ziva_dir = folder
+    else:
+        _SESSION_ZIVA = folder
+
+
+def save_preferences() -> bool:
+    """Write the user preferences to disk so the chosen folder survives a restart of Blender."""
+    try:
+        bpy.ops.wm.save_userpref()
+        return True
+    except RuntimeError:
+        return False
+
+
+class ASRP_Preferences(bpy.types.AddonPreferences):
+    bl_idname = __package__
+
+    project_dir: bpy.props.StringProperty(name="ASRP project folder", subtype="DIR_PATH",
+                                          description="The folder ASRP was downloaded into (it holds pyproject.toml and src/asrp_core)")
+
+    ziva_dir: bpy.props.StringProperty(name="Ziva reference folder", subtype="DIR_PATH",
+                                       description="An export folder of the lab's Ziva runs (outside the project), used by Compare with Ziva")
+
+    def draw(self, context):
+        self.layout.prop(self, "project_dir")
+        self.layout.prop(self, "ziva_dir")
+        project = core_project()
+        if project is None:
+            self.layout.label(text="No project folder yet: choose it here or in the ASRP tab (N key).", icon="ERROR")
+        else:
+            self.layout.label(text=f"In use: {project}", icon="CHECKMARK")
+
+
+class ASRP_OT_choose_project(bpy.types.Operator):
+    bl_idname = "asrp.choose_project"
+    bl_label = "Choose project folder"
+    bl_description = "Choose the folder ASRP was downloaded into (once). It is remembered after Blender is closed"
+
+    directory: bpy.props.StringProperty(subtype="DIR_PATH")
+
+    def invoke(self, context, event):
+        context.window_manager.fileselect_add(self)
+        return {"RUNNING_MODAL"}
+
+    def execute(self, context):
+        folder = Path(bpy.path.abspath(self.directory))
+        problem = project_problem(folder)
+        if problem:
+            self.report({"ERROR"}, problem)
+            return {"CANCELLED"}
+        set_project_preference(str(folder))
+        saved = save_preferences()
+        self.report({"INFO"}, f"ASRP project folder: {folder}" + ("" if saved else ". It could not be saved: choose it again after restarting Blender"))
+        return {"FINISHED"}
 
 
 def run_core(*args: str) -> subprocess.CompletedProcess:
@@ -138,12 +241,15 @@ class ASRP_OT_load_playback(bpy.types.Operator):
 # loads the files a finished run wrote, and switches which loaded result is visible.
 
 TICK_S = 0.25
+SMALL_ROW = 0.7  # height of a small line relative to a row
+RUN_AGAIN_S = 1.0  # a click on Run this soon after a run finished is refused (a second click of a double click)
 CHECK_KEYS = ("a", "b", "b2", "c", "d")
 VERSION_WORDS = {"physics": "physics only", "final": "final shape"}  # in the stored entry label
 VERSION_BUTTONS = {"physics": "Physics only", "final": "Final shape"}  # on the version rows of the Results panel
 # Short fixed names for the checks (the report's own names are long and get cut off in the side bar).
-CHECK_LABELS = {"a": "Motion completed", "b": "Hard attachments follow bones", "b2": "Spring anchors follow bodies",
+CHECK_LABELS = {"a": "Motion completed", "b": "Hard attachments", "b2": "Spring anchors",
                 "c": "Gravity sag", "d": "Tet mesh valid"}
+ROLE_WORDS = {"teeth_upper": "upper teeth", "teeth_lower": "lower teeth"}  # the objects as a person says them
 STATE_WORDS = {
     "running": "Running",
     "complete": "Complete",
@@ -206,8 +312,18 @@ def check_rows(report) -> list[tuple[str, str, str, str]] | None:
     return rows
 
 
+def report_warnings(report) -> list[str]:
+    """The run's warning lines (for example flipped faces of the display surface): reported, they are not checks. Each is cut
+    after its first sentence; the full text is in run_report.json."""
+    out = []
+    for w in (report.get("warnings") if isinstance(report, dict) else None) or []:
+        if isinstance(w, str) and w.strip():
+            out.append(w.split(". ")[0].rstrip(".") + ".")
+    return out
+
+
 def check_label(key: str, name: str) -> str:
-    """The row text of a check: "(b) Hard attachments follow bones". An unknown key shows the report's own name."""
+    """The row text of a check: "(b) Hard attachments". An unknown key shows the report's own name."""
     return f"({key}) {CHECK_LABELS.get(key, name)}"
 
 
@@ -215,20 +331,51 @@ def _count(value) -> bool:
     return isinstance(value, int) and not isinstance(value, bool)
 
 
-def surface_line(report) -> str | None:
-    """Reported only (not a check): the display surface at the last frame, final version if the report has one, else
-    physics. None when the report has no usable surface_health (an older run)."""
+SURFACE_KEYS = ("flipped_faces", "edges_shorter_than_half", "edges_longer_than_double")
+
+
+def _surface_part(report, which=None):
+    """(version, surface_health entry) of the version asked for; without one, the final version if the report has it,
+    else physics. (None, None) when the report has no usable surface_health (an older run)."""
     health = report.get("surface_health") if isinstance(report, dict) else None
     if not isinstance(health, dict):
-        return None
-    for which in ("final", "physics"):
-        part = health.get(which)
+        return None, None
+    for name in ((which,) if which else ("final", "physics")):
+        part = health.get(name)
         last = part.get("last") if isinstance(part, dict) else None
-        if isinstance(last, dict) and all(_count(last.get(k)) for k in
-                                          ("flipped_faces", "edges_shorter_than_half", "edges_longer_than_double")):
-            return (f"Surface ({which}): {last['flipped_faces']} flipped faces, {last['edges_shorter_than_half']} edges < 0.5x, "
-                    f"{last['edges_longer_than_double']} edges > 2x")
-    return None
+        if isinstance(last, dict) and all(_count(last.get(k)) for k in SURFACE_KEYS):
+            return name, part
+    return None, None
+
+
+def surface_line(report, which=None) -> str | None:
+    """Reported only (not a check): the display surface at the last frame, of the version `which` (default: the final
+    version if the report has one, else physics). None when the report has no usable surface_health (an older run)."""
+    name, part = _surface_part(report, which)
+    if part is None:
+        return None
+    last = part["last"]
+    return (f"Surface ({name}): {last['flipped_faces']} flipped faces, {last['edges_shorter_than_half']} edges < 0.5x, "
+            f"{last['edges_longer_than_double']} edges > 2x")
+
+
+def worst_surface_line(report, which=None) -> str | None:
+    """Reported only: the frame with the most flipped faces (which frame, how many), next to the last frame's line."""
+    name, part = _surface_part(report, which)
+    worst = part.get("worst") if part is not None else None
+    if not (isinstance(worst, dict) and _count(worst.get("frame")) and all(_count(worst.get(k)) for k in SURFACE_KEYS)):
+        return None
+    return (f"Worst frame ({name}): frame {worst['frame']}, {worst['flipped_faces']} flipped faces, "
+            f"{worst['edges_shorter_than_half']} edges < 0.5x, {worst['edges_longer_than_double']} edges > 2x")
+
+
+ALL_PASS_NOTE = ("All five checks passed. That does not say the surface is fine: the surface lines below are only "
+                 "reported, not checked.")
+
+
+def all_passed(rows) -> bool:
+    five = [r for r in rows if r[0] in CHECK_KEYS]
+    return len(five) == len(CHECK_KEYS) and all(r[2] == "PASS" for r in five)
 
 
 def settle_line(report) -> str | None:
@@ -294,6 +441,18 @@ def shown_entry(scene):
     """The entry whose object is on screen, or None (nothing shown, or its object was deleted)."""
     results = scene.asrp_results
     return results[scene.asrp_shown] if 0 <= scene.asrp_shown < len(results) and is_live(results[scene.asrp_shown].obj) else None
+
+
+def current_run(scene):
+    """(run name, run folder, layer on screen or None) of the result the panels talk about: the one shown from the
+    results list, else the one on the asset. None when there is neither."""
+    entry = shown_entry(scene)
+    if entry is not None:
+        return entry.run_name, entry.run_dir, None
+    run = scene.asrp_asset_run
+    if run and asset_open(scene):
+        return Path(run).name, run, scene.asrp_asset_layer or None
+    return None
 
 
 def show_entry(scene, index: int) -> None:
@@ -395,7 +554,10 @@ def tick():
                 if SESSION.run_dir is None:
                     raise ValueError("The run did not report its folder")
                 # After File > Open the results go to the scene that is current now, not to the one the run began in.
-                add_run_folder(bpy.context, SESSION.run_dir)
+                if SESSION.target == "asset":
+                    asset.apply_result(bpy.context, SESSION.run_dir)  # onto the five objects of Open asset
+                else:
+                    add_run_folder(bpy.context, SESSION.run_dir)
     except Exception as exc:  # noqa: BLE001  a timer that raises is unregistered silently: end in a visible error instead
         SESSION.handled = True
         SESSION.load_error = f"{type(exc).__name__}: {exc}" if not isinstance(exc, ValueError) else str(exc)
@@ -416,6 +578,14 @@ def ensure_timer() -> None:
 def on_load_post(*_args) -> None:
     """A file was loaded: a run may still be going (or have just ended), so poll it again. The panel's list belongs to
     the new file; the finished run's results are added to the scene that is current then."""
+    asset._SAVED_SHADING.clear()  # the highlight of the file that was open is not this file's
+    asset._SAVED_ACTIVE.clear()
+    if compare.SESSION.state in ("done", "failed"):
+        compare.SESSION.reset()
+    try:
+        compare.sync(bpy.context)  # a file saved with the colours or Ziva's lips on: the handler is armed again
+    except (RuntimeError, ValueError, OSError):
+        pass
     if SESSION.state == "running":
         show_entry(bpy.context.scene, -1)  # the opened file's saved shown result is not this run's
         ensure_timer()
@@ -433,6 +603,44 @@ class ASRP_Result(bpy.types.PropertyGroup):
     obj: bpy.props.PointerProperty(type=bpy.types.Object)
     frames: bpy.props.IntProperty()
     fps: bpy.props.IntProperty()
+
+
+class ASRP_Motion(bpy.types.PropertyGroup):
+    """One line of the motion list (what `asrp list-motions` printed)."""
+    file: bpy.props.StringProperty()
+    title: bpy.props.StringProperty()
+    error: bpy.props.StringProperty()
+    frames: bpy.props.IntProperty()
+    fps: bpy.props.FloatProperty()
+    source_tag: bpy.props.StringProperty()
+    has_landmarks: bpy.props.BoolProperty()
+
+
+class ASRP_AssetObject(bpy.types.PropertyGroup):
+    """One of the objects Open asset made (role: skull, jaw, ...); the results are put on exactly these."""
+    role: bpy.props.StringProperty()
+    obj: bpy.props.PointerProperty(type=bpy.types.Object)
+
+
+def start_run(op, context, scene_file, motion, runs_dir, name: str, target: str):
+    """Start `asrp run` in the background; where the finished result goes is `target` ("asset" or "files")."""
+    scene = context.scene
+    # A new run: no older result may stay on screen as if it were this run's (docs/04 section 9).
+    show_entry(scene, -1)
+    if target == "asset":
+        asset.clear_result(scene)
+    try:
+        Path(runs_dir).mkdir(parents=True, exist_ok=True)
+        SESSION.start(str(scene_file), str(motion), str(runs_dir), name)
+    except (RuntimeError, OSError) as exc:
+        if SESSION.state != "not_started":  # the folder could not be made: say so in the panel, not only in a popup
+            SESSION.reset()
+            SESSION.state, SESSION.error, SESSION.handled = "not_started", f"the run could not be started: {exc}", True
+        op.report({"ERROR"}, SESSION.error)
+        return {"CANCELLED"}
+    SESSION.target = target
+    ensure_timer()
+    return {"FINISHED"}
 
 
 class ASRP_OT_run(bpy.types.Operator):
@@ -453,21 +661,230 @@ class ASRP_OT_run(bpy.types.Operator):
         if not runs_dir:
             project = core_project()
             if project is None:
-                self.report({"ERROR"}, "ASRP project not found; set ASRP_PROJECT or choose a runs folder")
+                self.report({"ERROR"}, NO_PROJECT)
                 return {"CANCELLED"}
             runs_dir = str(project / "runs")
-        # A new run: no older result may stay on screen as if it were this run's (docs/04 section 9).
-        show_entry(scene, -1)
-        try:
-            Path(runs_dir).mkdir(parents=True, exist_ok=True)
-            SESSION.start(scene_file, motion, runs_dir, scene.asrp_run_name.strip())
-        except (RuntimeError, OSError) as exc:
-            if SESSION.state != "not_started":  # the folder could not be made: say so in the panel, not only in a popup
-                SESSION.reset()
-                SESSION.state, SESSION.error, SESSION.handled = "not_started", f"the run could not be started: {exc}", True
-            self.report({"ERROR"}, SESSION.error)
+        return start_run(self, context, scene_file, motion, runs_dir, scene.asrp_run_name.strip(), "files")
+
+
+class ASRP_OT_open_asset(bpy.types.Operator):
+    bl_idname = "asrp.open_asset"
+    bl_label = "Open asset"
+    bl_description = ("Import the lab export (`asrp import-asset`) and show skull, jaw, upper teeth, lower teeth and lips "
+                      "as five objects. The window waits while it imports")
+
+    def execute(self, context):
+        if SESSION.running:
+            self.report({"ERROR"}, "A run is in progress. Wait for it or cancel it first.")
             return {"CANCELLED"}
-        ensure_timer()
+        try:
+            made = asset.open_asset(context)
+            context.scene.asrp_asset_export = str(asset.export_folder())
+        except (ValueError, OSError, RuntimeError, subprocess.TimeoutExpired) as exc:
+            self.report({"ERROR"}, str(exc))
+            return {"CANCELLED"}
+        SESSION.reset()  # the asset is new: "Complete" of a run on the asset before it is not this asset's status
+        hidden = context.scene.asrp_asset_hidden
+        self.report({"INFO"}, f"Opened {len(made)} objects: {', '.join(made)}" + (f"; hid {hidden}" if hidden else ""))
+        return {"FINISHED"}
+
+
+class ASRP_OT_pick_motion(bpy.types.Operator):
+    bl_idname = "asrp.pick_motion"
+    bl_label = "Motion"
+    bl_description = "Use this motion for the next run"
+
+    index: bpy.props.IntProperty()
+
+    def execute(self, context):
+        scene = context.scene
+        if not (0 <= self.index < len(scene.asrp_motions)) or scene.asrp_motions[self.index].error:
+            self.report({"ERROR"}, "This motion file cannot be used")
+            return {"CANCELLED"}
+        scene.asrp_motion_index = self.index
+        return {"FINISHED"}
+
+
+class ASRP_OT_run_motion(bpy.types.Operator):
+    bl_idname = "asrp.run_motion"
+    bl_label = "Run"
+    bl_description = "Run the picked motion on the opened asset in the background, then play it on the same objects"
+
+    def execute(self, context):
+        scene = context.scene
+        if SESSION.running or (SESSION.state in ENDED and not SESSION.handled):  # running, or finished and not yet shown
+            self.report({"ERROR"}, "A run is already in progress")
+            return {"CANCELLED"}
+        if SESSION.state == "complete" and time.monotonic() - SESSION.ended_at < RUN_AGAIN_S:
+            self.report({"ERROR"}, "The last run has just finished. Press Run again if you want another one.")
+            return {"CANCELLED"}
+        try:
+            asset.asset_objects(scene)
+        except ValueError as exc:
+            self.report({"ERROR"}, str(exc))
+            return {"CANCELLED"}
+        problem = asset.files_problem(scene)
+        if scene.asrp_asset_scene and not Path(scene.asrp_asset_scene).is_file():
+            self.report({"ERROR"}, problem)
+            return {"CANCELLED"}
+        motion = asset.picked_motion(scene)
+        if motion is None or motion.error:
+            self.report({"ERROR"}, "Pick a motion first")
+            return {"CANCELLED"}
+        try:
+            runs_dir = asset.runs_folder()
+        except ValueError as exc:
+            self.report({"ERROR"}, str(exc))
+            return {"CANCELLED"}
+        motion_file = Path(scene.asrp_asset_export) / "trajectories" / motion.file
+        return start_run(self, context, Path(scene.asrp_asset_scene), motion_file, runs_dir, Path(motion.file).stem, "asset")
+
+
+class ASRP_OT_choose_ziva(bpy.types.Operator):
+    bl_idname = "asrp.choose_ziva"
+    bl_label = "Ziva reference folder"
+    bl_description = "Choose the Ziva export folder to compare with (once). It is remembered in the add-on preferences, not in the .blend"
+
+    directory: bpy.props.StringProperty(subtype="DIR_PATH")
+
+    def invoke(self, context, event):
+        context.window_manager.fileselect_add(self)
+        return {"RUNNING_MODAL"}
+
+    def execute(self, context):
+        folder = Path(bpy.path.abspath(self.directory))
+        if not folder.is_dir():
+            self.report({"ERROR"}, f"{folder} is not a folder")
+            return {"CANCELLED"}
+        set_ziva_preference(str(folder))
+        save_preferences()
+        self.report({"INFO"}, f"Ziva reference folder: {folder.name}")
+        return {"FINISHED"}
+
+
+COMPARE_TICK_S = 0.5
+
+
+def compare_tick():
+    """The timer of a comparison: take in what the command printed; when it has ended, show what it wrote."""
+    try:
+        state = compare.SESSION.poll()
+        if state == "running":
+            redraw()
+            return COMPARE_TICK_S
+        if state == "done" and not compare.SESSION.handled:
+            compare.SESSION.handled = True
+            compare._REPORTS.clear()
+            compare.sync(bpy.context)
+    except Exception as exc:  # noqa: BLE001  a timer that raises is unregistered silently: end in a visible error instead
+        compare.SESSION.kill_tree()
+        compare.SESSION.state, compare.SESSION.error = "failed", f"{type(exc).__name__}: {exc}"
+    redraw()
+    return None
+
+
+def ensure_compare_timer() -> None:
+    if not bpy.app.timers.is_registered(compare_tick):
+        bpy.app.timers.register(compare_tick, first_interval=COMPARE_TICK_S, persistent=True)
+
+
+class ASRP_OT_compare(bpy.types.Operator):
+    bl_idname = "asrp.compare"
+    bl_label = "Compare"
+    bl_description = ("Compare the result on the asset with the Ziva reference (`asrp compare`) in the background. The output goes "
+                      "into the run folder's compare folder. The differences are reported, not judged")
+
+    def execute(self, context):
+        scene = context.scene
+        if compare.SESSION.running:
+            self.report({"ERROR"}, "A comparison is already in progress")
+            return {"CANCELLED"}
+        ziva = ziva_folder()
+        if not ziva:
+            self.report({"ERROR"}, "Choose the Ziva reference folder first")
+            return {"CANCELLED"}
+        if not scene.asrp_asset_run or not asset_open(scene) or asset.files_problem(scene):
+            self.report({"ERROR"}, "Run a motion on the asset first")
+            return {"CANCELLED"}
+        compare.drop(scene)  # an older comparison of this run is replaced
+        try:
+            compare.SESSION.start(scene.asrp_asset_run, ziva, str(compare.out_folder(scene)))
+        except (RuntimeError, OSError) as exc:
+            self.report({"ERROR"}, str(exc))
+            return {"CANCELLED"}
+        ensure_compare_timer()
+        return {"FINISHED"}
+
+
+class ASRP_OT_highlight(bpy.types.Operator):
+    bl_idname = "asrp.highlight"
+    bl_label = "Highlight"
+    bl_description = ("Show this row in the 3D view: a tissue or bone is selected and made active, an attachment colours its "
+                      "vertices on the lips. A result on the asset is not touched")
+
+    kind: bpy.props.StringProperty()  # "part" (a tissue or a bone) or "attachment"
+    target: bpy.props.StringProperty()  # the object's role, or the attachment's name
+
+    def execute(self, context):
+        scene = context.scene
+        try:
+            if self.kind == "part":
+                obj = asset.asset_objects(scene).get(self.target)
+                if obj is None:
+                    raise ValueError(f"{self.target} is not an object of the asset. Press Open asset again.")
+                asset.select_part(context, obj)
+            else:
+                asset.highlight_attachment(context, self.target)
+        except (ValueError, RuntimeError, OSError, KeyError) as exc:
+            self.report({"ERROR"}, str(exc))
+            return {"CANCELLED"}
+        return {"FINISHED"}
+
+
+class ASRP_OT_clear_highlight(bpy.types.Operator):
+    bl_idname = "asrp.clear_highlight"
+    bl_label = "Clear highlight"
+    bl_description = "Put the 3D view back as it was before an attachment was highlighted"
+
+    def execute(self, context):
+        asset.clear_highlight(context)
+        return {"FINISHED"}
+
+
+class ASRP_OT_check_setup(bpy.types.Operator):
+    bl_idname = "asrp.check_setup"
+    bl_label = "Check setup"
+    bl_description = "Run `asrp check` on the asset's scene file and say in plain words what it found"
+
+    def execute(self, context):
+        scene = context.scene
+        if not asset_open(scene) or not Path(scene.asrp_asset_scene).is_file():
+            self.report({"ERROR"}, "Open the asset first")
+            return {"CANCELLED"}
+        try:
+            scene.asrp_setup_check = asset.run_setup_check(scene)
+        except (ValueError, RuntimeError, OSError, subprocess.TimeoutExpired) as exc:
+            scene.asrp_setup_check = f"Setup check: could not be run. {exc}"
+        return {"FINISHED"}
+
+
+class ASRP_OT_set_layer(bpy.types.Operator):
+    bl_idname = "asrp.set_layer"
+    bl_label = "Layer"
+    bl_description = "Show this layer of the last run on the lips (the bones do not change)"
+
+    layer: bpy.props.StringProperty()
+
+    def execute(self, context):
+        scene = context.scene
+        if not scene.asrp_asset_run:
+            self.report({"ERROR"}, "There is no result on the asset yet")
+            return {"CANCELLED"}
+        try:
+            asset.show_layer(scene, Path(scene.asrp_asset_run), self.layer)
+        except (ValueError, KeyError, OSError) as exc:
+            self.report({"ERROR"}, str(exc))
+            return {"CANCELLED"}
         return {"FINISHED"}
 
 
@@ -532,13 +949,25 @@ class ASRP_OT_remove_result(bpy.types.Operator):
         return {"FINISHED"}
 
 
-def wrapped(context, layout, text: str, icon: str = "NONE", alert: bool = False) -> None:
-    """A label that wraps to the width of the side bar."""
-    width = max(16, int(getattr(context.region, "width", 300) / 8))
+def wrapped(context, layout, text: str, icon: str = "NONE", alert: bool = False, reserve: int = 0, small: bool = False) -> None:
+    """A label that wraps to the width of the side bar (`reserve` characters narrower, when a button sits beside it).
+    `small`: a smaller line (70 % of a row) for what is secondary, so the panel stays short."""
+    width = max(16, int(getattr(context.region, "width", 280) / 8.5) - reserve)  # about 32 characters at the default 280 px
     col = layout.column(align=True)
     col.alert = alert
+    if small:
+        col.scale_y = SMALL_ROW
     for i, line in enumerate(textwrap.wrap(text, width=width) or [""]):
         col.label(text=line, icon=icon if i == 0 else "BLANK1")
+
+
+def step_layout(context, layout):
+    """Where a step draws: the layout itself, or, while no project folder is known, a greyed-out column under the reason."""
+    if core_project() is not None:
+        return layout
+    col = layout.column()
+    col.enabled = False
+    return col
 
 
 class ASRP_PT_main(bpy.types.Panel):
@@ -548,40 +977,196 @@ class ASRP_PT_main(bpy.types.Panel):
     bl_category = "ASRP"
 
     def draw(self, context):
-        layout = self.layout
-        layout.operator(ASRP_OT_load_playback.bl_idname, text="Load result", icon="IMPORT")
-        layout.operator(ASRP_OT_check_backend.bl_idname, text="Check backend", icon="FILE_REFRESH")
-        status = context.window_manager.asrp_status
-        if not status:
-            return
-        for check in json.loads(status):
-            layout.label(text=f"{check['name']}: {check['detail']}", icon=STATUS_ICONS[check["status"]])
+        if core_project() is None:  # the one thing to do before anything else; the steps below are greyed out until it is done
+            wrapped(context, self.layout, "Choose the ASRP project folder.", "ERROR")
+            wrapped(context, self.layout, "Asked once. Blender remembers.")
+            self.layout.operator(ASRP_OT_choose_project.bl_idname, icon="FILE_FOLDER")
+            wrapped(context, self.layout, "The steps below stay grey until then.", "INFO")
 
 
-class ASRP_PT_run(bpy.types.Panel):
-    bl_label = "Run"
+def asset_open(scene) -> bool:
+    try:
+        asset.asset_objects(scene)
+        return True
+    except ValueError:
+        return False
+
+
+def folder_lines(context, layout, label: str, folder) -> None:
+    """"Scene files: runs/_asset/<stamp>" (relative to the project folder) and a button that opens that folder."""
+    wrapped(context, layout, f"{label}: {asset.relative_to_project(folder)}", "FILE_FOLDER")
+    op = layout.operator("wm.path_open", text="Open folder", icon="FILEBROWSER")
+    op.filepath = str(folder)
+
+
+def scene_files_gone(scene) -> bool:
+    return bool(scene.asrp_asset_scene) and not Path(scene.asrp_asset_scene).is_file()
+
+
+class ASRP_PT_asset(bpy.types.Panel):
+    bl_label = "1  Open the asset"
     bl_space_type = "VIEW_3D"
     bl_region_type = "UI"
     bl_category = "ASRP"
     bl_parent_id = "ASRP_PT_main"
 
     def draw(self, context):
-        layout, scene = self.layout, context.scene
+        layout, scene = step_layout(context, self.layout), context.scene
         col = layout.column(align=True)
         col.enabled = not SESSION.running
-        # Each label on its own line above its field: neither competes with the path for the width of the side bar.
-        for label, prop in (("Scene", "asrp_scene_path"), ("Motion (trajectory.json)", "asrp_trajectory_path"),
-                            ("Runs folder", "asrp_runs_dir"), ("Run name", "asrp_run_name")):
-            col.label(text=label)
-            col.prop(scene, prop, text="")
-        if not scene.asrp_runs_dir:
-            layout.label(text="Empty runs folder = the project's runs")
-        wrapped(context, layout, "Computes the whole motion, then replays it. Not frame-by-frame.")
+        col.prop(scene, "asrp_tet_choice", expand=True)
+        wrapped(context, layout, asset.tet_line(scene.asrp_tet_choice or "coarse"), small=True)
+        if scene.asrp_asset_objects and scene.asrp_asset_tet and scene.asrp_asset_tet != scene.asrp_tet_choice:
+            wrapped(context, layout, "Press Open asset again to use this mesh.", "INFO", alert=True)
+        row = layout.row()
+        row.enabled = not SESSION.running
+        row.operator(ASRP_OT_open_asset.bl_idname, icon="IMPORT")
+        items = list(scene.asrp_asset_objects)
+        if not items:
+            layout.label(text="No asset is open")
+            return
+        if not asset_open(scene):
+            wrapped(context, layout, "An asset object was deleted. Press Open asset again.", "ERROR", alert=True)
+            return
+        problem = asset.files_problem(scene)
+        if problem:
+            wrapped(context, layout, problem, "ERROR", alert=True)
+        wrapped(context, layout, "Open: " + ", ".join(ROLE_WORDS.get(i.role, i.role) for i in items), "CHECKMARK", small=True)
+        if is_live(scene.asrp_asset_landmarks):
+            hidden = scene.asrp_show_landmarks and bool(scene.asrp_asset_run)
+            layout.prop(scene, "asrp_show_landmarks", text="Show landmarks (hidden now)" if hidden else "Show landmarks")
+
+
+class ASRP_PT_asset_details(bpy.types.Panel):
+    """Everything about the open asset that is not needed to go on: closed, inside step 1."""
+    bl_label = "Asset details"
+    bl_space_type = "VIEW_3D"
+    bl_region_type = "UI"
+    bl_category = "ASRP"
+    bl_parent_id = "ASRP_PT_asset"
+    bl_options = {"DEFAULT_CLOSED"}
+
+    def draw(self, context):
+        layout, scene = self.layout, context.scene
+        wrapped(context, layout, "One asset for both prototypes: skull, jaw, teeth, lips.")
+        wrapped(context, layout, "This .blend is the scene. Save it to keep the asset and the last result.")
+        if not scene.asrp_asset_objects or not asset_open(scene):
+            return
+        for text in (scene.asrp_asset_units, scene.asrp_asset_material, *scene.asrp_asset_report.splitlines()):
+            if text:
+                wrapped(context, layout, text)
+        if scene.asrp_asset_scene and not scene_files_gone(scene):
+            op = layout.operator("wm.path_open", text="Open import report", icon="TEXT")
+            op.filepath = str(Path(scene.asrp_asset_scene).parent / "import_report.json")
+            folder_lines(context, layout, "Scene files", Path(scene.asrp_asset_scene).parent)
+        if is_live(scene.asrp_asset_landmarks) and scene.asrp_show_landmarks and scene.asrp_asset_run:
+            wrapped(context, layout, "Landmarks show the rest positions; hidden while a result plays.", "INFO")
+        if scene.asrp_asset_hidden:
+            wrapped(context, layout, f"Hidden, because the asset was inside it: {scene.asrp_asset_hidden}. "
+                                     "The eye icon in the outliner shows it again.", "HIDE_ON")
+
+
+def part_row(context, layout, line: str, kind: str, target: str, icon: str = "RESTRICT_SELECT_OFF", extra: str = "") -> None:
+    """A row of the Physics setup: the sentence (wrapped), and a small button that highlights it in the 3D view."""
+    row = layout.row()
+    col = row.column()
+    wrapped(context, col, line, reserve=4)
+    if extra:
+        wrapped(context, col, extra, reserve=4)
+    op = row.operator(ASRP_OT_highlight.bl_idname, text="", icon=icon)
+    op.kind, op.target = kind, target
+
+
+class ASRP_PT_setup(bpy.types.Panel):
+    bl_label = "Physics setup"
+    bl_space_type = "VIEW_3D"
+    bl_region_type = "UI"
+    bl_category = "ASRP"
+    bl_parent_id = "ASRP_PT_main"
+    bl_options = {"DEFAULT_CLOSED"}
+
+    def draw(self, context):
+        layout, scene = self.layout, context.scene
+        if not asset_open(scene):
+            layout.label(text="Open the asset first")
+            return
+        try:
+            rows = json.loads(scene.asrp_asset_setup or "{}")
+        except ValueError:
+            rows = {"error": "The physics setup is not readable. Press Open asset again."}
+        if rows.get("error") or not rows:
+            wrapped(context, layout, rows.get("error") or "The physics setup is empty. Press Open asset again.", "ERROR", alert=True)
+            return
+        layout.label(text="Soft tissue")
+        for t in rows["tissues"]:
+            part_row(context, layout, t["line"], "part", t["name"], extra=t["material"])
+        layout.label(text="Bones")
+        for b in rows["bones"]:
+            part_row(context, layout, b["line"], "part", b["name"])
+        layout.label(text="Attachments")
+        for a in rows["attachments"]:
+            on = scene.asrp_highlight == a["name"]
+            part_row(context, layout, a["line"], "attachment", a["name"], icon="COLOR" if on else "VERTEXSEL")
+        row = layout.row()
+        row.enabled = bool(scene.asrp_highlight)
+        row.operator(ASRP_OT_clear_highlight.bl_idname, icon="X")
+        row = layout.row()
+        row.enabled = not scene_files_gone(scene)
+        row.operator(ASRP_OT_check_setup.bl_idname, icon="CHECKMARK")
+        for i, line in enumerate(scene.asrp_setup_check.splitlines()):
+            wrapped(context, layout, line, alert=line.startswith("Error"), icon="INFO" if i == 0 else "BLANK1")
+        wrapped(context, layout, "Read-only in this version. Marking meshes as bone or tissue in Blender comes later.")
+
+
+class ASRP_PT_motion(bpy.types.Panel):
+    bl_label = "2  Choose a motion"
+    bl_space_type = "VIEW_3D"
+    bl_region_type = "UI"
+    bl_category = "ASRP"
+    bl_parent_id = "ASRP_PT_main"
+
+    def draw(self, context):
+        layout, scene = step_layout(context, self.layout), context.scene
+        if not asset_open(scene):
+            layout.label(text="Open the asset first")
+            return
+        col = layout.column(align=True)
+        col.enabled = not SESSION.running
+        for i, item in enumerate(scene.asrp_motions):
+            if item.error:
+                wrapped(context, col, f"{item.file}: {item.error}", "ERROR", alert=True)
+                continue
+            op = col.operator(ASRP_OT_pick_motion.bl_idname, text=asset.motion_label(item), depress=(i == scene.asrp_motion_index),
+                              icon="CHECKBOX_HLT" if i == scene.asrp_motion_index else "CHECKBOX_DEHLT")
+            op.index = i
+            small = col.row()
+            small.scale_y = 0.7  # the details are a smaller second line under the title
+            small.label(text="  " + asset.motion_details(item))
+
+
+class ASRP_PT_run(bpy.types.Panel):
+    bl_label = "3  Run"
+    bl_space_type = "VIEW_3D"
+    bl_region_type = "UI"
+    bl_category = "ASRP"
+    bl_parent_id = "ASRP_PT_main"
+
+    def draw(self, context):
+        layout, scene = step_layout(context, self.layout), context.scene
+        picked = asset.picked_motion(scene)
+        row = layout.row()  # always the first row of the step, running or not: it does not move
+        row.enabled = (not SESSION.running) and asset_open(scene) and picked is not None and not picked.error and not scene_files_gone(scene)
+        row.operator(ASRP_OT_run_motion.bl_idname, icon="PLAY")
+        wrapped(context, layout, "Computes the whole motion, then replays it. Not frame-by-frame.", small=True)
         if SESSION.running:
             self.draw_running(layout)
         else:
-            layout.operator(ASRP_OT_run.bl_idname, icon="PLAY")
+            if scene_files_gone(scene):
+                wrapped(context, layout, asset.files_problem(scene), "ERROR", alert=True)
+            elif not row.enabled:
+                wrapped(context, layout, "Open the asset and pick a motion first")
             self.draw_outcome(context, layout)
+            self.draw_playback(context, layout)
 
     def draw_running(self, layout):
         s = SESSION
@@ -593,13 +1178,26 @@ class ASRP_PT_run(bpy.types.Panel):
         layout.label(text=f"{int(s.elapsed)} s elapsed" + (". Cancelling..." if s.cancel_requested else ""))
         layout.operator(ASRP_OT_cancel_run.bl_idname, icon="CANCEL")
 
+    def draw_playback(self, context, layout):
+        """After a run: Play / Pause, what is playing, and where the run's files are."""
+        scene = context.scene
+        if SESSION.running or SESSION.load_error or not (scene.asrp_asset_run and asset_open(scene)):
+            return
+        if asset.files_problem(scene):
+            return  # the Asset section says the files are gone
+        playing = bool(getattr(context.screen, "is_animation_playing", False))
+        layout.operator("screen.animation_play", text="Pause" if playing else "Play", icon="PAUSE" if playing else "PLAY")
+        first, last = scene.frame_start, scene.frame_end
+        wrapped(context, layout, f"Playing frame {first} to {last}. Space bar pauses." if playing
+                else f"Frame {first} to {last} is ready. Space bar plays.", small=True)
+
     def draw_outcome(self, context, layout):
         s = SESSION
         if s.state == "idle":
             return
         ok = s.state == "complete" and not s.load_error
-        layout.label(text=STATE_WORDS[s.state] if ok or s.state != "complete" else "Complete, but the results could not be loaded",
-                     icon="CHECKMARK" if ok else "ERROR")
+        wrapped(context, layout, STATE_WORDS[s.state] if ok or s.state != "complete" else "Complete, but the results could not be loaded",
+                "CHECKMARK" if ok else "ERROR")
         if s.state == "complete" and s.cancel_too_late:
             wrapped(context, layout, "The cancel came too late: the run had already finished. This is a complete result and it is loaded.", "INFO")
         if s.state == "complete" and s.passed is False:
@@ -612,6 +1210,32 @@ class ASRP_PT_run(bpy.types.Panel):
             wrapped(context, layout, f"The results could not be loaded: {s.load_error}", "ERROR", alert=True)
 
 
+class ASRP_PT_run_files(bpy.types.Panel):
+    """Run any scene file with any motion file (typed paths). Not part of the three steps; its result is loaded as new
+    objects into the Results list, like Load run folder. A sub-panel of Advanced."""
+    bl_label = "Run other files"
+    bl_space_type = "VIEW_3D"
+    bl_region_type = "UI"
+    bl_category = "ASRP"
+    bl_parent_id = "ASRP_PT_advanced"
+    bl_options = {"DEFAULT_CLOSED"}
+
+    def draw(self, context):
+        layout, scene = self.layout, context.scene
+        col = layout.column(align=True)
+        col.enabled = not SESSION.running
+        # Each label on its own line above its field: neither competes with the path for the width of the side bar.
+        for label, prop in (("Scene", "asrp_scene_path"), ("Motion (trajectory.json)", "asrp_trajectory_path"),
+                            ("Runs folder", "asrp_runs_dir"), ("Run name", "asrp_run_name")):
+            col.label(text=label)
+            col.prop(scene, prop, text="")
+        if not scene.asrp_runs_dir:
+            wrapped(context, layout, "Empty runs folder = the project's runs")
+        row = layout.row()
+        row.enabled = not SESSION.running
+        row.operator(ASRP_OT_run.bl_idname, icon="PLAY")
+
+
 class ASRP_PT_results(bpy.types.Panel):
     bl_label = "Results"
     bl_space_type = "VIEW_3D"
@@ -622,10 +1246,21 @@ class ASRP_PT_results(bpy.types.Panel):
     def draw(self, context):
         layout, scene = self.layout, context.scene
         shown = scene.asrp_shown if shown_entry(scene) is not None else -1  # a deleted object is not "shown"
-        if shown < 0:
+        run = Path(scene.asrp_asset_run) if scene.asrp_asset_run and asset_open(scene) else None
+        if run is not None and not (run / "playback.json").is_file():
+            wrapped(context, layout, f"The files of the result on the asset ({run.name}) are gone. Run the motion again.", "ERROR", alert=True)
+        elif run is not None:
+            for layer in ("physics", "final"):
+                if layer == "final" and not (run / "playback_final.pc2").is_file():
+                    continue  # the run had no landmark layer: there is no final shape
+                on = scene.asrp_asset_layer == layer
+                op = layout.operator(ASRP_OT_set_layer.bl_idname, text=asset.LAYER_WORDS[layer], depress=on,
+                                     icon="HIDE_OFF" if on else "HIDE_ON")
+                op.layer = layer
+        if shown < 0 and run is None:
             layout.label(text="No result is shown", icon="HIDE_ON")
         for indexes in result_groups(scene):
-            layout.label(text=scene.asrp_results[indexes[0]].run_name)  # the run's name once, then its versions
+            wrapped(context, layout, scene.asrp_results[indexes[0]].run_name)  # the run's name once, then its versions
             for i in indexes:
                 entry = scene.asrp_results[i]
                 word = VERSION_BUTTONS.get(entry.version, entry.version)
@@ -639,7 +1274,45 @@ class ASRP_PT_results(bpy.types.Panel):
                     op.index = i
                 rm = row.operator(ASRP_OT_remove_result.bl_idname, text="", icon="X")
                 rm.index = i
-        layout.operator(ASRP_OT_load_run_folder.bl_idname, icon="FILE_FOLDER")
+
+
+class ASRP_PT_compare(bpy.types.Panel):
+    bl_label = "Compare with Ziva"
+    bl_space_type = "VIEW_3D"
+    bl_region_type = "UI"
+    bl_category = "ASRP"
+    bl_parent_id = "ASRP_PT_main"
+    bl_options = {"DEFAULT_CLOSED"}
+
+    def draw(self, context):
+        layout, scene = self.layout, context.scene
+        folder = ziva_folder()
+        layout.operator(ASRP_OT_choose_ziva.bl_idname, text="Ziva reference folder", icon="FILE_FOLDER")
+        if folder:
+            wrapped(context, layout, f"Reference: {Path(folder).name}")
+        else:
+            wrapped(context, layout, "Choose the Ziva export folder once. It is the lab's data, outside the project.", "INFO")
+        row = layout.row()
+        row.enabled = bool(folder) and bool(scene.asrp_asset_run) and asset_open(scene) and not compare.SESSION.running and not asset.files_problem(scene)
+        row.operator(ASRP_OT_compare.bl_idname, text="Compare", icon="PLAY")
+        if not scene.asrp_asset_run:
+            layout.label(text="Run a motion on the asset first")
+        s = compare.SESSION
+        if s.running:
+            layout.label(text=f"Comparing... {int(s.elapsed)} s", icon="TIME")
+        elif s.state == "failed":
+            wrapped(context, layout, f"The comparison failed: {s.error}", "ERROR", alert=True)
+        for line in compare.summary_lines(scene):
+            wrapped(context, layout, line)
+        if compare.ready(scene):
+            wrapped(context, layout, compare.REPORT_NOTE)
+        row = layout.row()
+        row.enabled = compare.ready(scene)
+        row.prop(scene, "asrp_show_ziva", text="Show Ziva's lips")
+        row = layout.row()
+        row.enabled = compare.ready(scene)
+        row.prop(scene, "asrp_show_heat", text="Show difference as colours")
+        layout.label(text=compare.SCALE_LINE)
 
 
 class ASRP_PT_checks(bpy.types.Panel):
@@ -648,15 +1321,20 @@ class ASRP_PT_checks(bpy.types.Panel):
     bl_region_type = "UI"
     bl_category = "ASRP"
     bl_parent_id = "ASRP_PT_main"
+    bl_options = {"DEFAULT_CLOSED"}
 
     def draw(self, context):
         layout, scene = self.layout, context.scene
-        entry = shown_entry(scene)
-        if entry is None:
+        current = current_run(scene)
+        if current is None:
             layout.label(text="No result is shown")
             return
-        report = read_report(entry.run_dir)
-        layout.label(text=f"Run: {entry.run_name}")
+        run_name, run_dir, version = current
+        if not Path(run_dir).is_dir():
+            wrapped(context, layout, f"The run folder is gone ({run_name}). Run the motion again.", "ERROR", alert=True)
+            return
+        report = read_report(run_dir)
+        wrapped(context, layout, f"Run: {run_name}")
         rows = check_rows(report) if report is not None else None
         if rows is None:
             wrapped(context, layout, "The run report is unreadable (run_report.json is missing or not shaped like a report).", "ERROR", alert=True)
@@ -664,7 +1342,7 @@ class ASRP_PT_checks(bpy.types.Panel):
         for key, name, verdict, message in rows:
             fail = verdict == "FAIL"
             box = layout.column(align=True)
-            row = box.split(factor=0.8)  # the check on the left, its verdict on the right
+            row = box.split(factor=0.72)  # the check on the left, its verdict on the right
             row.alert = fail
             row.label(text=check_label(key, name))
             right = row.row()
@@ -674,18 +1352,55 @@ class ASRP_PT_checks(bpy.types.Panel):
                 # With the option on, the report's own (long) check name comes with the message of a passed check.
                 text = message if fail or verdict == "NOT RUN" or name == key else f"{name}. {message}"
                 wrapped(context, box, text, alert=fail)
+        if all_passed(rows):  # a green list must not read as "the surface is fine"
+            wrapped(context, layout, ALL_PASS_NOTE, "INFO")
         wrapped(context, layout, landmark_summary(report))
-        for line in (surface_line(report), settle_line(report)):
+        which = version if version in ("physics", "final") else None  # the layer on the asset's lips; None: final if there is one
+        for line in (surface_line(report, which), worst_surface_line(report, which), settle_line(report)):
             if line:
                 wrapped(context, layout, line)
+        for line in report_warnings(report):
+            wrapped(context, layout, f"Reported, not a check: {line}", "INFO")
         if not_settled(report):
             wrapped(context, layout, "Tissue not settled at the settle frame", "ERROR", alert=True)
         layout.prop(scene, "asrp_show_messages", text="Show every check's message")
 
 
-classes = (ASRP_OT_check_backend, ASRP_OT_load_playback, ASRP_Result, ASRP_OT_run, ASRP_OT_cancel_run,
-           ASRP_OT_load_run_folder, ASRP_OT_show_result, ASRP_OT_remove_result,
-           ASRP_PT_main, ASRP_PT_run, ASRP_PT_results, ASRP_PT_checks)
+class ASRP_PT_advanced(bpy.types.Panel):
+    """Everything that is not one of the three steps: the project folder, the backend check, loading a result or a run
+    folder that is already on disk, and running other files."""
+    bl_label = "Advanced"
+    bl_space_type = "VIEW_3D"
+    bl_region_type = "UI"
+    bl_category = "ASRP"
+    bl_parent_id = "ASRP_PT_main"
+    bl_options = {"DEFAULT_CLOSED"}
+
+    def draw(self, context):
+        layout = self.layout
+        project = core_project()
+        wrapped(context, layout, f"Project: {project.name}" if project is not None else "No project folder chosen yet",
+                "FILE_FOLDER" if project is not None else "ERROR")
+        layout.operator(ASRP_OT_choose_project.bl_idname, text="Change project folder" if project is not None else "Choose project folder",
+                        icon="FILE_FOLDER")
+        layout.operator(ASRP_OT_check_backend.bl_idname, text="Check backend", icon="FILE_REFRESH")
+        status = context.window_manager.asrp_status
+        if status:
+            for check in json.loads(status):
+                wrapped(context, layout, f"{check['name']}: {check['detail']}", STATUS_ICONS[check["status"]])
+        scene = context.scene
+        if scene.asrp_asset_run and asset_open(scene) and not asset.files_problem(scene):  # the run's folder: out of the way of step 3
+            folder_lines(context, layout, "Run files", Path(scene.asrp_asset_run))
+        layout.operator(ASRP_OT_load_playback.bl_idname, text="Load result", icon="IMPORT")
+        layout.operator(ASRP_OT_load_run_folder.bl_idname, icon="FILE_FOLDER")
+
+
+classes = (ASRP_Preferences, ASRP_OT_choose_project, ASRP_OT_choose_ziva, ASRP_OT_compare, ASRP_OT_check_backend, ASRP_OT_load_playback, ASRP_Result, ASRP_Motion,
+           ASRP_AssetObject, ASRP_OT_run, ASRP_OT_open_asset, ASRP_OT_pick_motion, ASRP_OT_run_motion, ASRP_OT_set_layer,
+           ASRP_OT_cancel_run, ASRP_OT_load_run_folder, ASRP_OT_show_result, ASRP_OT_remove_result,
+           ASRP_OT_highlight, ASRP_OT_clear_highlight, ASRP_OT_check_setup,
+           ASRP_PT_main, ASRP_PT_asset, ASRP_PT_asset_details, ASRP_PT_setup, ASRP_PT_motion, ASRP_PT_run, ASRP_PT_results, ASRP_PT_compare, ASRP_PT_checks, ASRP_PT_advanced,
+           ASRP_PT_run_files)
 
 
 def register():
@@ -701,7 +1416,34 @@ def register():
     S.asrp_results = bpy.props.CollectionProperty(type=ASRP_Result)
     S.asrp_shown = bpy.props.IntProperty(default=-1, description="Index of the result on screen, -1 for none")
     S.asrp_show_messages = bpy.props.BoolProperty(description="Show the message of every check, not only of failed ones")
+    S.asrp_asset_objects = bpy.props.CollectionProperty(type=ASRP_AssetObject)
+    S.asrp_asset_scene = bpy.props.StringProperty(description="scene.json that Open asset imported")
+    S.asrp_asset_export = bpy.props.StringProperty(description="The export folder the asset and the motions come from")
+    S.asrp_asset_hidden = bpy.props.StringProperty(description="Objects Open asset hid because the asset was inside them")
+    S.asrp_asset_run = bpy.props.StringProperty(description="The run folder whose result is on the asset's objects")
+    S.asrp_asset_layer = bpy.props.StringProperty(description="physics or final: the layer on the asset's lips")
+    S.asrp_asset_landmarks = bpy.props.PointerProperty(type=bpy.types.Object, description="The landmark dots (the sixth object of Open asset)")
+    S.asrp_tet_choice = bpy.props.EnumProperty(items=asset.TET_CHOICES, default="coarse", name="Tet mesh",
+                                               description="Which tet mesh Open asset imports with")
+    S.asrp_asset_tet = bpy.props.StringProperty(description="The tet mesh choice the open asset was imported with")
+    S.asrp_show_ziva = bpy.props.BoolProperty(name="Show Ziva's lips", update=lambda _self, _ctx: compare.sync_ziva(bpy.context),
+                                              description="Show Ziva's lips (from the comparison) next to ours")
+    S.asrp_show_heat = bpy.props.BoolProperty(name="Show difference as colours", update=lambda _self, _ctx: compare.sync_heat(bpy.context),
+                                              description="Colour our lips by the difference from Ziva at the current frame")
+    S.asrp_ziva_object = bpy.props.PointerProperty(type=bpy.types.Object, description="Ziva's lips (the comparison's playback package)")
+    S.asrp_asset_units = bpy.props.StringProperty(description="The units line of the imported scene")
+    S.asrp_asset_report = bpy.props.StringProperty(description="Lines of the import report, one per line")
+    S.asrp_asset_setup = bpy.props.StringProperty(description="The Physics setup rows of the imported scene (JSON)")
+    S.asrp_setup_check = bpy.props.StringProperty(description="The outcome of the last Check setup")
+    S.asrp_highlight_object = bpy.props.PointerProperty(type=bpy.types.Object, description="The points that show the highlighted attachment")
+    S.asrp_highlight = bpy.props.StringProperty(description="The attachment whose vertices are coloured on the lips, if any")
+    S.asrp_show_landmarks = bpy.props.BoolProperty(default=True, name="Show landmarks", update=lambda self, _ctx: asset.sync_landmarks(self),
+                                                   description="Show the landmarks' rest positions as dots (hidden while a result is on the asset)")
+    S.asrp_asset_material = bpy.props.StringProperty(description="The material line of the imported scene, for the Asset section")
+    S.asrp_motions = bpy.props.CollectionProperty(type=ASRP_Motion)
+    S.asrp_motion_index = bpy.props.IntProperty(default=-1, description="The motion picked for the next run, -1 for none")
     global _exit_handler
+    session.preference_project = preference_project
     if on_load_post not in bpy.app.handlers.load_post:
         bpy.app.handlers.load_post.append(on_load_post)
     _exit_handler = register_exit_handler(SESSION)
@@ -714,6 +1456,10 @@ def unregister():
     global _exit_handler
     if bpy.app.timers.is_registered(tick):
         bpy.app.timers.unregister(tick)
+    if bpy.app.timers.is_registered(compare_tick):
+        bpy.app.timers.unregister(compare_tick)
+    compare.SESSION.close()
+    compare.unregister_handlers()
     if on_load_post in bpy.app.handlers.load_post:
         bpy.app.handlers.load_post.remove(on_load_post)
     # Blender's exit calls unregister() for an installed add-on before Python shuts down, so the run is stopped here:
@@ -723,7 +1469,10 @@ def unregister():
         atexit.unregister(_exit_handler)
         _exit_handler = None
     S = bpy.types.Scene
-    for name in ("asrp_show_messages", "asrp_shown", "asrp_results", "asrp_run_name", "asrp_runs_dir",
+    session.preference_project = lambda: ""
+    for name in ("asrp_highlight_object", "asrp_ziva_object", "asrp_show_heat", "asrp_show_ziva", "asrp_asset_tet", "asrp_tet_choice", "asrp_show_landmarks", "asrp_highlight", "asrp_setup_check", "asrp_asset_setup", "asrp_asset_report", "asrp_asset_units",
+                 "asrp_asset_landmarks", "asrp_asset_material", "asrp_motion_index", "asrp_motions", "asrp_asset_layer", "asrp_asset_run", "asrp_asset_export", "asrp_asset_hidden",
+                 "asrp_asset_scene", "asrp_asset_objects", "asrp_show_messages", "asrp_shown", "asrp_results", "asrp_run_name", "asrp_runs_dir",
                  "asrp_trajectory_path", "asrp_scene_path"):
         delattr(S, name)
     del bpy.types.WindowManager.asrp_status
