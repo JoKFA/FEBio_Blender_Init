@@ -121,3 +121,36 @@ def test_capture_callback_retains_failure_if_maya_swallows_it():
     sampler(2)
     sampler(3)
     assert len(sampler.errors) == 1 and "missing frame" in sampler.errors[0]
+
+
+# --- T-37 item 8: a motion that leaves the jaw still is a motion; the report says whole face or lips only ----------
+
+
+def test_a_motion_that_leaves_the_jaw_still_is_not_a_problem_unless_it_must_turn_it():
+    still_jaw = {"frames_sampled": 31, "frames_expected": 31, "bone_translation": 0, "jaw_degrees": 0.0,
+                 "landmark_travel": 4.0, "final_vs_physics": 2.0}  # IY, UW, T: the landmarks move, the jaw does not
+    assert z.check_motion(still_jaw, "expression") == []
+    problems = z.check_motion(still_jaw, "expression", jaw_turns=True)  # AA must turn it
+    assert len(problems) == 1 and "jaw01 turned only 0.000 degrees" in problems[0]
+    # "was the motion loaded" is still asked: nothing moving at all is a problem with the jaw not required
+    assert len(z.check_motion({**still_jaw, "landmark_travel": 0.0, "final_vs_physics": 0.0}, "expression")) == 2
+
+
+def test_the_simulation_check_follows_the_jaw_only_when_it_turns():
+    base = {"motion_move": 0.0, "frozen_frames": 0, "rest_offset": 0.0, "finite": True, "largest_move": 1.0,
+            "gravity_sag": 0.5, "jaw_degrees": 0.0}
+    assert z.check_simulation(base)[0] == []  # the jaw never turned: nothing for the physics to follow
+    problems, _ = z.check_simulation({**base, "jaw_degrees": 5.0})  # it turned and the shape did not follow
+    assert len(problems) == 1 and "did not follow the jaw" in problems[0]
+
+
+def test_the_report_says_whole_face_or_lips_only():
+    entries = [{"body": "zTissue1", "vertices": z.LIP_VERTICES}, {"body": "zTissue2", "vertices": 500},
+               {"body": "zTissue3", "vertices": 700}]
+    every = {"zTissue1": True, "zTissue2": True, "zTissue3": True}
+    assert z.solved_scope(entries, every)["scope"] == "full_face"
+    only = z.solved_scope(entries, {"zTissue1": True, "zTissue2": False, "zTissue3": False})
+    assert only["scope"] == "lips_only" and only["disabled"] == ["zTissue2", "zTissue3"]
+    assert z.solved_scope(entries, {"zTissue1": False, "zTissue2": True, "zTissue3": False})["scope"] == "other"
+    assert z.solved_scope(entries, {"zTissue1": True, "zTissue2": None, "zTissue3": False})["scope"] == "unknown"
+    assert z.solved_scope([], {})["scope"] == "unknown"

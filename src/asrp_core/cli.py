@@ -65,7 +65,7 @@ def cmd_import_asset(args: argparse.Namespace) -> int:
     tet = Path(args.tetmesh) if args.tetmesh else Path(args.export) / ".." / "tetmesh" / "lips.json"
     try:
         result = lab.import_asset(Path(args.export), Path(args.out), tet, args.mm_per_scene_unit,
-                                  tissue_settings=args.tissue_settings)
+                                  tissue_settings=args.tissue_settings, attachment_rule=args.attachments)
     except lab.AssetError as e:
         print(f"ERROR  {e}")
         print("import FAILED")
@@ -309,10 +309,14 @@ def main(argv: list[str] | None = None) -> int:
     imp.add_argument("--mm-per-scene-unit", type=float, default=0.962,
                      help="geometry scale, mm per scene unit (default 0.962, the lab controller's conversion, ADR-31)")
     imp.add_argument("--tetmesh", help="the lip tet mesh (default: <export>/../tetmesh/lips.json)")
-    imp.add_argument("--tissue-settings", choices=("ours", "lab"), default="ours",
-                     help="ours (default): our own material values. lab: the Young's modulus, Poisson's ratio, "
-                          "density and substeps measured in the lab's Ziva scene (docs/03 section 5); the material "
-                          "model, attachments, damping, gravity and physical scale stay ours")
+    imp.add_argument("--tissue-settings", choices=("ours", "lab"), default="lab",
+                     help="lab (default): the Young's modulus (12 kPa), Poisson's ratio (0.4), density and substeps "
+                          "measured in the lab's Ziva scene (docs/03 section 5). ours: our earlier material (15 kPa, "
+                          "0.45). In both, the material model, damping, gravity and physical scale stay ours")
+    imp.add_argument("--attachments", choices=("ours", "ziva-soft"), default="ours",
+                     help="ours (default): upper lip hard, the others springs of 100 x E x h. ziva-soft: all four "
+                          "groups springs of Ziva's 0.1 N/mm3 x the group's mean lip-surface area per vertex x k^2 "
+                          "(docs/05 section 3); for tet meshes so coarse that the lips share tet nodes")
     imp.set_defaults(func=cmd_import_asset)
 
     conv = sub.add_parser("convert-motion",

@@ -118,8 +118,9 @@ def load(run_dir, *, allow_failed_checks: bool = False, allow_unsettled: bool = 
 
     NOT for the lab's existing training: the results the lab's training saved sit on the rest shape
     (`rest_model`). This entry is for new experiments that ask for a settled base, and it says so with a
-    SettledBaseWarning. A run report without a `tissue_settled` field (an older run) is accepted: whether
-    the tissue had stopped is then not known."""
+    SettledBaseWarning. A run report without a `tissue_settled` field (an older run) is refused like one
+    that says the tissue was still moving: whether the tissue had stopped is then not known; allow_unsettled=True
+    accepts both."""
     warnings.warn(
         "final_shape.load: the base is the shape after the gravity-only settle. The lab's saved training results "
         "sit on the REST shape; for the lab's existing training use final_shape.rest_model(scene.json) "
@@ -148,13 +149,19 @@ def load(run_dir, *, allow_failed_checks: bool = False, allow_unsettled: bool = 
             f"the run in {run_dir} has no settled shape: {reason or 'run_report.json does not say why'}. "
             "Make the run with a trajectory whose settle_until_frame ends a stretch where nothing moves"
         )
-    if settled.get("tissue_settled") is False and not allow_unsettled:  # absent (an older run): not known, accepted
+    if settled.get("tissue_settled") is False and not allow_unsettled:
         raise FinalShapeError(
             f"the run in {run_dir} has a settled shape, but the tissue was still moving at that frame: "
             f"{settled.get('tissue_step_max_mm')!r} mm in the last frame of the settle, above the "
             f"{settled.get('tissue_settled_limit_mm')!r} mm limit. A base that is still moving gives a different lip "
             "shape depending on when it is read. Give the motion a longer settle, or pass allow_unsettled=True if you "
             "accept it"
+        )
+    if settled.get("tissue_settled") is not True and not allow_unsettled:  # absent: an older report, not known
+        raise FinalShapeError(
+            f"the run in {run_dir} does not say whether the tissue had stopped moving at the settled frame "
+            "(run_report.json has no settled_shape.tissue_settled, so the run is from an older version). Run again "
+            "with this version, or pass allow_unsettled=True if you accept a base that may still be moving"
         )
     frame = settled.get("frame")
     scene, skin, rest_scene = _scene_parts(run_dir / "scene.json")
@@ -178,16 +185,42 @@ def rest_model(scene_json_path) -> LipModel:
     is the lab's formula (bind pose + weights @ translations) and reproduces the 145 lip results the lab's
     training program saved (worst 0.000007 mm, tests/test_lab_facts.py). The model's base is "rest".
 
-    The mesh is the scene's first soft tissue; it is accepted only if its vertex count equals the skin
-    weights' (checked below), which is what ties it to the lips."""
+    Which soft tissue is the lips is decided by identity, not by position or vertex count: the skin file names
+    the Maya mesh its weights were made for (`mesh`), and the tissue taken is the one whose source object is that
+    mesh (`mesh_<name>.obj`). A skin file that does not name its mesh (an older import) is matched by topology:
+    exactly one tissue whose mesh has the weights' vertex count and whose faces stay inside it; with two or none
+    the scene is refused rather than guessed."""
     scene_path = Path(scene_json_path)
     scene, skin, rest_scene = _scene_parts(scene_path)
     if not scene.soft_tissues:
         raise FinalShapeError(f"{scene_path} has no soft tissue, so there is no lip mesh to start from")
-    mesh_path = scene_path.parent / scene.soft_tissues[0].mesh.path
-    if not mesh_path.is_file():
-        raise FinalShapeError(f"the lip mesh {mesh_path} does not exist; re-import the asset")
-    base_mm, _faces = coords.read_obj(mesh_path)  # the scene's surface mesh is already mm, Z up
+    v = skin.weights.shape[0]
+    meshes = {}
+    for tissue in scene.soft_tissues:
+        mesh_path = scene_path.parent / tissue.mesh.path
+        if not mesh_path.is_file():
+            raise FinalShapeError(f"the mesh {mesh_path} of soft tissue {tissue.name!r} does not exist; re-import the asset")
+        meshes[tissue.name] = (mesh_path, *coords.read_obj(mesh_path))  # the surface mesh is already mm, Z up
+    if skin.mesh:
+        wanted = f"mesh_{skin.mesh}.obj"
+        found = [t for t in scene.soft_tissues if Path(t.source_obj.file).name == wanted]
+        if len(found) != 1:
+            raise FinalShapeError(
+                f"the skin weights are for the mesh {skin.mesh!r}, and {len(found)} soft tissues of {scene_path} come "
+                f"from {wanted} (the tissues come from "
+                f"{', '.join(sorted({Path(t.source_obj.file).name for t in scene.soft_tissues}))}); this scene's "
+                "lips cannot be told from another mesh, re-import the asset")
+        tissue = found[0]
+    else:
+        found = [t for t in scene.soft_tissues if len(meshes[t.name][1]) == v
+                 and all(0 <= i < v for f in meshes[t.name][2] for i in f)]
+        if len(found) != 1:
+            raise FinalShapeError(
+                f"the skin file does not name its mesh, and {len(found)} soft tissues of {scene_path} have the "
+                f"weights' {v} vertices with faces inside them; re-import the asset so the skin file says which "
+                "mesh it is for")
+        tissue = found[0]
+    mesh_path, base_mm, _faces = meshes[tissue.name]
     return _model(scene, skin, rest_scene, base_mm, "rest", where=f"the lip mesh {mesh_path}")
 
 

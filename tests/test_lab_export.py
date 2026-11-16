@@ -76,7 +76,7 @@ def test_mesh_not_in_measured_state_is_reported():
 
 
 SOLVED = {"gravity_sag": 1.0, "motion_move": 20.0, "frozen_frames": 0, "rest_offset": 0.0, "finite": True,
-          "largest_move": 25.0}
+          "largest_move": 25.0, "jaw_degrees": 12.0}
 
 
 def test_a_good_solve_passes():
@@ -114,7 +114,8 @@ def test_a_run_with_no_motion_fails_the_motion_check():
     played = {"frames_sampled": 50, "frames_expected": 50, "jaw_degrees": 12.0, "landmark_travel": 8.0,
               "final_vs_physics": 6.0}
     assert check_motion(played) == []
-    assert check_motion({**played, "jaw_degrees": 0.0})
+    assert check_motion({**played, "jaw_degrees": 0.0}, jaw_turns=True)  # T-37 item 8: only when it must turn
+    assert check_motion({**played, "jaw_degrees": 0.0}) == []  # IY, UW, T leave the jaw still
     assert check_motion({**played, "landmark_travel": 0.0})
     assert check_motion({**played, "final_vs_physics": 0.0})
     assert check_motion({**played, "frames_sampled": 49})
