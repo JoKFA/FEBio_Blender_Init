@@ -257,7 +257,7 @@ README 顶上的动图是更早的一次运行（材料还是我们定的 15 kPa
 | 对象 | 300 个 landmark，10,240 个显示顶点 |
 | 我们的蒙皮对实验室公式（实验室自己的绑定姿态和权重文件）最大差 | 5.3e-06 mm（平均 1.1e-06 mm） |
 | 门限 | 0.0001 mm |
-| 命令 | `uv run python tools/landmark_layer_check.py` |
+| 命令 | `uv run python tests/landmark_layer_check.py` |
 <!-- END generated: landmark -->
 
 **landmark 层对 Ziva**：每一帧，蒙皮前的形状加权重乘该帧 landmark 位移，对同一帧 Ziva 蒙皮后的形状，最大差 0.000016 mm，整张脸和只留嘴唇两次运行都是（引自 [09](09-roadmap-and-tasks.md) 的"对比"一节；这一条的核对要实验室的数据，在 `tests/test_lab_motion.py`，没有数据的机器上跳过）。
