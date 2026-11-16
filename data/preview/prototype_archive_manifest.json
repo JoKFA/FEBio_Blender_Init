@@ -1,0 +1,27 @@
+{
+  "format": "asrp-prototype-archive/1",
+  "tool": "tools/prototype_archive.py",
+  "date": "2026-11-15",
+  "git_commit": "2155f87",
+  "machine": "the development machine (a Windows 11 PC, 16 logical processors)",
+  "febio_threads": 4,
+  "what_else_ran": "other agents of the same batch were running tests and FEBio runs on the same machine at the same time; how much was not measured",
+  "commands": [
+    "asrp import-asset data/lab_export <scene folder> --tissue-settings lab --tetmesh data/tetmesh/lips_lattice.json --attachments ziva-soft",
+    "asrp import-asset data/lab_export <scene folder> --tissue-settings lab ",
+    "asrp run <scene> data/lab_export/trajectories/neutral_to_AA.json --threads 4",
+    "asrp run <scene> <head shake from tools/head_shake_motion.py> --threads 4",
+    "asrp run <scene> data/lab_export/trajectories/jaw_open_12deg.json --threads 4",
+    "asrp compare <AA run> <Ziva full-face export> --out <folder>  (and the lips-only export)",
+    "uv run python tools/ziva_comparison.py <report> --aa-run <AA run> --shake-run <shake run>",
+    "uv run python tools/render_comparison.py ..."
+  ],
+  "meshes": {
+    "coarse": "data/tetmesh/lips_lattice.json, --attachments ziva-soft",
+    "fine": "data/tetmesh/lips.json, default attachments (upper lip hard)"
+  },
+  "ziva_runs": {
+    "full_face": "neutral_to_AA_export_20261112_202048_16aa06ab",
+    "lips_only": "AA_lips_only_export_20261112_205041_de5be4be"
+  }
+}

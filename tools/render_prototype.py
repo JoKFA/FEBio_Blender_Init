@@ -11,10 +11,10 @@ views: rest (frame 0), settled (the settled frame) and jaw fully open (the frame
 
 With --version final (a run that has a landmark layer) it loads and checks the final version (physics +
 landmarks, <run_dir>/final/display.npy) instead of the physics one. With --last <name> it renders only the last
-frame, from the side and from the front, to <out>/<name>_side.png and <out>/<name>_front.png (docs/15 section 8).
+frame, from the side and from the front, to <out>/<name>_side.png and <out>/<name>_front.png (used by spikes/audit_aa_folds.py; the page's front pictures come from tools/render_comparison.py).
 
 With --frames-dir <dir> [--frames-size <px>] it also renders every frame of the same side view to
-<dir>/frame_000.png ... (default 560 px square), for assembling an animation (docs/15).
+<dir>/frame_000.png ... (default 560 px square), for assembling an animation (the README's animation).
 """
 
 import json
