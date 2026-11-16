@@ -424,6 +424,9 @@ def case_malformed_reports():
           "null name / message / numbers -> still rows and a summary; no exception")
 
 
+LABEL_MAX = 34  # characters one line holds at the default sidebar width (280 px); longer text is wrapped (wrapped() uses 32)
+
+
 class Rec:
     """A stand-in for a panel layout that records what is drawn: ('label', text, alert) and ('op', idname, text, depress, op)."""
 
@@ -462,6 +465,9 @@ def draw_panel(panel):
         if hasattr(panel, name):
             setattr(me, name, types.MethodType(getattr(panel, name), me))
     panel.draw(me, bpy.context)
+    too_long = [(r[0], (r[1] if r[0] == "label" else r[2])) for r in log
+                if r[0] in ("label", "op", "prop") and len(str((r[1] if r[0] == "label" else r[2]) or "").rstrip()) > LABEL_MAX]
+    assert not too_long, f"{panel.bl_label}: text that does not fit {LABEL_MAX} characters (cut off at the default sidebar width): {too_long}"
     return log
 
 
@@ -799,9 +805,9 @@ MOTIONS = {  # file: (layer the panel must show, frame in the middle of the moti
     "neutral_to_AA.json": ("final", 25, ("jaw", "teeth_lower"), ("skull", "teeth_upper")),  # last: its last control replaces the five objects
 }  # the order the cases run in (the panel's list order is TITLES)
 TITLES = {  # what the panel's list shows, in the order it shows it: from the owner's words, not from the add-on
-    "jaw_open_12deg.json": "Prototype 1: jaw opens 12 degrees (test motion)",
-    "neutral_to_AA.json": "Prototype 2: neutral to AA (lab motion)",
-    "head_shake.json": "Prototype 2: head shake (test motion)",
+    "jaw_open_12deg.json": "Prototype 1: jaw opens 12 deg",
+    "neutral_to_AA.json": "Prototype 2: neutral to AA",
+    "head_shake.json": "Prototype 2: head shake",
 }
 LIPS_TOLERANCE_MM = 1e-5
 BONE_TOLERANCE_MM = 1e-4  # the bones' quaternions are float32
@@ -1218,6 +1224,12 @@ def check_run_section(run_dir, frames):
     word = "Pause" if real_playing else "Play"
     need(len(plays) == 1 and plays[0][2] == word, "after-run", f"the Run section has no {word} button after a run: {[(r[1], r[2]) for r in log if r[0] == 'op']}")
     text = " ".join(labels_of(log))
+    need("Complete" in labels_of(log), "after-run", f"after a run the Run section does not end in 'Complete': {labels_of(log)}")  # F6
+    res = labels_of(draw_panel(asrp_blender.ASRP_PT_results))
+    need("On the asset:" in res and Path(run_dir).name.replace(" ", "") in "".join(res).replace(" ", ""), "after-run", f"the run name is not on its own line: {res}")  # F3
+    adv = draw_panel(asrp_blender.ASRP_PT_advanced)
+    need(f"Project: {asrp_blender.core_project().name}" in " ".join(labels_of(adv)) and "Change project folder" in [r[2] for r in adv if r[0] == "op"], "after-run",
+         f"the Advanced section does not say which project folder is in use: {labels_of(adv)}")  # F4
     need(f"Run files: {asrp_blender.asset.relative_to_project(run_dir)}".replace(" ", "") in text.replace(" ", ""), "after-run",
          f"the Run section does not show the run folder: {text}")
     opens = [r for r in log if r[0] == "op" and r[1] == "wm.path_open"]
@@ -1267,7 +1279,8 @@ def draw_new_panels():
     ops = [r for r in log if r[0] == "op"]
     assert [r[2] for r in ops] == list(TITLES.values()) and sum(1 for r in ops if r[3]) == 1 and ops[0][3], [(r[2], r[3]) for r in ops]
     details = [t for t in labels_of(log)]
-    assert details == ["      51 frames, 30 fps, test motion", "      47 frames, 30 fps, lab motion", "      87 frames, 30 fps, test motion"], details
+    assert details == ["  51 frames, 30 fps, test motion", "  47 frames, 30 fps, lab motion", "  87 frames, 30 fps, test motion"], details
+    assert all(len(t) <= LABEL_MAX for t in TITLES.values()), "a motion title is longer than its button holds"
     # no internal word where a plain one exists
     import re
     shown = " ".join(labels_of(draw_panel(asrp_blender.ASRP_PT_asset)) + details + [r[2] for r in ops])
@@ -1632,11 +1645,13 @@ def run_child(phase: str, repo: Path, tmp: Path) -> None:
     if phase == "a":
         assert prefs.project_dir == "" and ab.core_project() is None, (prefs.project_dir, ab.core_project())
         main = draw_panel(ab.ASRP_PT_main)
-        assert "Choose the ASRP project folder (once)" in labels_of(main), main
+        mtext = " ".join(labels_of(main))
+        assert "Choose the ASRP project folder." in labels_of(main) and "Asked once. Blender remembers." in labels_of(main), main
+        assert mtext.count("stay grey") == 1, mtext  # the note is written once, under the chooser
         assert [r[1] for r in main if r[0] == "op"] == ["asrp.choose_project"], main
         for panel in (ab.ASRP_PT_asset, ab.ASRP_PT_motion, ab.ASRP_PT_run):  # steps 1 to 3 greyed out, with the reason
             log = draw_panel(panel)
-            assert "Choose the project folder first (top of this tab)." in " ".join(labels_of(log)), (panel.bl_label, log)
+            assert "Choose the project folder first" not in " ".join(labels_of(log)), (panel.bl_label, log)  # no note on every step
             assert all(not r[5] for r in log if r[0] == "op"), f"{panel.bl_label}: a button is enabled while no project is known"
         for name in ("open_asset", "run_motion"):  # pressed anyway (from a script): a plain sentence, not the old one
             try:
@@ -1659,7 +1674,7 @@ def run_child(phase: str, repo: Path, tmp: Path) -> None:
         assert bpy.ops.asrp.open_asset() == {"FINISHED"}
         sc = bpy.context.scene
         assert len(sc.asrp_asset_objects) == 5 and [m.file for m in sc.asrp_motions] == list(TITLES), [m.file for m in sc.asrp_motions]
-        print(f"CHILD phase a: loaded from {where.parent.name} outside the repo; no project -> 'Choose the ASRP project folder (once)', steps 1 to 3 "
+        print(f"CHILD phase a: loaded from {where.parent.name} outside the repo; no project -> 'Choose the ASRP project folder.' once, steps 1 to 3 "
               f"greyed out, open_asset refused in plain words; a wrong folder refused; the right one chosen; Open asset made "
               f"{len(sc.asrp_asset_objects)} objects, motions {[m.title for m in sc.asrp_motions]}, {sc.asrp_asset_material!r}")
     else:

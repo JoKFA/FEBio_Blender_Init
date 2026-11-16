@@ -3,7 +3,7 @@
   "fps": 30,
   "frames": 47,
   "source": "job_251205-190350/251205-190358/combined_checkpoints.pkl (sha256 55b0109b16ed8c98f99f88e07cfdf3bcd49f0adb1d504f166c56a56917d53549): a lab motion of 22 steps that starts at rest; frames 0-14 at rest, step i on frame 15 + i, the last pose held 10 frames; jaw01 turns about world X by the file's pitch (last -5.16416 degrees); the 300 lip landmarks move by the file's offsets; the eyes' and the forehead's offsets are not used",
-  "title": "Prototype 2: neutral to AA (lab motion)",
+  "title": "Prototype 2: neutral to AA",
   "source_tag": "lab_setting",
   "settle_until_frame": 14,
   "landmarks": {

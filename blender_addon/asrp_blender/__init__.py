@@ -944,7 +944,7 @@ class ASRP_OT_remove_result(bpy.types.Operator):
 
 def wrapped(context, layout, text: str, icon: str = "NONE", alert: bool = False, reserve: int = 0) -> None:
     """A label that wraps to the width of the side bar (`reserve` characters narrower, when a button sits beside it)."""
-    width = max(16, int(getattr(context.region, "width", 300) / 8) - reserve)
+    width = max(16, int(getattr(context.region, "width", 280) / 8.5) - reserve)  # about 32 characters at the default 280 px
     col = layout.column(align=True)
     col.alert = alert
     for i, line in enumerate(textwrap.wrap(text, width=width) or [""]):
@@ -955,7 +955,6 @@ def step_layout(context, layout):
     """Where a step draws: the layout itself, or, while no project folder is known, a greyed-out column under the reason."""
     if core_project() is not None:
         return layout
-    wrapped(context, layout, "Choose the project folder first (top of this tab).", "INFO")
     col = layout.column()
     col.enabled = False
     return col
@@ -968,9 +967,11 @@ class ASRP_PT_main(bpy.types.Panel):
     bl_category = "ASRP"
 
     def draw(self, context):
-        if core_project() is None:  # the one thing to do before anything else
-            self.layout.label(text="Choose the ASRP project folder (once)", icon="ERROR")
+        if core_project() is None:  # the one thing to do before anything else; the steps below are greyed out until it is done
+            wrapped(context, self.layout, "Choose the ASRP project folder.", "ERROR")
+            wrapped(context, self.layout, "Asked once. Blender remembers.")
             self.layout.operator(ASRP_OT_choose_project.bl_idname, icon="FILE_FOLDER")
+            wrapped(context, self.layout, "The steps below stay grey until then.", "INFO")
 
 
 def asset_open(scene) -> bool:
@@ -1113,7 +1114,7 @@ class ASRP_PT_motion(bpy.types.Panel):
             op.index = i
             small = col.row()
             small.scale_y = 0.7  # the details are a smaller second line under the title
-            small.label(text="      " + asset.motion_details(item))
+            small.label(text="  " + asset.motion_details(item))
 
 
 class ASRP_PT_run(bpy.types.Panel):
@@ -1136,7 +1137,7 @@ class ASRP_PT_run(bpy.types.Panel):
             if scene_files_gone(scene):
                 wrapped(context, layout, asset.files_problem(scene), "ERROR", alert=True)
             elif not row.enabled:
-                layout.label(text="Open the asset and pick a motion first")
+                wrapped(context, layout, "Open the asset and pick a motion first")
             self.draw_outcome(context, layout)
             self.draw_playback(context, layout)
 
@@ -1169,8 +1170,8 @@ class ASRP_PT_run(bpy.types.Panel):
         if s.state == "idle":
             return
         ok = s.state == "complete" and not s.load_error
-        layout.label(text=STATE_WORDS[s.state] if ok or s.state != "complete" else "Complete, but the results could not be loaded",
-                     icon="CHECKMARK" if ok else "ERROR")
+        wrapped(context, layout, STATE_WORDS[s.state] if ok or s.state != "complete" else "Complete, but the results could not be loaded",
+                "CHECKMARK" if ok else "ERROR")
         if s.state == "complete" and s.cancel_too_late:
             wrapped(context, layout, "The cancel came too late: the run had already finished. This is a complete result and it is loaded.", "INFO")
         if s.state == "complete" and s.passed is False:
@@ -1203,7 +1204,7 @@ class ASRP_PT_run_files(bpy.types.Panel):
             col.label(text=label)
             col.prop(scene, prop, text="")
         if not scene.asrp_runs_dir:
-            layout.label(text="Empty runs folder = the project's runs")
+            wrapped(context, layout, "Empty runs folder = the project's runs")
         row = layout.row()
         row.enabled = not SESSION.running
         row.operator(ASRP_OT_run.bl_idname, icon="PLAY")
@@ -1223,7 +1224,8 @@ class ASRP_PT_results(bpy.types.Panel):
         if run is not None and not (run / "playback.json").is_file():
             wrapped(context, layout, f"The files of the result on the asset ({run.name}) are gone. Run the motion again.", "ERROR", alert=True)
         elif run is not None:
-            layout.label(text=f"On the asset: {run.name}")
+            layout.label(text="On the asset:")
+            wrapped(context, layout, run.name)
             for layer in ("physics", "final"):
                 if layer == "final" and not (run / "playback_final.pc2").is_file():
                     continue  # the run had no landmark layer: there is no final shape
@@ -1234,7 +1236,7 @@ class ASRP_PT_results(bpy.types.Panel):
         if shown < 0 and run is None:
             layout.label(text="No result is shown", icon="HIDE_ON")
         for indexes in result_groups(scene):
-            layout.label(text=scene.asrp_results[indexes[0]].run_name)  # the run's name once, then its versions
+            wrapped(context, layout, scene.asrp_results[indexes[0]].run_name)  # the run's name once, then its versions
             for i in indexes:
                 entry = scene.asrp_results[i]
                 word = VERSION_BUTTONS.get(entry.version, entry.version)
@@ -1279,7 +1281,7 @@ class ASRP_PT_compare(bpy.types.Panel):
         for line in compare.summary_lines(scene):
             wrapped(context, layout, line)
         if compare.ready(scene):
-            layout.label(text=compare.REPORT_NOTE)
+            wrapped(context, layout, compare.REPORT_NOTE)
         row = layout.row()
         row.enabled = compare.ready(scene)
         row.prop(scene, "asrp_show_ziva", text="Show Ziva's lips")
@@ -1308,7 +1310,7 @@ class ASRP_PT_checks(bpy.types.Panel):
             wrapped(context, layout, f"The run folder is gone ({run_name}). Run the motion again.", "ERROR", alert=True)
             return
         report = read_report(run_dir)
-        layout.label(text=f"Run: {run_name}")
+        wrapped(context, layout, f"Run: {run_name}")
         rows = check_rows(report) if report is not None else None
         if rows is None:
             wrapped(context, layout, "The run report is unreadable (run_report.json is missing or not shaped like a report).", "ERROR", alert=True)
@@ -1353,7 +1355,7 @@ class ASRP_PT_advanced(bpy.types.Panel):
     def draw(self, context):
         layout = self.layout
         project = core_project()
-        wrapped(context, layout, f"Project folder: {project}" if project is not None else "No project folder chosen yet",
+        wrapped(context, layout, f"Project: {project.name}" if project is not None else "No project folder chosen yet",
                 "FILE_FOLDER" if project is not None else "ERROR")
         layout.operator(ASRP_OT_choose_project.bl_idname, text="Change project folder" if project is not None else "Choose project folder",
                         icon="FILE_FOLDER")
@@ -1361,7 +1363,7 @@ class ASRP_PT_advanced(bpy.types.Panel):
         status = context.window_manager.asrp_status
         if status:
             for check in json.loads(status):
-                layout.label(text=f"{check['name']}: {check['detail']}", icon=STATUS_ICONS[check["status"]])
+                wrapped(context, layout, f"{check['name']}: {check['detail']}", STATUS_ICONS[check["status"]])
         layout.operator(ASRP_OT_load_playback.bl_idname, text="Load result", icon="IMPORT")
         layout.operator(ASRP_OT_load_run_folder.bl_idname, icon="FILE_FOLDER")
 

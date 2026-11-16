@@ -172,6 +172,7 @@ M0 基础 ✅ ──► M1 原料就绪 ✅ ──► M2 物理段 ──► M3 
   - R-01：第六个物体 "ASRP landmarks"（300 个 landmark，每个一个 1.6 mm 宽的小八面体，位置读 `scene.json` 的 `rest_positions_mm`，核心程序没改）、Show landmarks 复选框（默认开，有结果时自动隐藏并说明原因）、单位一行、导入报告几行和 Open import report 按钮；
   - R-02：Physics setup 小节（软组织、骨头、连接，来源用人话写，每行一个高亮按钮，Clear highlight，Check setup 跑 `asrp check`，最后一行写明只读）；
   - `tools/check_panel.py` 新增：case 13（真实存盘、另一个 Blender 进程重开、文件夹被搬走）、三步检查里的 landmark、单位、报告、Physics setup 行、高亮（结果不被打乱、Clear highlight 逐项还原）和 Check setup（好场景和一个连接没有顶点的场景）；每一项都在把对应的修复关掉以后看到它失败过。
+- **第二轮，手走一遍以后的修正**：顶上那行 "Choose the ASRP project folder (once)" 被截断，改成两行短字，说明在主面板只写一次，三步各自灰掉；运动标题被截断，改成 "Prototype 1: jaw opens 12 deg"、"Prototype 2: neutral to AA"、"Prototype 2: head shake"（来源在下面一行写），标题最多 34 个字符，更长的 `trajectory.read` 拒绝；"On the asset:" 的运行名另起一行折行；Advanced 里写 "Project: <文件夹名>" 和 Change project folder；检查里每个小节画出来的每段字都量，超过 34 个字符就失败（把一行改回长文字时看到它失败）；运行完成后 Run 小节停在 "Complete" 加播放状态（检查里核对）。粗格子默认以后一次运行约 1 秒。
 - **第二轮 B 部分**：
   - 四面体网格的选择（06 第 3.1 节）：Open asset 上面两个单选按钮，Coarse lattice 是默认（`--tetmesh data/tetmesh/lips_lattice.json --attachments ziva-soft`），Fine 和以前一样；一行说明随选择变，四面体数读网格文件；改选择不悄悄改任何东西，写 "Press Open asset again to use this mesh."；用粗格子时检查 (b) 显示 NOT RUN，不算失败；运行报告里的翻转面 warning 显示成 "Reported, not a check"；
   - Compare with Ziva（06 第 3.5 节）：参考文件夹存在插件偏好里，Compare 在后台跑 `asrp compare`，数字读 `compare_report.json`，Show Ziva's lips（第二个物体，灰蓝色，跟着显示的层），Show difference as colours（读 `.f32`，固定刻度 0 到 5 mm，帧变处理函数，取消勾选时还原）；

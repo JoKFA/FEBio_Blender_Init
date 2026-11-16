@@ -3,7 +3,7 @@
   "fps": 30,
   "frames": 87,
   "source": "head shake (T-28, ours): head and jaw01 translate along x, keys of the lab's passive_dynamics_test.py (0 at frames 0 and 16, 3 loops of 10 frames, +-5 scene units = +-4.81 mm), cubic Hermite with our reading of Maya's auto tangents, then 40 frames at rest; the keys at the extremes fall on half frames (as in the lab's script), so sampled once per frame the head goes at most 4.46 mm; tools/head_shake_motion.py",
-  "title": "Prototype 2: head shake (test motion)",
+  "title": "Prototype 2: head shake",
   "source_tag": "ours",
   "settle_until_frame": 14,
   "drivers": {

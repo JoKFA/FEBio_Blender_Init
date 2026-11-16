@@ -83,14 +83,14 @@ def test_source_tag_is_optional_round_trips_and_a_bad_value_is_refused(tmp_path)
 def test_title_is_optional_round_trips_and_must_be_one_short_line(tmp_path):
     assert trajectory.read(write(tmp_path, example())).title is None
     assert "title" not in trajectory.read(write(tmp_path, example())).to_json()
-    t = trajectory.read(write(tmp_path, example() | {"title": "Jaw opens 12 degrees (test motion)"}))
-    assert t.title == "Jaw opens 12 degrees (test motion)" and "title" not in t.extra
+    t = trajectory.read(write(tmp_path, example() | {"title": "Prototype 1: jaw opens 12 deg"}))
+    assert t.title == "Prototype 1: jaw opens 12 deg" and "title" not in t.extra
     trajectory.write(tmp_path / "again.json", t)
     assert trajectory.read(tmp_path / "again.json").title == t.title
-    for bad in ("", "  ", " padded", "two\nlines", "x" * 61, 5, ["a"]):
-        with pytest.raises(TrajectoryError, match=r"title is .*1 to 60 characters"):
+    for bad in ("", "  ", " padded", "two\nlines", "x" * 35, 5, ["a"]):
+        with pytest.raises(TrajectoryError, match=r"title is .*1 to 34 characters"):
             trajectory.read(write(tmp_path, example() | {"title": bad}))
-    assert trajectory.read(write(tmp_path, example() | {"title": "x" * 60})).title == "x" * 60
+    assert trajectory.read(write(tmp_path, example() | {"title": "x" * 34})).title == "x" * 34
 
 
 def test_settle_until_frame_is_optional_round_trips_and_must_be_a_frame_of_the_file(tmp_path):

@@ -7,8 +7,8 @@ Format `asrp-trajectory/1`, one JSON object:
       "fps": 30,                      # frames per second; must equal the scene's solver fps
       "frames": 46,                   # transforms per driver; frame 0 is the first entry
       "source": "free text: which controller output, or which generator, made this",
-      "title": "Jaw opens 12 degrees (test motion)",   # optional: the name the Blender panel shows, one line of at
-                                      #   most 60 characters; without it the panel shows the file name
+      "title": "Prototype 1: jaw opens 12 deg",   # optional: the name the Blender panel shows, one line of at
+                                      #   most 34 characters; without it the panel shows the file name
       "source_tag": "lab_setting" | "ziva_default" | "ours",   # optional: where the motion comes from, the
                                       #   same three tags as in scene.json; the run report shows it
                                       #   ("unstated" when absent, never guessed from the text)
@@ -51,7 +51,7 @@ SOURCE_TAGS = ("lab_setting", "ziva_default", "ours")  # the same three values a
 # How far a transform may be from rigid (rotation part orthonormal with determinant 1, last row
 # 0 0 0 1). Round-trip through text keeps ~1e-16; this only lets through rounding, not a scale.
 RIGID_TOLERANCE = 1e-6
-TITLE_MAX = 60  # characters of the optional "title": the panel's motion list shows it at the sidebar's default width
+TITLE_MAX = 34  # characters of the optional "title": the button of the panel's motion list holds this many at the default sidebar width
 
 
 class TrajectoryError(ValueError):
