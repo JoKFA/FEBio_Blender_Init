@@ -12,7 +12,7 @@
 |---|---|
 | 第一次接触项目的任何人 | [01 项目一页纸](01-overview.md) → [术语表](glossary.md) → [15 原型机](15-prototype.md) |
 | 实验室成员 | 01 → [02 需求](02-requirements.md) → [03 资产说明](03-asset.md) → [14 实验室的操作流程](14-ziva-demo-walkthrough.md) → [11 风险与待决问题](11-risks-and-questions.md) → [12 导出清单](12-lab-export-checklist.md)（第三部分是给实验室的问题） |
-| 开发者 | 01 → 02 → 03 → [04 系统设计](04-architecture.md) → [05 Ziva 到 FEBio 的对应](05-ziva-to-febio.md) → [07 验证与验收](07-validation.md) → [08 开发规范](08-engineering-standards.md) → [10 决策记录](10-decisions.md) → [09 路线图与任务](09-roadmap-and-tasks.md) 里分给你的任务卡 |
+| 开发者 | 01 → 02 → 03 → [04 系统设计](04-architecture.md) → [16 完整流程](16-pipeline.md) → [05 Ziva 到 FEBio 的对应](05-ziva-to-febio.md) → [07 验证与验收](07-validation.md) → [08 开发规范](08-engineering-standards.md) → [10 决策记录](10-decisions.md) → [09 路线图与任务](09-roadmap-and-tasks.md) 里分给你的任务卡 |
 | 审查者 | 08 开发规范 → 07 验证与验收 → 被审查任务的任务卡 |
 | 想看原型机动起来、自己跑一遍 | [15](15-prototype.md)，或仓库根目录的 [README](../README.md) |
 | 读的时候有疑问 | 先查 [13 设计解释](13-explanations.md) 的目录；没有的话问出来，答完补进 13 |
@@ -36,6 +36,7 @@
 | 13 | [设计解释（问答）](13-explanations.md) | 看文档、做任务时冒出的"为什么要这样""这一步从哪来"，包括 Ziva 机器上实测的结果（E-11） |
 | 14 | [实验室的操作流程](14-ziva-demo-walkthrough.md) | 实验室在 Maya + Ziva 里怎么工作、钢琴界面怎么用（2026-11-10 演示录像） |
 | 15 | [原型机](15-prototype.md) | 原型机长什么样、怎么自己跑、跑出的数字说明什么、不说明什么 |
+| 16 | [从 Maya 到 Blender 的完整流程](16-pipeline.md) | 从 Maya 导出到 Blender 播放、和 Ziva 对比，一共哪几步、每一步用哪条命令和哪些 `.py` 文件 |
 | — | [术语表](glossary.md) | 文档里出现的专业词是什么意思 |
 | — | [templates/](templates/) | 任务卡和合并请求的模板 |
 
@@ -54,7 +55,7 @@ asrp/
 ├─ .gitattributes             data/、tests/fixtures/ 按字节检出，哈希在任何电脑上都对得上（08 第 10 节）
 │
 ├─ docs/                      设计文档（本目录），唯一依据
-│  ├─ 01 … 15、glossary.md    见上面的"全部文档"
+│  ├─ 01 … 16、glossary.md    见上面的"全部文档"
 │  └─ templates/              任务卡、合并请求模板
 │
 ├─ src/
