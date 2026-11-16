@@ -154,7 +154,7 @@ def check(tmp_path_factory):
         pytest.skip("needs data/lab_export and data/tetmesh/lips.json")
     if not HAVE_LAB:
         pytest.skip("NOT VERIFIED: needs the lab's own files; " + local_paths.HOW_TO_SET)
-    spec = importlib.util.spec_from_file_location("landmark_layer_check", REPO / "tools" / "landmark_layer_check.py")
+    spec = importlib.util.spec_from_file_location("landmark_layer_check", REPO / "tests" / "landmark_layer_check.py")
     tool = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(tool)
     return tool.run(LAB_DATA, tmp_path_factory.mktemp("layer"))

@@ -36,7 +36,7 @@ LIPS = REPO / "data" / "lab_export" / "mesh_middleres_OrbicularisOris.obj"
 OUT = REPO / "data" / "tetmesh" / "lips.json"
 LATTICE_OUT = REPO / "data" / "tetmesh" / "lips_lattice.json"
 MM_PER_SCENE_UNIT = 0.962  # the lab controller's conversion (ADR-31); --mm-per-scene-unit overrides
-# Chosen in T-04 (ADR-20, evidence from spikes/s2_tetmesh.py): a tight envelope, about
+# Chosen in T-04 (ADR-20, evidence in docs/13 and the git history): a tight envelope, about
 # fTetWild's own default (1e-3 of the 122.7 mm diagonal), keeps the mouth slit open up to where
 # the surface crosses itself, the same on both sides, in every run tried. Envelopes of 0.5 mm and
 # up leave the lips touching along an edge or at a vertex where the slit narrows to about the

@@ -31,7 +31,7 @@ def test_a_quarter_turn_about_a_known_hinge_moves_points_where_hand_working_says
 
 
 def test_the_hinge_matches_the_s1_spike_rotation():
-    spec = importlib.util.spec_from_file_location("s1", Path(__file__).resolve().parents[1] / "spikes" / "s1_dynamic_jaw.py")
+    spec = importlib.util.spec_from_file_location("s1", Path(__file__).resolve().parent / "s1_dynamic_jaw.py")
     s1 = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(s1)
     angles = [0.0, -0.05, s1.JAW_OPEN, 0.3]

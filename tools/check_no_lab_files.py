@@ -4,7 +4,8 @@
 
 Three tests on everything in the index (committed or staged):
 1. the name: scene files, pickles, caches, plug-in binaries and licence files are never ours; nothing under
-   `.local/` (this machine's own settings) and no trip pointer file is ever tracked;
+   `.local/` (this machine's own settings) and no trip pointer file is ever tracked; the files of the local AI
+   development setup (`AGENTS.md`, `CLAUDE.md`, the `.claude/` folder) are each machine's own and never tracked;
 2. the content: a SHA-256 that is listed in the manifest of a lab-machine trip. The manifest lives with
    the data, outside the repo; tools/local_paths.py says where it is on this machine. On a machine that
    does not have the data only the other tests run, and the output says so;
@@ -24,8 +25,9 @@ import local_paths  # noqa: E402
 REPO = Path(__file__).resolve().parents[1]
 FORBIDDEN = (".mb", ".ma", ".pkl", ".abc", ".f32", ".zbuilder", ".mll", ".lic")
 LOCAL_ONLY = (".local/", "ziva_trip_pointer.json")
-# The owner's instruction file names his own folders on purpose; tools do not edit it (see the file itself).
-PATHS_ALLOWED_IN = ("AGENTS.md", "CLAUDE.md")
+# The local AI development setup: each machine has its own, with its own folders in it (T-38).
+LOCAL_AI_FILES = ("AGENTS.md", "CLAUDE.md")
+LOCAL_AI_FOLDER = ".claude/"
 TEXT_LIMIT = 5_000_000
 
 
@@ -37,6 +39,8 @@ def violations(files: dict[str, str], lab_hashes: set[str]) -> list[str]:
             found.append(f"{path}: files of this kind are never committed")
         elif path.startswith(LOCAL_ONLY[0]) or path.endswith(LOCAL_ONLY[1]):
             found.append(f"{path}: this machine's own settings are never committed")
+        elif path in LOCAL_AI_FILES or path.startswith(LOCAL_AI_FOLDER):
+            found.append(f"{path}: the local AI development setup belongs to each machine, not to the repository")
         elif digest in lab_hashes:
             found.append(f"{path}: same content as a file brought back from the lab's machine")
     return found
@@ -64,8 +68,6 @@ def machine_paths(texts: dict[str, str], markers: list[str]) -> list[str]:
     """texts maps a tracked path to its text; returns one line per file that names a path of this machine."""
     found = []
     for path, text in sorted(texts.items()):
-        if path in PATHS_ALLOWED_IN:
-            continue
         normal = _normal(text)
         hit = next((m for m in markers if _normal(m) in normal), None)
         if hit:

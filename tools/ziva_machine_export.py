@@ -38,7 +38,7 @@ SETTINGS = {
     "motion": "neutral_to_AA",  # a short name with no spaces
     "first": None,  # None = use the timeline
     "last": None,
-    "require_simulation": True,  # False only for tools/rehearse_ziva_export.py on plain Maya
+    "require_simulation": True,  # False only to rehearse the plumbing on plain Maya, without Ziva
     "accepted": [],  # words from problems a researcher has checked by eye, e.g. ["zCache"]
     "stage": "preflight",  # preflight | static | pilot | export | probe
     "kind": "expression",  # expression | head_translation

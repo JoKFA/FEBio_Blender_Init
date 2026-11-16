@@ -1,6 +1,6 @@
 """T-09 acceptance on the real asset (not product code): does our landmark layer give the lab's numbers?
 
-    uv run python tools/landmark_layer_check.py [lab data folder]
+    uv run python tests/landmark_layer_check.py [lab data folder]
 
 The lab data folder holds the lab's own files (oor_bind_pose.json, oor_skin_weights.json); the default
 is $ASRP_LAB_DATA, else the folder named in .local/paths.json (tools/local_paths.py); there is no built-in
@@ -27,6 +27,8 @@ import numpy as np
 
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "src"))
+
+sys.path.insert(0, str(REPO / "tools"))
 
 import local_paths  # noqa: E402
 
@@ -106,7 +108,7 @@ def run(lab_dir, workdir: Path) -> dict:
         "max_translation_applied_mm": max_motion,
         "seed": SEED,
         "lab_commit": LAB_COMMIT,
-        "command": "uv run python tools/landmark_layer_check.py",
+        "command": "uv run python tests/landmark_layer_check.py",
     }
 
 

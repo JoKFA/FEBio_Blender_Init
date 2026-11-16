@@ -26,7 +26,7 @@ from asrp_core import febio, playback  # noqa: E402
 
 out = Path(tempfile.mkdtemp(prefix="asrp_playback_"))
 proc = subprocess.run(
-    [shutil.which("uv"), "run", "--project", str(REPO), "python", str(REPO / "spikes" / "s1_dynamic_jaw.py"), str(out)],
+    [shutil.which("uv"), "run", "--project", str(REPO), "python", str(REPO / "tests" / "s1_dynamic_jaw.py"), str(out)],
     capture_output=True,
     text=True,
 )

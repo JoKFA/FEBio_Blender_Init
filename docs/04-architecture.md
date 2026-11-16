@@ -135,7 +135,7 @@ runs/2026-11-03_neutral-to-AA_001/
 
 生成器拒绝的场景（检查有错、显示顶点离四面体太远、一个点被两个刚体要走……）不建运行文件夹，`asrp run` 打印原因和 `run NOT STARTED`。
 
-`runs/` 不进 git。`data/` 里提交的有 `lab_export/`、`preview/`、`briefing/`、`tetmesh/`（四面体网格是只读输入，ADR-19、ADR-20），其余不进。四面体网格是**显式生成一次、落盘并记哈希的输入**，运行时只读，不在运行中重新生成（fTetWild 同输入多次运行结果不同，见 ADR-20 和 [13](13-explanations.md) E-03）。需要分享某次运行时，把整个文件夹打包发送。
+`runs/` 不进 git。`data/` 里提交的有 `lab_export/`、`preview/`、`tetmesh/`（四面体网格是只读输入，ADR-19、ADR-20），其余不进。四面体网格是**显式生成一次、落盘并记哈希的输入**，运行时只读，不在运行中重新生成（fTetWild 同输入多次运行结果不同，见 ADR-20 和 [13](13-explanations.md) E-03）。需要分享某次运行时，把整个文件夹打包发送。
 
 **位置和显示网格存成数组，日志不装坐标**（T-25，ADR-38 第 10 条）。生成的 `.feb` 让 FEBio 把节点位置写进自己的文件 `positions.txt`（和 `.feb` 同目录，每条记录是 `*Step`、`*Time`、`*Data  = positions`，然后每行 `id,x,y,z`，12 位有效数字），不再写进 `model.log`。整段算完后外壳读它、存成数组，再把它删掉（和 `model.xplt` 一样；失败和取消的运行也删；只删这个名字的文件，别的名字不碰）。两个结果各由一个小的 JSON 表头和一个 `.npy` 组成，数字在 `.npy` 里；表头里都有 `format`、`units`（`mm`）、`array`（`.npy` 的文件名）和 `shape`：
 
@@ -283,7 +283,7 @@ Blender 插件的每个按钮都对应其中一条命令。界面能做的事，
 
 文件和目录的清单见 [README](README.md) 里的目录树；每个模块负责什么见本文第 3 节的表。两处都没有的，才写在这里：
 
-- `spikes/` 和 `tools/mb_inventory.py`、`tools/asset_report.py`、`tools/lip_attachments.py`、`tools/maya_export.py` 是试验和资产分析、导出工具，**不是产品代码**，不要在它们上面直接扩展，结论写进 05、10。只用过一次的开发文件（比如上 Ziva 机器用的导出和排练脚本）按 T-38 移出仓库。
+- `tools/mb_inventory.py`、`tools/asset_report.py`、`tools/lip_attachments.py`、`tools/maya_export.py` 是资产分析、导出工具，**不是产品代码**，不要在它们上面直接扩展，结论写进 05、10。一次性的试验和开发文件不进仓库（T-38 已移出，08 第 1 节）；验证门和测试用的三个检查（`tests/s1_dynamic_jaw.py`、`tests/s2_lips_febio.py`、`tests/s3_attachment.py`）在 `tests/` 里。
 
 ## 12. 和实验室代码的分界与对接
 

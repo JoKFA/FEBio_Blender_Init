@@ -190,7 +190,7 @@ def test_the_four_lip_attachments_are_in_the_scene_as_docs_05_section_3_says(imp
 @needs_export
 def test_an_attachments_file_for_another_mesh_is_refused(tmp_path):
     export = tmp_path / "export"
-    shutil.copytree(EXPORT, export, ignore=shutil.ignore_patterns("manual_maya_obj"))
+    shutil.copytree(EXPORT, export, ignore=shutil.ignore_patterns())
     data = json.loads((export / "lip_attachments.json").read_text())
     data["groups"][0]["vertices"] = data["groups"][0]["vertices"][:-1]
     (export / "lip_attachments.json").write_text(json.dumps(data))
@@ -265,7 +265,7 @@ def test_obj_files_not_in_scene_coordinates_are_refused(tmp_path):
 @needs_export
 def test_an_incomplete_export_is_refused(tmp_path):
     export = tmp_path / "export"
-    shutil.copytree(EXPORT, export, ignore=shutil.ignore_patterns("manual_maya_obj", "mesh_middleres_skull.obj"))
+    shutil.copytree(EXPORT, export, ignore=shutil.ignore_patterns("mesh_middleres_skull.obj"))
     with pytest.raises(lab.AssetError, match="mesh_middleres_skull.obj is missing"):
         lab.import_asset(export, tmp_path / "out", TET)
 

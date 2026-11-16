@@ -100,7 +100,7 @@ def generator_settings(model: generate.Model | None = None) -> list[tuple]:
         ("generator.rhoi", rhoi, ("generalized-alpha spectral radius at infinity, from the scene's "
          "solver.numerical_damping_rhoi" if from_scene else "generalized-alpha spectral radius at infinity, the "
          "generator's default because the scene does not set solver.numerical_damping_rhoi") + ": 0 is FEBio's strongest "
-         "damping of fast modes; numerical, not physical damping. Used by T-07's runs (spikes/s3_attachment.py); docs/05 "
+         "damping of fast modes; numerical, not physical damping. Used by T-07's runs (tests/s3_attachment.py); docs/05 "
          "pit 2, T-28"),
         ("generator.gravity_sign_in_febio", generate.FEBIO_GRAVITY_SIGN, "docs/05 pit 1 (ADR-10): FEBio's const body load "
          "acts opposite to the manual, so the scene's physical gravity is written negated"),
@@ -112,7 +112,7 @@ def generator_settings(model: generate.Model | None = None) -> list[tuple]:
          "(one FEBio spring material per level); the level count and the largest error are in the generator report"),
         ("generator.max_distance_edges", generate.MAX_DISTANCE_EDGES, "a display vertex farther than this x the median tet edge "
          "from its tet stops the run (docs/05 section 3 rule 5)"),
-        ("generator.max_retries", generate.MAX_RETRIES, "adaptive stepping as in spikes/s2_lips_febio.py"),
+        ("generator.max_retries", generate.MAX_RETRIES, "adaptive stepping as in tests/s2_lips_febio.py"),
         ("generator.dtmin_fraction", generate.DTMIN_FRACTION, "the step may shrink to this fraction of a frame step"),
         ("generator.motion_between_frames", "linear", "the rigid bodies' translation and rotation vector are interpolated "
          "linearly between frames (exact for a fixed hinge)"),

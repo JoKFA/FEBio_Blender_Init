@@ -51,16 +51,13 @@ def test_the_worst_frame_has_the_most_flipped_faces_then_the_most_edges_out_of_r
     assert h["worst"]["frame"] == 1 and h["worst"]["edges_longer_than_double"] >= 1
 
 
-def test_a_squashed_edge_is_counted_short_and_the_spike_printout_uses_the_same_function():
+def test_a_squashed_edge_is_counted_short_and_the_single_frame_count_uses_the_same_function():
     squashed = REST.copy()
     squashed[4, 0] = 0.25
     h = plausibility.surface_health(REST, squashed[None], FACES)["last"]
     assert h["edges_shorter_than_half"] >= 1 and h["edge_ratio_min"] == 0.25
     one = plausibility.folds(REST, squashed, np.array(FACES))
     assert one["edges < 0.5x"] == h["edges_shorter_than_half"] and one["edge ratio min / max"][0] == 0.25
-    import audit_aa_folds  # the spike takes its function from plausibility
-
-    assert audit_aa_folds.folds is plausibility.folds
 
 
 def test_quads_are_fanned_into_triangles():

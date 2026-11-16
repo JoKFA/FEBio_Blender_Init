@@ -69,7 +69,7 @@ def tetrahedralize(
     if edge_mm <= 0 or envelope_mm <= 0:
         raise ValueError(f"edge length and envelope must be positive, got {edge_mm} and {envelope_mm} mm")
     # Imported here, not at the top: reading a saved mesh (`load`) must not pull in fTetWild, and
-    # only tools/build_tetmesh.py and the spikes ever generate one.
+    # only tools/build_tetmesh.py and the tests ever generate one.
     import pytetwild
 
     # pytetwild takes the envelope relative to the bounding-box diagonal.

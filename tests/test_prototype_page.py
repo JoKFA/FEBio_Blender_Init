@@ -220,7 +220,7 @@ def test_nothing_of_the_retired_stand_ins_or_the_old_waiting_remains():
 
 def test_no_code_or_archive_of_the_retired_stand_ins_is_left():
     hits = []
-    for folder in ("src", "tools", "tests", "spikes", "blender_addon"):
+    for folder in ("src", "tools", "tests", "blender_addon"):
         for path in (REPO / folder).rglob("*.py"):
             if RETIRED in path.read_text(encoding="utf-8", errors="replace"):
                 hits.append(str(path.relative_to(REPO)))

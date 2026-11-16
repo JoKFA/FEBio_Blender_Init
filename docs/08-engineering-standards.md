@@ -10,10 +10,9 @@ asrp/
   blender_addon/        Blender 插件（只管界面）。不能用第三方库
   tests/                自动测试
   tools/                检查、分析、渲染用的小工具（不是产品代码）
-  spikes/               试验代码（不是产品代码，不要在上面继续开发；一次性的由 T-38 移出仓库）
   docs/                 设计文档（本目录）
   assets/  runs/        实验室原始场景、运行结果 —— 被 git 忽略
-  data/                 导出和派生数据 —— lab_export、preview、briefing、tetmesh 提交，其余忽略（ADR-19）
+  data/                 导出和派生数据 —— lab_export、preview、tetmesh 提交，其余忽略（ADR-19）
 ```
 
 逐个文件夹、主要文件的说明见 [README](README.md) 的"仓库目录"。新功能放进哪个目录，以 [04 系统设计](04-architecture.md) 第 3 节为准。拿不准时先问，不要自己新建顶层目录。
@@ -64,7 +63,7 @@ asrp/
    1. **行宽不检查**（E501 忽略）：现有代码写在约 150 列，全部重排会把真正的改动埋掉；
    2. **不加 `ruff format --check`**，原因同上。下次整个重写某个文件时再回头看；
    3. **规则 B905（`zip()` 不带 `strict=`）整个仓库忽略**：`zip()` 都是把一起造出来的序列配对，加 `strict=` 只会添噪音；
-   4. **三个由 Maya 自带的 Python 运行的脚本**（`tools/maya_export.py`、`tools/rehearse_ziva_export.py`、`tools/ziva_machine_export.py`）在 `pyproject.toml` 里各关了几条规则（老式字符串格式化和三条风格规则），保持原样。具体清单只看 `pyproject.toml`，这里不抄。
+   4. **两个由 Maya 自带的 Python 运行的脚本**（`tools/maya_export.py`、`tools/ziva_machine_export.py`）在 `pyproject.toml` 里各关了几条规则（老式字符串格式化和三条风格规则），保持原样。具体清单只看 `pyproject.toml`，这里不抄。
 
 ## 6. 测试的规矩
 
@@ -95,7 +94,7 @@ asrp/
 
    **关于实验室的事实要有会失败的检查**：实验室的训练、Ziva 的结果和设置这类关键事实，写进文档之前先在 `tests/test_lab_facts.py` 里加一条能失败的检查（数据在仓库外，没有数据时跳过并打印 `NOT VERIFIED`）。写数字时写明哪一次运行、哪些顶点、哪一帧对哪一帧、最大还是平均。实验室自己存下了某个状态的结果时，直接和它比，不用别的实验去拼（[13](13-explanations.md) E-15）。
 
-   `--level auto` 按未提交的文件和最近一次提交的文件自己选级。`.claude/verify.json` 调用的就是它，Claude 每一轮结束时自动运行。它不能代替合并前的全量。
+   `--level auto`（`uv run python tools/verify.py --level auto`）按未提交的文件和最近一次提交的文件自己选级。每台机器可以在自己的本机设置里（不进仓库，`AGENTS.md`、`CLAUDE.md` 和 `.claude/` 都是各机自己的，验证门拒绝它们被跟踪）让开发工具每一轮结束时调用它。它不能代替合并前的全量。
 
 ## 7. 什么叫"完成"
 
@@ -142,7 +141,7 @@ asrp/
 
 ## 10. 数据和安全
 
-- 实验室的原始场景文件（`assets/`）、论文、演示视频、实验室的控制器源码和运行结果（`runs/`）**永远不进 git**。`data/` 里的 `lab_export/`、`preview/`、`briefing/`、`tetmesh/` 提交到私有仓库，其余不提交（ADR-19）。这些都不发到仓库以外的地方。实验室源码只读，用 `git show` 查，不运行（ADR-28）。
+- 实验室的原始场景文件（`assets/`）、论文、演示视频、实验室的控制器源码和运行结果（`runs/`）**永远不进 git**。`data/` 里的 `lab_export/`、`preview/`、`tetmesh/` 提交到私有仓库，其余不提交（ADR-19）。这些都不发到仓库以外的地方。实验室源码只读，用 `git show` 查，不运行（ADR-28）。
 - **被哈希的文件按字节检出**：`data/` 和 `tests/fixtures/` 下的文件由 sha256 识别（`scene.json`、`data/tetmesh/lips.json` 和 S1 示例都记着哈希）。Git for Windows 默认 `core.autocrlf=true`，会在检出时改换行符，哈希就全对不上。仓库根目录的 `.gitattributes` 把这两个目录设成 `-text`，检出的字节等于仓库里的字节，不管各人怎么设。往这两个目录加新的文本文件时不用另外处理；要在别的目录放被哈希的文件，先把目录加进 `.gitattributes`。验证办法：用 `git clone --config core.autocrlf=true` 克隆，跑 `tests/test_scene.py`、`test_asset.py`、`test_tetmesh.py`、`test_trajectory.py`，应全部通过。
 - 实验室的论文还在审稿，不对外引用其中的内容和图表。
 - FEBio 的安装包和程序文件不能放进仓库，也不能转发（许可规定）。每个人自己去官网下载。

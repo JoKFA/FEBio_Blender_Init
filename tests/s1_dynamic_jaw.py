@@ -12,7 +12,7 @@ Checks that can fail: normal termination; every frame present for every node;
 skull nodes do not move; jaw nodes follow the prescribed hinge rotation exactly;
 tissue sags under gravity and is pulled further down when the jaw opens.
 
-    uv run python spikes/s1_dynamic_jaw.py [out_dir]
+    uv run python tests/s1_dynamic_jaw.py [out_dir]
 """
 
 import itertools

@@ -11,11 +11,11 @@
 | Ziva 里的东西 | 它是什么 | 新系统里的表达 | 状态 |
 |---|---|---|---|
 | **zTissue**（软组织） | 会变形的体积，比如嘴唇肌肉 | 四面体网格 + 弹性材料，交给 FEBio 计算 | ✅ T-06a：嘴唇的四面体网格加 neo-Hookean 材料（材料值见下一行）在 FEBio 里跑完 51 帧（含第 0 帧，FEBio 算 50 步）的代用张嘴，重试 0 次，用时见 [15](15-prototype.md) 第 3 节（`uv run asrp run <out>/scene.json <out>/placeholder_jaw.json`，09 T-06a 的结果）；拉伸、悬挂的方块和理论值差 ≤ 0.5%（`tests/test_generate.py`） |
-| **zTet**（四面体设置） | 规定四面体网格多粗（`tetSz`） | 我们自己做四面体化，尺寸按 `tetSz` 换算成毫米。`.mb` 里没有存 Ziva 的四面体网格，见 [13](13-explanations.md) E-02 | ✅ T-04：用 fTetWild（`src/asrp_core/tetmesh.py`，ADR-20）。嘴唇网格自身穿插，TetGen 拒绝切，fTetWild 能切，但每次结果不同，所以**网格只生成一次，提交在 `data/tetmesh/lips.json`**，之后一律用 `tetmesh.load` 读（校验哈希）。包络 0.12 mm、边长 25.4 mm：6,747 个计算点、26,721 个四面体，最小二面角 10.4°；上下唇分开的宽度是表面的 99%，左右差 0；单连通、边界流形，亏格 3（表面的 1 加两侧嘴角各一个小孔，坑 13）。FEBio 重力沉降通过。生成 `uv run python tools/build_tetmesh.py`，比较表 `uv run python spikes/s2_tetmesh.py`，FEBio `uv run python spikes/s2_lips_febio.py smoke`；初版的问题见 [13](13-explanations.md) E-03 |
+| **zTet**（四面体设置） | 规定四面体网格多粗（`tetSz`） | 我们自己做四面体化，尺寸按 `tetSz` 换算成毫米。`.mb` 里没有存 Ziva 的四面体网格，见 [13](13-explanations.md) E-02 | ✅ T-04：用 fTetWild（`src/asrp_core/tetmesh.py`，ADR-20）。嘴唇网格自身穿插，TetGen 拒绝切，fTetWild 能切，但每次结果不同，所以**网格只生成一次，提交在 `data/tetmesh/lips.json`**，之后一律用 `tetmesh.load` 读（校验哈希）。包络 0.12 mm、边长 25.4 mm：6,747 个计算点、26,721 个四面体，最小二面角 10.4°；上下唇分开的宽度是表面的 99%，左右差 0；单连通、边界流形，亏格 3（表面的 1 加两侧嘴角各一个小孔，坑 13）。FEBio 重力沉降通过。生成 `uv run python tools/build_tetmesh.py`，比较表 `uv run python spikes/s2_tetmesh.py`，FEBio `uv run python tests/s2_lips_febio.py smoke`；初版的问题见 [13](13-explanations.md) E-03 |
 | **zMaterial**（材料） | 材料类型、杨氏模量、泊松比、密度 | FEBio 里的 neo-Hookean 材料，参数换算单位 | 🔶 Ziva 场景里的实测值见 [03](03-asset.md) 第 5 节。**我们现在的默认**（`src/asrp_core/asset/lab.py` 写进场景，来源标 `lab_setting`，T-37）：杨氏模量 E = 12 kPa（0.012 MPa），泊松比 ν = 0.4，密度 1060 kg/m³（1.06×10⁻⁹ t/mm³），都是 Ziva 实测的值；`--tissue-settings ours` 写我们早先的 15 kPa、0.45。其余我们定的值：k = 0.67（第 2 节）、嘴角混合比例 α = 0.5、弹簧基础刚度 100 × E × h（第 3 节）。每样东西要哪些数，见 [13](13-explanations.md) E-06 |
 | **zBone**（骨头） | 不变形、只跟着动的物体 | FEBio 的刚体 | ✅ S1 已验证 |
 | 下颌跟着 `jaw01` 关节转 | 骨头由关节带动 | 让下颌这个刚体绕关节所在的点转动，每帧给定转角 | ✅ S1 已验证，误差 4×10⁻⁹ mm。T-06a：生成器按每帧完整刚体变换写（参考点的平移 + 旋转向量，ADR-21），斜轴加平移的方块也跟住 < 10⁻⁶ mm（`test_a_plate_turning_about_a_tilted_axis_and_moving_is_followed`） |
-| 颅骨固定 | 骨头不动 | 刚体所有方向固定 | ✅ 刚体整个固定可用：T-07 第 1 步的框架是六个自由度全固定的刚体（`rigid_fixed`），弹簧锚点并入它，4 个锚点的位移是 0（`uv run python spikes/s3_attachment.py`）。S1 用的"固定一组计算点"也行，颅骨两种都可以 |
+| 颅骨固定 | 骨头不动 | 刚体所有方向固定 | ✅ 刚体整个固定可用：T-07 第 1 步的框架是六个自由度全固定的刚体（`rigid_fixed`），弹簧锚点并入它，4 个锚点的位移是 0（`uv run python tests/s3_attachment.py`）。S1 用的"固定一组计算点"也行，颅骨两种都可以 |
 | **zAttachment**（粘连） | 把一样东西的一部分顶点"粘"在另一样东西上，每个顶点有权重 | 见第 3 节 | ✅ T-07 第 1、2 步（2026-11-11）：弹簧和重力的写法对（k = 1 和 2 误差 ≤ 0.02%），弹簧加硬趋近硬绑定（单调，差别 ∝ 1/刚度）；**零长度弹簧不能用，每个节点写三根带偏移的弹簧**，见第 3 节"T-07 的结果"。嘴唇四组粘连的 807 个权重全是 1.0（上唇 74 个没存数值的顶点用默认值 1.0，已实测，A-33，E-11），所以权重小于 1 的情形（T-07 第 3 步，A-23）只在第二阶段的皮肤粘连里出现。Ziva 场景里的粘连全是软约束（数值见 03 第 5 节，和我们的差别见第 4 节）。T-06a 按第 3 节的规则实现在 `src/asrp_core/generate.py`，真实嘴唇上 `hard` 显示顶点逐帧偏离 8.4×10⁻¹¹ mm，细节见第 3 节末"T-06a 的实现" |
 | **zEmbedder**（嵌入） | 精细的显示网格跟着粗的计算网格动 | 每个显示顶点记住自己在哪个四面体里、离四个角各有多近（重心坐标），算完后按比例插值 | ✅ T-06a：`src/asrp_core/embed.py`，在外面的顶点按最近的边界四面体外推。嘴唇的 10,240 个顶点有 65%（6,674 个）落在四面体外，95% 离四面体不到 0.07 mm，最远 0.93 mm（正中嘴缝最深处的折痕，T-04 实测）；没有变形时嵌入结果和原网格差 7×10⁻¹⁴ mm（`test_embedded_lips_at_rest_equal_the_lip_mesh`） |
 | landmark 蒙皮（skinCluster7） | 300 个关节按权重带动嘴唇顶点 | **不进 FEBio**，在物理结果之后用同样的蒙皮公式叠加（`src/asrp_core/skinning.py`，见 [04](04-architecture.md) 第 2 节） | ✅ 源码确认只有 `jaw01` 进物理（ADR-29）；Ziva 里实测：蒙皮前形状加"权重 × landmark 平移"还原蒙皮后形状，误差 0.000016 mm（E-11） |
@@ -112,7 +112,7 @@ Ziva 场景里的粘连全是软约束，刚度和阻尼见 [03](03-asset.md) �
 
 ### T-07 第 1、2 步的结果（2026-11-11）
 
-全部由 `uv run python spikes/s3_attachment.py --extra` 产生（不带 `--extra` 只跑下面的检查；FEBio 4.13，动力学，每帧 1/30 秒一步，广义 α，`rhoi` = 0；快速部分是 `uv run python -m pytest tests/test_s3_attachment.py`，7 个，约 11 秒）。单位 mm、N、MPa、s。节点坐标 × k 写入，结果 ÷ k。
+全部由 `uv run python tests/s3_attachment.py --extra` 产生（不带 `--extra` 只跑下面的检查；FEBio 4.13，动力学，每帧 1/30 秒一步，广义 α，`rhoi` = 0；快速部分是 `uv run python -m pytest tests/test_s3_attachment.py`，7 个，约 11 秒）。单位 mm、N、MPa、s。节点坐标 × k 写入，结果 ÷ k。
 
 **第 1 步：方块挂在 4 根弹簧上**（边长 10 mm，E = 1000 MPa，ρ = 1.06×10⁻⁹ t/mm³，每根弹簧 K = 0.0025 N/mm，重力 0 到 1 秒线性加上去，再保持到 2 秒；框架是六个自由度全固定的刚体）。理论伸长 = ρ·V·k²·g ÷（4K）：
 
@@ -256,7 +256,7 @@ FEBio 4.13 的用户手册（安装目录 `doc/` 下）里，能给变形体加"
 
 | # | 坑 | 怎么处理 | 证据 |
 |---|---|---|---|
-| 坑 1 | **FEBio 的重力方向和按手册公式推出的相反**：填 -9810 反而往上推（手册第 3.13.3 节写的是 ρa = div σ + ρb，按它应该往下） | 写入 FEBio 时把重力反号；用"组织在重力下应该往下沉"的检查守住 | 悬挂块对照实验：-9810 时往上 0.202 mm，+9810 时往下 0.205 mm（`spikes/s1_dynamic_jaw.py` 开头的说明） |
+| 坑 1 | **FEBio 的重力方向和按手册公式推出的相反**：填 -9810 反而往上推（手册第 3.13.3 节写的是 ρa = div σ + ρb，按它应该往下） | 写入 FEBio 时把重力反号；用"组织在重力下应该往下沉"的检查守住 | 悬挂块对照实验：-9810 时往上 0.202 mm，+9810 时往下 0.205 mm（`tests/s1_dynamic_jaw.py` 开头的说明） |
 | 坑 2 | **FEBio 默认的时间积分没有阻尼**，组织会一直小幅晃动；而且组织的晃动周期（约 14 毫秒）比一帧（33 毫秒）还短，单看某一帧会失真 | 判断"有没有下沉"时看一段时间的平均，不看单帧。**已知限制**：生成器现在用 `substeps_per_frame` = 1、`rhoi` = 0、dt = 33 毫秒，对嘴唇的振动模态数值上过阻尼，几乎等于准静态，所以和 Ziva 比动态时，差别里有积分器的成分。Ziva 整张脸的 AA 在时间步上是稳的（只试过这一次，第 4 节说明 2），比动态之前先确认我们这一侧的子步数和 `rhoi`（T-33） | S1 保持阶段仍有约 ±0.04 mm 的晃动 |
 | 坑 3 | **FEBio 这类 C++ 程序在 Windows 上可能打不开中文路径** | 仓库和运行文件夹放在纯英文路径下；`asrp doctor` 会检查 | 预防性措施 |
 | 坑 4 | **FEBio 会读取电脑上的个人配置文件**，可能导致不同电脑结果不同 | 一律加 `-noconfig` 参数运行 | 已写进 `src/asrp_core/febio.py` |
@@ -270,7 +270,7 @@ FEBio 4.13 的用户手册（安装目录 `doc/` 下）里，能给变形体加"
 | 坑 12 | **fTetWild 每次结果都不一样**：同一台机器、同样输入，即使 `num_threads=1`、关掉简化或优化，节点数和哈希每次都变（25.4 mm / 1.27 mm 单线程连跑三次：360、333、328 个节点）。在运行时重新生成，就违反 R-06 | 网格只用 `tools/build_tetmesh.py` 显式生成一次，写成 `data/tetmesh/lips.json` 并提交；之后一律 `tetmesh.load`，它校验内容哈希，`tetmesh.check_source` 校验源表面没变（ADR-20） | `tests/test_tetmesh.py` 的 `test_save_and_load_round_trip_bit_for_bit`、`test_load_refuses_an_edited_mesh`、`test_check_source_notices_a_new_surface` |
 | 坑 13 | **自身穿插的表面，"表面的亏格"不等于它围出的实体的亏格**：嘴唇表面是亏格 1 的环，但两侧嘴角的上下唇先互相穿过，再往外又分开一小段（约 1.6 mm 长、0.17–0.29 mm 宽）。这两小段前后贯通，是实体上的两个小孔，所以忠实的四面体网格亏格是 3 | 期望亏格 = 表面亏格 + "穿过之后又分开"的段数（`tetmesh.check`）；只是焊住（没有穿过）的不算 | `test_a_crossing_that_opens_again_is_a_pocket`、`test_a_weld_is_not_a_pocket`、`test_check_wants_the_pocket_kept`；[13](13-explanations.md) E-03 |
 | 坑 14 | **fTetWild 偶尔直接崩溃**：进程退出码 139，没有任何报错。包络 1.5 mm 时遇到过，大批量重复运行时也遇到过一次 | 只在 `tools/build_tetmesh.py` 里生成，崩了就重跑；产品运行时不调用 fTetWild（坑 12） | T-04 比较时两次（退出码 139） |
-| 坑 15 | **FEBio 的 `load_controller` 编号必须从 1 连续往上**，跳号就报 `invalid value for attribute "id"`；用 must points 控制输出时，位置记录里（`positions.txt`，以前是日志）**没有第 0 帧**，只有第 1 到 N 帧 | 编号连续生成；检查帧数时数 1..N | `spikes/s2_lips_febio.py`；`tests/test_tetmesh.py` 的 `test_saved_lip_mesh_settles_under_gravity_in_real_febio` |
+| 坑 15 | **FEBio 的 `load_controller` 编号必须从 1 连续往上**，跳号就报 `invalid value for attribute "id"`；用 must points 控制输出时，位置记录里（`positions.txt`，以前是日志）**没有第 0 帧**，只有第 1 到 N 帧 | 编号连续生成；检查帧数时数 1..N | `tests/s2_lips_febio.py`；`tests/test_tetmesh.py` 的 `test_saved_lip_mesh_settles_under_gravity_in_real_febio` |
 | 坑 16 | **FEBio 把读不懂的数字当成 0，不报错**：numpy 的数写成文字是 `np.float64(0.1)`，FEBio 读成 0，刚体就一动不动，日志里正常结束 | 生成器里每个数都经 `generate._num`（Python 的 `float` 再 `repr`）写出 | T-06a 试验时刚体转动全变成 0；`tests/test_generate.py` 的 `test_numbers_reach_the_feb_as_plain_floats` |
 | 坑 17 | **FEBio 多线程求解时，同一个 `.feb` 两次的结果在日志最后一位不同**（约 10⁻¹¹ mm）；回放文件要逐位相同就不行（float32 舍入偶尔会翻过去） | 默认 4 线程（`febio.DEFAULT_THREADS`，同时设 `OMP_NUM_THREADS` 和 `MKL_NUM_THREADS`，记进溯源，`asrp run --threads N` 可改，ADR-38）；需要回放文件逐位相同时用 `--threads 1`，代价是慢（各线程数的用时在 ADR-38 的证据里） | 同一个方块 `.feb` 多线程连跑三次，日志数据三个不同的哈希；单线程三次完全相同；`test_same_input_twice_gives_the_same_playback_files`（单线程以前它失败）；2026-11-11 实测（`spikes/audit_threads.py`，原型机 `.feb`，50 步）：4 线程比 1 线程最多差 1×10⁻¹⁰ mm（满足 1×10⁻⁹ mm，只是回放文件不保证逐位相同）；各线程数的用时只记在 [10](10-decisions.md) ADR-38 的证据里 |
 | 坑 18 | **不属于任何单元的计算点，FEBio 只给一个警告就删掉**（"isolated vertices removed"），它们在位置记录里就没有结果 | 生成器发现四面体网格里有不属于任何四面体的计算点就报错；每个刚体都带一个小四面体，弹簧的锚点属于弹簧单元 | T-06a 试验；`test_a_tet_mesh_node_in_no_tet_stops_the_generator` |
