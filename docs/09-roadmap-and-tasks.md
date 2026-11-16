@@ -47,7 +47,7 @@ M0 基础 ✅ ──► M1 原料就绪 ✅ ──► M2 物理段 ──► M3 
 | M4 对比与评审 | 和 Ziva 并排比较，研究员评审通过（[07](07-validation.md) 第 4 节）。T-34 做第一次逐帧比较，T-11 做完整的比较工具 | **是**：研究员评审。Ziva 参考结果已取回（D3） |
 | M5 界面与验收 | 研究员能在 Blender 里独立完成全流程，实验室签字验收。T-35 是第一步 | **是**：试用和验收 |
 
-## 2. 现在到哪，接下来做什么（2026-11-15）
+## 2. 现在到哪，接下来做什么（2026-11-16）
 
 **现在到哪**：
 
@@ -62,10 +62,11 @@ M0 基础 ✅ ──► M1 原料就绪 ✅ ──► M2 物理段 ──► M3 
 
 | 任务 | 状态 |
 |---|---|
-| **T-35** 面板 | 三步流程、项目文件夹、四面体选择、物理设置（只读）、和 Ziva 对比、存盘再打开都做了，无窗口的检查通过；2026-11-15 用鼠标走了两遍（发现的问题记在卡片末尾）。还差：第二遍走查发现的版面问题改完以后再走一遍 |
-| **T-36** 结果页 | 写好了，数字绑在存档的报告上；还差走查的截图 |
-| **T-38** 一次性开发文件移出仓库 | 进行中 |
+| **T-35** 面板 | ✅ 三步流程、项目文件夹、四面体选择、物理设置（只读）、和 Ziva 对比、存盘再打开都做了，无窗口的检查通过；用鼠标走了四遍，发现的问题修了（卡片末尾）。剩两条小问题，不挡交付 |
+| **T-36** 结果页 | 写好了，数字绑在存档的报告上，有走查截图和正面动图；剩一位没参与的人照页面走一遍 |
+| **T-38** 一次性开发文件移出仓库 | ✅ |
 | **T-14** 演示、操作说明和验收 | 操作步骤在 [15](15-prototype.md) 第 2 节；请实验室的人照着做一遍、跨机器复现，还没做 |
+| 安装 | 插件要先用一条命令打包再用鼠标装（README）；给实验室机器的安装包是 T-40，排在原型机之后 |
 
 **原型机之后的顺序**（最终产品是什么形状，见 [01](01-overview.md)）：
 
@@ -138,7 +139,7 @@ M0 基础 ✅ ──► M1 原料就绪 ✅ ──► M2 物理段 ──► M3 
 
 ---
 
-### T-35 在 Blender 里三步：打开资产、选运动、Run，在同一组物体上回放 🟡（2026-11-13 做完，命令行下的检查通过；2026-11-15 带窗口用鼠标走了一遍，发现的问题见卡片末尾，还没修完）
+### T-35 在 Blender 里三步：打开资产、选运动、Run，在同一组物体上回放 ✅（2026-11-16；命令行下的检查通过，带窗口用鼠标从新开的 Blender 走了四遍，前三遍发现的问题修了，第四遍的截图在 [15](15-prototype.md) 第 2.2 节；剩下的两条小问题写在卡片末尾）
 - **目标**：不用命令行的研究员在 Blender 里做三步：打开资产，颅骨、下颌、牙齿、嘴唇出现在视口里；选一条运动；按 Run。算完以后结果在这些物体上播放，用 Blender 自己的时间轴。
 - **为什么**：在 Maya 里用 Ziva，可以打开场景、播放、在视口里看结果（研究员在钢琴界面里实际看到什么没量过，🔍）。我们现在要在命令行里导入、运行，再把回放包加载进 Blender（[15](15-prototype.md) 第 2 节）。下周给实验室看的就是这个用法。
 - **范围**：骨头加嘴唇。不做钢琴界面（那是实验室的工具），不做其他组织，不做 Ziva 结果的回放（T-11）。
@@ -188,7 +189,13 @@ M0 基础 ✅ ──► M1 原料就绪 ✅ ──► M2 物理段 ──► M3 
   - Compare with Ziva（06 第 3.5 节）：参考文件夹存在插件偏好里，Compare 在后台跑 `asrp compare`，数字读 `compare_report.json`，Show Ziva's lips（第二个物体，灰蓝色，跟着显示的层），Show difference as colours（读 `.f32`，固定刻度 0 到 5 mm，帧变处理函数，取消勾选时还原）；
   - `tools/check_panel.py`：三个运动在默认的粗格子上从面板跑完并匹配各自的缓存；Fine 导入的场景和以前一样并能跑；对比部分在真实的 AA 导出上跑（数据在项目外，用 `tools/local_paths.py` 找；找不到时这一部分打印 NOT VERIFIED 和原因，不算通过）。
   - **没验证的**：带窗口时的样子（280 像素下有没有被截断的字、高亮的黄色在视口里是否一眼看得出、Open folder 和 Open import report 真的打开）；带着结果列表（Load result 等）的 .blend 存盘再打开。
-  第 4 条当天修了，并且加进了检查：命令行下的三步检查原来在按 Open asset 之前先把场景里的网格（包括那个方块）删掉，所以看不到这个问题；现在它保留一个和启动场景一样的 2 米方块，要求打开资产后方块被隐藏而不是删除、旁边的物体不受影响，关掉修复时检查失败。其余各条还没有修。
+  第 4 条当天修了，并且加进了检查：命令行下的三步检查原来在按 Open asset 之前先把场景里的网格（包括那个方块）删掉，所以看不到这个问题；现在它保留一个和启动场景一样的 2 米方块，要求打开资产后方块被隐藏而不是删除、旁边的物体不受影响，关掉修复时检查失败。
+- **第三、四遍手走**（2026-11-15 到 16，装的是整批合起来的包，从新开的 Blender 只用鼠标）：第三遍在一屏里走完三步（粗格子默认，AA 算完自动播放、显示最终形状），Compare with Ziva 在面板上给出 "mean 1.88 mm, 95% 3.60 mm, max 5.09 mm"，差别着色和 Ziva 的嘴唇都出来；Ctrl+S 存盘、退出、另开 Blender 从最近文件打开，资产、第 36 帧的结果、选的运动和对比的数都在；在重开的场景上换原型一再 Run，结果被替换；甩头能跑。第三遍发现的三处当天修了，各加了检查并看到它在关掉修复时失败：
+  1. Checks 里 "(b) Attachments follow bon…" 在 NOT RUN 旁边被截断：两行改名 "Hard attachments"、"Spring anchors"；
+  2. 在已有资产的场景里再按 Open asset，新物体叫 "ASRP jaw.001" 之类（旧物体还占着名字时建的）：建完、删掉旧的以后改回原名；
+  3. 再按 Open asset 以后 Run 小节仍写着上一份资产的 "Complete"：打开资产时清掉运行状态。
+  另外 Open asset 的视角改成从正面看（项目负责人问"为什么不是正面图"），第四遍在正面视角下重拍了全部截图，包括细网格上的原型一。第二轮里视角跳到正面的现象，第三遍时发现鼠标停在我没放的位置、Blender 处在旋转视图的拖动里：是项目负责人同时在用鼠标，和我的点击撞上；插件里没有找到移动视角的代码，检查在每次 Run 前后核对视图矩阵不变。
+- **剩下的**（不挡交付）：第 7 条，甩头 4.5 mm 在默认视角下几乎看不出来（结果页有放大的动图）；第 11 条，Advanced 里 Load result 的文件窗口从"文档"文件夹开始、有一个要手打的 version 框；"Tet mesh valid"、"edges < 0.5x" 的用语没有改；插件装进 Blender 时还要先用一条命令打包（安装包是 T-40）。
 
 ---
 
@@ -210,7 +217,8 @@ M0 基础 ✅ ──► M1 原料就绪 ✅ ──► M2 物理段 ──► M3 
 - **依赖**：T-34、T-35。
 - **改动范围**：`docs/15`、`tools/prototype_numbers.py`、`tools/prototype2_numbers.py`、`tests/test_prototype_page.py`、`tests/test_prototype2_page.py`。
 - **规模**：小到中。
-- **结果**（2026-11-15）：[15](15-prototype.md) 按上面四部分加第 5 节（仍然成立的核对）重写。页面里的数字来自 `data/preview/` 里产品自己写的报告，由 `tools/prototype_archive.py` 重新生成（导入、三段运动各跑一次、`asrp compare` 对 Ziva 整张脸和只留嘴唇各一次、`tools/ziva_comparison.py`、画图），粗格子和细网格各做一套；表由 `tools/prototype_numbers.py` 写进页面，`tests/test_prototype_page.py` 在两边对不上时失败（改页面里的一个数、改存档里的一个数、让页面引的数在出处里消失，各试过一次，都失败）。图用 `tools/render_comparison.py`（无窗口的 Blender，同一个相机和着色）。引自别的文档的数（ADR-44、E-20、本文件 T-33 和 T-34 的结果）写明了出处，`tools/prototype_numbers.py` 的 `QUOTES` 检查它们还在出处里。**没做的**：没参与的开发者照页面走一遍并记下输出；用鼠标走一遍的截图位置留空（`<!-- WALK: ... -->`，由协调人填）；第 2 节面板第 1 步的两个单选按钮按 06 将要有的样子写，面板落地后核对一次文字；没有在实验室的演示机上重新计时。
+- **结果**（2026-11-15）：[15](15-prototype.md) 按上面四部分加第 5 节（仍然成立的核对）重写。页面里的数字来自 `data/preview/` 里产品自己写的报告，由 `tools/prototype_archive.py` 重新生成（导入、三段运动各跑一次、`asrp compare` 对 Ziva 整张脸和只留嘴唇各一次、`tools/ziva_comparison.py`、画图），粗格子和细网格各做一套；表由 `tools/prototype_numbers.py` 写进页面，`tests/test_prototype_page.py` 在两边对不上时失败（改页面里的一个数、改存档里的一个数、让页面引的数在出处里消失，各试过一次，都失败）。图用 `tools/render_comparison.py`（无窗口的 Blender，同一个相机和着色）。引自别的文档的数（ADR-44、E-20、本文件 T-33 和 T-34 的结果）写明了出处，`tools/prototype_numbers.py` 的 `QUOTES` 检查它们还在出处里。**没做的**：没参与的开发者照页面走一遍并记下输出；没有在实验室的演示机上重新计时。
+- **后来补上的**（2026-11-16）：第 2.2 节按落地的面板改写成一张步骤表（打开资产、物理设置、选运动、Run、结果、和 Ziva 对比、检查、存盘再打开），面板上的字由 `tests/test_prototype_page.py` 对着插件核对；"用鼠标走一遍（截图）"放进 T-35 第四遍手走的 9 张正面截图（`data/preview/walk_*.png`），测试要求它们都在、都不重复；页面顶上和第 3 节加了正面带骨头的动图（AA 最终形状和物理层、原型一、甩头，`tools/render_comparison.py` 一次生成，测试查每张动图的帧数和尺寸）。
 
 ---
 
@@ -269,7 +277,7 @@ M0 基础 ✅ ──► M1 原料就绪 ✅ ──► M2 物理段 ──► M3 
 
 ---
 
-### T-38 一次性开发文件移出仓库 🔴（等 T-36、T-37）
+### T-38 一次性开发文件移出仓库 ✅（2026-11-15）
 - **目标**：仓库里只留产品、产品的检查和资产管线；一次性的开发脚本、试验、为一页文档写的数字工具和它们的存档移出仓库。
 - **为什么**：仓库装的是项目，不是开发过程（2026-11-13 定）。[13](13-explanations.md) E-12 的分类：`tools/`、`spikes/`、`tests/`、`data/` 里有 35 个一次性的文件（PROCESS）。
 - **做法**：
@@ -287,7 +295,7 @@ M0 基础 ✅ ──► M1 原料就绪 ✅ ──► M2 物理段 ──► M3 
 - **不做**：改产品代码的行为；改 `AGENTS.md`、`CLAUDE.md` 的内容；改写 git 历史（旧提交里还留着的指针文件和这些 AI 开发文件2026-11-13 项目负责人定：现在不抹，等第一阶段做完或者整个产品做完时再说）。
 - **依赖**：T-36（15 的数字工具和存档等结果页改完再移）；T-37 的第 7 项。
 - **改动范围**：`tools/`、`spikes/`、`tests/`、`data/preview/`、`data/briefing/`、`pyproject.toml`、`.gitignore`、`README.md`、文档里的命令。
-- **做了（2026-11-15）**：E-12 清单里的一次性文件移出了仓库（`tools/` 的 `rehearse_ziva_export.py`、`lip_attachments_preview.py`、`render_playback.py`、`briefing/`；`spikes/` 整个目录；`data/briefing/`、`data/lab_export/manual_maya_obj/`、`data/preview/` 里一次性脚本的输出和讲解页的图），存在仓库外的开发归档里，git 历史里仍有。三个检查和 `landmark_layer_check.py`（`tests/test_skinning.py` 要用它）搬进了 `tests/`：`tests/s1_dynamic_jaw.py`、`tests/s2_lips_febio.py`、`tests/s3_attachment.py`、`tests/landmark_layer_check.py`，`pyproject.toml` 的 `pythonpath` 只剩 `tools`。清单里有几条后来成了产品、留下：`tools/prototype_numbers.py`、`tests/test_prototype_page.py`、`tests/test_render_prototype.py`、`data/preview/prototype_*`（结果页 15 读它们；`prototype_run_report.json` 也在其中，`prototype_numbers.py` 读它）和 README 的动图。`AGENTS.md` 和 `.claude/verify.json` 已从 git 取消跟踪（本机文件内容不变，已核对哈希），`.gitignore` 加了 `AGENTS.md`、`CLAUDE.md`、`.claude/`，验证门拒绝它们被跟踪（`tests/test_no_lab_files.py`）。`tests/test_one_off_files_gone.py` 列出要移走的路径，剩一个就失败，也进 docs 级。`docs/15` 里一条写着 `tools/landmark_layer_check.py` 的命令随 `docs/15` 的下一次改动改成 `tests/landmark_layer_check.py`。
+- **做了（2026-11-15）**：E-12 清单里的一次性文件移出了仓库（`tools/` 的 `rehearse_ziva_export.py`、`lip_attachments_preview.py`、`render_playback.py`、`briefing/`；`spikes/` 整个目录；`data/briefing/`、`data/lab_export/manual_maya_obj/`、`data/preview/` 里一次性脚本的输出和讲解页的图），存在仓库外的开发归档里，git 历史里仍有。三个检查和 `landmark_layer_check.py`（`tests/test_skinning.py` 要用它）搬进了 `tests/`：`tests/s1_dynamic_jaw.py`、`tests/s2_lips_febio.py`、`tests/s3_attachment.py`、`tests/landmark_layer_check.py`，`pyproject.toml` 的 `pythonpath` 只剩 `tools`。清单里有几条后来成了产品、留下：`tools/prototype_numbers.py`、`tests/test_prototype_page.py`、`tests/test_render_prototype.py`、`data/preview/prototype_*`（结果页 15 读它们；`prototype_run_report.json` 也在其中，`prototype_numbers.py` 读它）和 README 的动图。`AGENTS.md` 和 `.claude/verify.json` 已从 git 取消跟踪（本机文件内容不变，已核对哈希），`.gitignore` 加了 `AGENTS.md`、`CLAUDE.md`、`.claude/`，验证门拒绝它们被跟踪（`tests/test_no_lab_files.py`）。`tests/test_one_off_files_gone.py` 列出要移走的路径，剩一个就失败，也进 docs 级。`docs/15` 里那条命令已改成 `tests/landmark_layer_check.py`（存档随之重新生成）。
 - **规模**：中。
 
 ---
