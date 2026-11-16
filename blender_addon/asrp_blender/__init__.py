@@ -9,7 +9,7 @@ from pathlib import Path
 import bpy
 from bpy.app.handlers import persistent
 
-from . import asset, session
+from . import asset, compare, session
 from .session import (
     ENDED,
     EXIT_WAIT_S,
@@ -56,6 +56,25 @@ def set_project_preference(folder: str) -> None:
         _SESSION_PROJECT = folder
 
 
+_SESSION_ZIVA = ""
+
+
+def ziva_folder() -> str:
+    """The Ziva reference folder chosen once (add-on preference only; never written into the .blend or a repo file)."""
+    prefs = preferences()
+    chosen = prefs.ziva_dir if prefs is not None else ""
+    return bpy.path.abspath(chosen) if chosen else _SESSION_ZIVA
+
+
+def set_ziva_preference(folder: str) -> None:
+    global _SESSION_ZIVA
+    prefs = preferences()
+    if prefs is not None:
+        prefs.ziva_dir = folder
+    else:
+        _SESSION_ZIVA = folder
+
+
 def save_preferences() -> bool:
     """Write the user preferences to disk so the chosen folder survives a restart of Blender."""
     try:
@@ -71,8 +90,12 @@ class ASRP_Preferences(bpy.types.AddonPreferences):
     project_dir: bpy.props.StringProperty(name="ASRP project folder", subtype="DIR_PATH",
                                           description="The folder ASRP was downloaded into (it holds pyproject.toml and src/asrp_core)")
 
+    ziva_dir: bpy.props.StringProperty(name="Ziva reference folder", subtype="DIR_PATH",
+                                       description="An export folder of the lab's Ziva runs (outside the project), used by Compare with Ziva")
+
     def draw(self, context):
         self.layout.prop(self, "project_dir")
+        self.layout.prop(self, "ziva_dir")
         project = core_project()
         if project is None:
             self.layout.label(text="No project folder yet: choose it here or in the ASRP tab (N key).", icon="ERROR")
@@ -284,6 +307,16 @@ def check_rows(report) -> list[tuple[str, str, str, str]] | None:
         verdict = {True: "PASS", False: "FAIL"}.get(c.get("passed"), "NOT RUN")
         rows.append((key, str(c.get("name") or key), verdict, str(c.get("message") or "")))
     return rows
+
+
+def report_warnings(report) -> list[str]:
+    """The run's warning lines (for example flipped faces of the display surface): reported, they are not checks. Each is cut
+    after its first sentence; the full text is in run_report.json."""
+    out = []
+    for w in (report.get("warnings") if isinstance(report, dict) else None) or []:
+        if isinstance(w, str) and w.strip():
+            out.append(w.split(". ")[0].rstrip(".") + ".")
+    return out
 
 
 def check_label(key: str, name: str) -> str:
@@ -544,6 +577,12 @@ def on_load_post(*_args) -> None:
     the new file; the finished run's results are added to the scene that is current then."""
     asset._SAVED_SHADING.clear()  # the highlight of the file that was open is not this file's
     asset._SAVED_ACTIVE.clear()
+    if compare.SESSION.state in ("done", "failed"):
+        compare.SESSION.reset()
+    try:
+        compare.sync(bpy.context)  # a file saved with the colours or Ziva's lips on: the handler is armed again
+    except (RuntimeError, ValueError, OSError):
+        pass
     if SESSION.state == "running":
         show_entry(bpy.context.scene, -1)  # the opened file's saved shown result is not this run's
         ensure_timer()
@@ -692,6 +731,82 @@ class ASRP_OT_run_motion(bpy.types.Operator):
             return {"CANCELLED"}
         motion_file = Path(scene.asrp_asset_export) / "trajectories" / motion.file
         return start_run(self, context, Path(scene.asrp_asset_scene), motion_file, runs_dir, Path(motion.file).stem, "asset")
+
+
+class ASRP_OT_choose_ziva(bpy.types.Operator):
+    bl_idname = "asrp.choose_ziva"
+    bl_label = "Ziva reference folder"
+    bl_description = "Choose the Ziva export folder to compare with (once). It is remembered in the add-on preferences, not in the .blend"
+
+    directory: bpy.props.StringProperty(subtype="DIR_PATH")
+
+    def invoke(self, context, event):
+        context.window_manager.fileselect_add(self)
+        return {"RUNNING_MODAL"}
+
+    def execute(self, context):
+        folder = Path(bpy.path.abspath(self.directory))
+        if not folder.is_dir():
+            self.report({"ERROR"}, f"{folder} is not a folder")
+            return {"CANCELLED"}
+        set_ziva_preference(str(folder))
+        save_preferences()
+        self.report({"INFO"}, f"Ziva reference folder: {folder.name}")
+        return {"FINISHED"}
+
+
+COMPARE_TICK_S = 0.5
+
+
+def compare_tick():
+    """The timer of a comparison: take in what the command printed; when it has ended, show what it wrote."""
+    try:
+        state = compare.SESSION.poll()
+        if state == "running":
+            redraw()
+            return COMPARE_TICK_S
+        if state == "done" and not compare.SESSION.handled:
+            compare.SESSION.handled = True
+            compare._REPORTS.clear()
+            compare.sync(bpy.context)
+    except Exception as exc:  # noqa: BLE001  a timer that raises is unregistered silently: end in a visible error instead
+        compare.SESSION.kill_tree()
+        compare.SESSION.state, compare.SESSION.error = "failed", f"{type(exc).__name__}: {exc}"
+    redraw()
+    return None
+
+
+def ensure_compare_timer() -> None:
+    if not bpy.app.timers.is_registered(compare_tick):
+        bpy.app.timers.register(compare_tick, first_interval=COMPARE_TICK_S, persistent=True)
+
+
+class ASRP_OT_compare(bpy.types.Operator):
+    bl_idname = "asrp.compare"
+    bl_label = "Compare"
+    bl_description = ("Compare the result on the asset with the Ziva reference (`asrp compare`) in the background. The output goes "
+                      "into the run folder's compare folder. The differences are reported, not judged")
+
+    def execute(self, context):
+        scene = context.scene
+        if compare.SESSION.running:
+            self.report({"ERROR"}, "A comparison is already in progress")
+            return {"CANCELLED"}
+        ziva = ziva_folder()
+        if not ziva:
+            self.report({"ERROR"}, "Choose the Ziva reference folder first")
+            return {"CANCELLED"}
+        if not scene.asrp_asset_run or not asset_open(scene) or asset.files_problem(scene):
+            self.report({"ERROR"}, "Run a motion on the asset first")
+            return {"CANCELLED"}
+        compare.drop(scene)  # an older comparison of this run is replaced
+        try:
+            compare.SESSION.start(scene.asrp_asset_run, ziva, str(compare.out_folder(scene)))
+        except (RuntimeError, OSError) as exc:
+            self.report({"ERROR"}, str(exc))
+            return {"CANCELLED"}
+        ensure_compare_timer()
+        return {"FINISHED"}
 
 
 class ASRP_OT_highlight(bpy.types.Operator):
@@ -888,6 +1003,12 @@ class ASRP_PT_asset(bpy.types.Panel):
         layout, scene = step_layout(context, self.layout), context.scene
         wrapped(context, layout, "One asset for both prototypes: skull, jaw, teeth, lips.")
         wrapped(context, layout, "This .blend is the scene. Save it to keep the asset and the last result.")
+        col = layout.column(align=True)
+        col.enabled = not SESSION.running
+        col.prop(scene, "asrp_tet_choice", expand=True)
+        wrapped(context, layout, asset.tet_line(scene.asrp_tet_choice or "coarse"))
+        if scene.asrp_asset_objects and scene.asrp_asset_tet and scene.asrp_asset_tet != scene.asrp_tet_choice:
+            wrapped(context, layout, "Press Open asset again to use this mesh.", "INFO", alert=True)
         row = layout.row()
         row.enabled = not SESSION.running
         row.operator(ASRP_OT_open_asset.bl_idname, icon="IMPORT")
@@ -1129,6 +1250,45 @@ class ASRP_PT_results(bpy.types.Panel):
                 rm.index = i
 
 
+class ASRP_PT_compare(bpy.types.Panel):
+    bl_label = "Compare with Ziva"
+    bl_space_type = "VIEW_3D"
+    bl_region_type = "UI"
+    bl_category = "ASRP"
+    bl_parent_id = "ASRP_PT_main"
+    bl_options = {"DEFAULT_CLOSED"}
+
+    def draw(self, context):
+        layout, scene = self.layout, context.scene
+        folder = ziva_folder()
+        layout.operator(ASRP_OT_choose_ziva.bl_idname, text="Ziva reference folder", icon="FILE_FOLDER")
+        if folder:
+            wrapped(context, layout, f"Reference: {Path(folder).name}")
+        else:
+            wrapped(context, layout, "Choose the Ziva export folder once. It is the lab's data, outside the project.", "INFO")
+        row = layout.row()
+        row.enabled = bool(folder) and bool(scene.asrp_asset_run) and asset_open(scene) and not compare.SESSION.running and not asset.files_problem(scene)
+        row.operator(ASRP_OT_compare.bl_idname, text="Compare", icon="PLAY")
+        if not scene.asrp_asset_run:
+            layout.label(text="Run a motion on the asset first")
+        s = compare.SESSION
+        if s.running:
+            layout.label(text=f"Comparing... {int(s.elapsed)} s", icon="TIME")
+        elif s.state == "failed":
+            wrapped(context, layout, f"The comparison failed: {s.error}", "ERROR", alert=True)
+        for line in compare.summary_lines(scene):
+            wrapped(context, layout, line)
+        if compare.ready(scene):
+            layout.label(text=compare.REPORT_NOTE)
+        row = layout.row()
+        row.enabled = compare.ready(scene)
+        row.prop(scene, "asrp_show_ziva", text="Show Ziva's lips")
+        row = layout.row()
+        row.enabled = compare.ready(scene)
+        row.prop(scene, "asrp_show_heat", text="Show difference as colours")
+        layout.label(text=compare.SCALE_LINE)
+
+
 class ASRP_PT_checks(bpy.types.Panel):
     bl_label = "Checks"
     bl_space_type = "VIEW_3D"
@@ -1173,6 +1333,8 @@ class ASRP_PT_checks(bpy.types.Panel):
         for line in (surface_line(report, which), worst_surface_line(report, which), settle_line(report)):
             if line:
                 wrapped(context, layout, line)
+        for line in report_warnings(report):
+            wrapped(context, layout, f"Reported, not a check: {line}", "INFO")
         if not_settled(report):
             wrapped(context, layout, "Tissue not settled at the settle frame", "ERROR", alert=True)
         layout.prop(scene, "asrp_show_messages", text="Show every check's message")
@@ -1204,11 +1366,11 @@ class ASRP_PT_advanced(bpy.types.Panel):
         layout.operator(ASRP_OT_load_run_folder.bl_idname, icon="FILE_FOLDER")
 
 
-classes = (ASRP_Preferences, ASRP_OT_choose_project, ASRP_OT_check_backend, ASRP_OT_load_playback, ASRP_Result, ASRP_Motion,
+classes = (ASRP_Preferences, ASRP_OT_choose_project, ASRP_OT_choose_ziva, ASRP_OT_compare, ASRP_OT_check_backend, ASRP_OT_load_playback, ASRP_Result, ASRP_Motion,
            ASRP_AssetObject, ASRP_OT_run, ASRP_OT_open_asset, ASRP_OT_pick_motion, ASRP_OT_run_motion, ASRP_OT_set_layer,
            ASRP_OT_cancel_run, ASRP_OT_load_run_folder, ASRP_OT_show_result, ASRP_OT_remove_result,
            ASRP_OT_highlight, ASRP_OT_clear_highlight, ASRP_OT_check_setup,
-           ASRP_PT_main, ASRP_PT_asset, ASRP_PT_setup, ASRP_PT_motion, ASRP_PT_run, ASRP_PT_results, ASRP_PT_checks, ASRP_PT_advanced,
+           ASRP_PT_main, ASRP_PT_asset, ASRP_PT_setup, ASRP_PT_motion, ASRP_PT_run, ASRP_PT_results, ASRP_PT_compare, ASRP_PT_checks, ASRP_PT_advanced,
            ASRP_PT_run_files)
 
 
@@ -1232,6 +1394,14 @@ def register():
     S.asrp_asset_run = bpy.props.StringProperty(description="The run folder whose result is on the asset's objects")
     S.asrp_asset_layer = bpy.props.StringProperty(description="physics or final: the layer on the asset's lips")
     S.asrp_asset_landmarks = bpy.props.PointerProperty(type=bpy.types.Object, description="The landmark dots (the sixth object of Open asset)")
+    S.asrp_tet_choice = bpy.props.EnumProperty(items=asset.TET_CHOICES, default="coarse", name="Tet mesh",
+                                               description="Which tet mesh Open asset imports with")
+    S.asrp_asset_tet = bpy.props.StringProperty(description="The tet mesh choice the open asset was imported with")
+    S.asrp_show_ziva = bpy.props.BoolProperty(name="Show Ziva's lips", update=lambda _self, _ctx: compare.sync_ziva(bpy.context),
+                                              description="Show Ziva's lips (from the comparison) next to ours")
+    S.asrp_show_heat = bpy.props.BoolProperty(name="Show difference as colours", update=lambda _self, _ctx: compare.sync_heat(bpy.context),
+                                              description="Colour our lips by the difference from Ziva at the current frame")
+    S.asrp_ziva_object = bpy.props.PointerProperty(type=bpy.types.Object, description="Ziva's lips (the comparison's playback package)")
     S.asrp_asset_units = bpy.props.StringProperty(description="The units line of the imported scene")
     S.asrp_asset_report = bpy.props.StringProperty(description="Lines of the import report, one per line")
     S.asrp_asset_setup = bpy.props.StringProperty(description="The Physics setup rows of the imported scene (JSON)")
@@ -1256,6 +1426,10 @@ def unregister():
     global _exit_handler
     if bpy.app.timers.is_registered(tick):
         bpy.app.timers.unregister(tick)
+    if bpy.app.timers.is_registered(compare_tick):
+        bpy.app.timers.unregister(compare_tick)
+    compare.SESSION.close()
+    compare.unregister_handlers()
     if on_load_post in bpy.app.handlers.load_post:
         bpy.app.handlers.load_post.remove(on_load_post)
     # Blender's exit calls unregister() for an installed add-on before Python shuts down, so the run is stopped here:
@@ -1266,7 +1440,7 @@ def unregister():
         _exit_handler = None
     S = bpy.types.Scene
     session.preference_project = lambda: ""
-    for name in ("asrp_show_landmarks", "asrp_highlight", "asrp_setup_check", "asrp_asset_setup", "asrp_asset_report", "asrp_asset_units",
+    for name in ("asrp_ziva_object", "asrp_show_heat", "asrp_show_ziva", "asrp_asset_tet", "asrp_tet_choice", "asrp_show_landmarks", "asrp_highlight", "asrp_setup_check", "asrp_asset_setup", "asrp_asset_report", "asrp_asset_units",
                  "asrp_asset_landmarks", "asrp_asset_material", "asrp_motion_index", "asrp_motions", "asrp_asset_layer", "asrp_asset_run", "asrp_asset_export", "asrp_asset_hidden",
                  "asrp_asset_scene", "asrp_asset_objects", "asrp_show_messages", "asrp_shown", "asrp_results", "asrp_run_name", "asrp_runs_dir",
                  "asrp_trajectory_path", "asrp_scene_path"):

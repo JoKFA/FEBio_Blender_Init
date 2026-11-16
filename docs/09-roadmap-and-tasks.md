@@ -172,6 +172,10 @@ M0 基础 ✅ ──► M1 原料就绪 ✅ ──► M2 物理段 ──► M3 
   - R-01：第六个物体 "ASRP landmarks"（300 个 landmark，每个一个 1.6 mm 宽的小八面体，位置读 `scene.json` 的 `rest_positions_mm`，核心程序没改）、Show landmarks 复选框（默认开，有结果时自动隐藏并说明原因）、单位一行、导入报告几行和 Open import report 按钮；
   - R-02：Physics setup 小节（软组织、骨头、连接，来源用人话写，每行一个高亮按钮，Clear highlight，Check setup 跑 `asrp check`，最后一行写明只读）；
   - `tools/check_panel.py` 新增：case 13（真实存盘、另一个 Blender 进程重开、文件夹被搬走）、三步检查里的 landmark、单位、报告、Physics setup 行、高亮（结果不被打乱、Clear highlight 逐项还原）和 Check setup（好场景和一个连接没有顶点的场景）；每一项都在把对应的修复关掉以后看到它失败过。
+- **第二轮 B 部分**：
+  - 四面体网格的选择（06 第 3.1 节）：Open asset 上面两个单选按钮，Coarse lattice 是默认（`--tetmesh data/tetmesh/lips_lattice.json --attachments ziva-soft`），Fine 和以前一样；一行说明随选择变，四面体数读网格文件；改选择不悄悄改任何东西，写 "Press Open asset again to use this mesh."；用粗格子时检查 (b) 显示 NOT RUN，不算失败；运行报告里的翻转面 warning 显示成 "Reported, not a check"；
+  - Compare with Ziva（06 第 3.5 节）：参考文件夹存在插件偏好里，Compare 在后台跑 `asrp compare`，数字读 `compare_report.json`，Show Ziva's lips（第二个物体，灰蓝色，跟着显示的层），Show difference as colours（读 `.f32`，固定刻度 0 到 5 mm，帧变处理函数，取消勾选时还原）；
+  - `tools/check_panel.py`：三个运动在默认的粗格子上从面板跑完并匹配各自的缓存；Fine 导入的场景和以前一样并能跑；对比部分在真实的 AA 导出上跑（数据在项目外，用 `tools/local_paths.py` 找；找不到时这一部分打印 NOT VERIFIED 和原因，不算通过）。
   - **没验证的**：带窗口时的样子（280 像素下有没有被截断的字、高亮的黄色在视口里是否一眼看得出、Open folder 和 Open import report 真的打开）；带着结果列表（Load result 等）的 .blend 存盘再打开。
   第 4 条当天修了，并且加进了检查：命令行下的三步检查原来在按 Open asset 之前先把场景里的网格（包括那个方块）删掉，所以看不到这个问题；现在它保留一个和启动场景一样的 2 米方块，要求打开资产后方块被隐藏而不是删除、旁边的物体不受影响，关掉修复时检查失败。其余各条还没有修。
 
@@ -384,7 +388,7 @@ M0 基础 ✅ ──► M1 原料就绪 ✅ ──► M2 物理段 ──► M3 
   - 面板要读的东西都在 `--out` 文件夹里，面板不用算：`compare_report.json`、`heatmap.json` + `heatmap_physics.f32` / `heatmap_final.f32`、`ziva_playback/`（插件的 Load Result 能直接加载）。
   - 取点方式：到目标姿态的距离看下颌最后动的那一帧（真实数据上是第 36 帧）；下唇跟随比例用场景里的 `lower_lip_on_jaw`（76 个顶点），物理层，基准帧报第 0 帧和第 14 帧；Ziva 一侧的下颌运动取自它自己的 `motion.json`。
   - Ziva 回放包在 Blender 里（`--background`）逐帧和 Alembic 原文件比：0 到 46 帧，30 帧/秒，最大差 1.6×10⁻⁵ mm；同一个检查把时间线设成 24 帧/秒，最大差 4.87 mm，所以这个检查抓得住帧率错（`tests/test_compare_blender.py`）。Alembic 里的物体带自己的变换（缩放 2.54、转轴），比较时取世界坐标。
-  - 没做：面板上的对比小节（T-13）；只有前缀的流和别的帧率不比，是拒绝，不是换算；"只留嘴唇"那次的比较没有单独验证（命令对它和整张脸一样处理，用哪一次由调用的人选）。
+  - 面板上的对比小节后来做了（T-35 第二轮 B，06 第 3.5 节）。没做：只有前缀的流和别的帧率不比，是拒绝，不是换算；"只留嘴唇"那次的比较没有单独验证（命令对它和整张脸一样处理，用哪一次由调用的人选）。
 
 ---
 
@@ -402,7 +406,8 @@ M0 基础 ✅ ──► M1 原料就绪 ✅ ──► M2 物理段 ──► M3 
 - **目标**：实现 [06 界面设计](06-ui.md) 的五个小节。
 - **已完成的小节**（2026-11-12）：**Run**（后台启动 `asrp run`、进度、取消、完成后自动加载、失败不加载）、**Results**（已加载运行的列表，在 physics only 和各运行的 final shape 之间切换，可加载以前的运行文件夹，可移除；老的 Load result 也走这个列表）、**Checks**（读 `run_report.json`，列 a、b、b2、c、d 五项 PASS / FAIL / NOT RUN 和 landmark 层一行）。写法和边界在 06 第 3.3、3.4 节。这是**先算完整个动作再回放**，不是逐帧互动的；逐帧接着算取决于 T-30。
 - **后来做了的小节**：资产（3.1）、运动列表（3.3）由 T-35 做；物理设置（3.2，只读，R-02）：软组织、骨头、连接各一行加高亮按钮，Check setup 按钮，见 T-35 卡的"第二轮"。
-- **还没做的小节**：对比（3.5，要 T-11 的 `asrp compare`）；运行小节里失败时的"打开运行文件夹"按钮和回放小节里的"两者叠加"见 06 的"设计里有、还没做"。
+- **对比小节**（3.5）：Compare with Ziva 做了，见 T-35 卡的"第二轮 B 部分"；
+- **还没做的**：运行小节里失败时的"打开运行文件夹"按钮和回放小节里的"两者叠加"见 06 的"设计里有、还没做"。
 - **做法**：每个小节等对应的命令完成后再做。运行结果的合理性检查不通过时，面板上醒目提示（读 `run_report.json` 的 `checks` 和 `not_run`，[07](07-validation.md) 第 3 节）：已做，不通过的一项标红并带说明。
 - **验收**：06 第 6 节；插件里没有任何计算代码。
 - **结果**（2026-11-12）：

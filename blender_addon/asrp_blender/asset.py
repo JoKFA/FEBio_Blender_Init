@@ -31,6 +31,11 @@ HIGHLIGHT_OFF = (0.55, 0.55, 0.55, 1.0)
 SOURCE_PHRASE = {"lab_setting": "measured in Ziva", "ours": "our value", "ziva_default": "Ziva default"}
 ROLE_KEY = "asrp_role"  # custom property on each of the five objects
 LAYER_WORDS = {"physics": "Physics only", "final": "Final shape"}
+TET_FILES = {"coarse": "lips_lattice.json", "fine": "lips.json"}  # data/tetmesh/ of the project
+TET_CHOICES = (("coarse", "Coarse lattice (Ziva's tet size)", "Imports with the regular lattice and Ziva's soft attachments"),
+               ("fine", "Fine (lips move separately)", "Imports with the fine tet mesh and our attachments"))
+TET_LINES = {"coarse": "{n} tets. Moves the lips as one body, like Ziva. About 1 s per run.",
+             "fine": "{n} tets. Upper and lower lip move separately. About 30 s per run."}
 TISSUE_SETTINGS = "lab"  # Open asset imports with Ziva's measured material values (the T-34 report used them)
 IMPORT_TIMEOUT_S = 900  # the first import after installing may have to build the Python environment
 # After Open asset every 3D view looks at the asset from the front and a little to the right and above (the asset's
@@ -48,6 +53,43 @@ def export_folder() -> Path:
     if project is None:
         raise ValueError(NO_PROJECT)
     return project / "data" / "lab_export"
+
+
+_TET_COUNTS: dict = {}  # (path, modified) -> number of tets: the fine mesh is a 1 MB file, read once
+
+
+def tet_file(choice: str) -> Path:
+    project = core_project()
+    if project is None:
+        raise ValueError(NO_PROJECT)
+    return project / "data" / "tetmesh" / TET_FILES[choice]
+
+
+def tet_count(choice: str):
+    """The number of tets of the mesh a choice imports with, read from the tet mesh file (None when it cannot be read)."""
+    try:
+        path = tet_file(choice)
+        key = (str(path), path.stat().st_mtime)
+    except (ValueError, OSError):
+        return None
+    if key not in _TET_COUNTS:
+        _TET_COUNTS[key] = read_tet_summary(path)[0]
+    return _TET_COUNTS[key]
+
+
+def tet_line(choice: str) -> str:
+    n = tet_count(choice)
+    return TET_LINES[choice].format(n="?" if n is None else f"{n:,}")
+
+
+def import_arguments(choice: str) -> list[str]:
+    """The options `asrp import-asset` gets for a tet mesh choice (paths from the project folder)."""
+    if choice == "fine":
+        return ["--tissue-settings", TISSUE_SETTINGS, "--attachments", "ours"]
+    path = tet_file("coarse")
+    if not path.is_file():
+        raise ValueError(f"The coarse lattice tet mesh {path} is missing. Choose Fine, or update the project folder.")
+    return ["--tetmesh", str(path), "--tissue-settings", TISSUE_SETTINGS, "--attachments", "ziva-soft"]
 
 
 def runs_folder() -> Path:
@@ -351,21 +393,48 @@ def attachment_entry(scene, name: str) -> dict:
     return entry
 
 
+def show_vertex_colours(context) -> None:
+    """Every 3D view shows vertex colours (solid, colour type "vertex"); what each showed before is kept for restore_views."""
+    for key, space in view3d_spaces(context):
+        _SAVED_SHADING.setdefault(key, (space.shading.type, space.shading.color_type))
+        space.shading.type, space.shading.color_type = "SOLID", "VERTEX"
+
+
+def restore_views(context) -> None:
+    if not _SAVED_SHADING:
+        return  # nothing was changed by us: leave the views alone
+    for key, space in view3d_spaces(context):
+        saved = _SAVED_SHADING.get(key)
+        space.shading.type, space.shading.color_type = saved if saved else (space.shading.type, "MATERIAL")
+    _SAVED_SHADING.clear()
+
+
+def new_colour_attribute(mesh, name: str):
+    """A point colour attribute that is the active one; what was active before is kept for drop_colour_attribute."""
+    active = mesh.color_attributes.active_color
+    _SAVED_ACTIVE.setdefault(mesh.name, active.name if active is not None else None)
+    attr = mesh.color_attributes.new(name, "FLOAT_COLOR", "POINT")
+    mesh.color_attributes.active_color = attr
+    return attr
+
+
+def drop_colour_attribute(mesh, name: str) -> None:
+    if name in mesh.color_attributes:
+        mesh.color_attributes.remove(mesh.color_attributes[name])
+        prev = _SAVED_ACTIVE.pop(mesh.name, None)
+        if prev and prev in mesh.color_attributes:
+            mesh.color_attributes.active_color = mesh.color_attributes[prev]
+
+
 def clear_highlight(context) -> None:
     """Put the display back as it was: the colour attribute removed, the previous active colour attribute and the viewport's
     colour type restored. Nothing else of the scene is touched."""
     scene = context.scene
     for item in scene.asrp_asset_objects:
-        mesh = item.obj.data if is_live(item.obj) else None
-        if mesh is not None and HIGHLIGHT_ATTR in mesh.color_attributes:
-            mesh.color_attributes.remove(mesh.color_attributes[HIGHLIGHT_ATTR])
-            prev = _SAVED_ACTIVE.pop(mesh.name, None)
-            if prev and prev in mesh.color_attributes:
-                mesh.color_attributes.active_color = mesh.color_attributes[prev]
-    for key, space in view3d_spaces(context):
-        saved = _SAVED_SHADING.get(key)
-        space.shading.type, space.shading.color_type = saved if saved else (space.shading.type, "MATERIAL")
-    _SAVED_SHADING.clear()
+        if is_live(item.obj):
+            drop_colour_attribute(item.obj.data, HIGHLIGHT_ATTR)
+    if not scene.asrp_show_heat:  # the difference colours use the same views: they put them back when they go
+        restore_views(context)
     scene.asrp_highlight = ""
 
 
@@ -378,21 +447,18 @@ def highlight_attachment(context, name: str) -> int:
     if obj is None:
         raise ValueError(f"The attachment starts on {entry['from']!r}, which is not an object of the asset")
     clear_highlight(context)
+    if scene.asrp_show_heat:  # one colour display at a time: the difference colours go
+        scene.asrp_show_heat = False
     mesh = obj.data
     vertices = {int(w[0]) for w in entry.get("weights", [])}
     if not vertices or max(vertices) >= len(mesh.vertices):
         raise ValueError(f"The attachment {name!r} has no vertices on the {entry['from']} object. Press Open asset again.")
-    active = mesh.color_attributes.active_color
-    _SAVED_ACTIVE[mesh.name] = active.name if active is not None else None
-    attr = mesh.color_attributes.new(HIGHLIGHT_ATTR, "FLOAT_COLOR", "POINT")
+    attr = new_colour_attribute(mesh, HIGHLIGHT_ATTR)
     colors = []
     for i in range(len(mesh.vertices)):
         colors += HIGHLIGHT_ON if i in vertices else HIGHLIGHT_OFF
     attr.data.foreach_set("color", colors)
-    mesh.color_attributes.active_color = attr
-    for key, space in view3d_spaces(context):
-        _SAVED_SHADING[key] = (space.shading.type, space.shading.color_type)
-        space.shading.type, space.shading.color_type = "SOLID", "VERTEX"
+    show_vertex_colours(context)
     scene.asrp_highlight = name
     return len(vertices)
 
@@ -481,9 +547,12 @@ def open_asset(context) -> dict:
     out = scenes_folder() / datetime.now().strftime("%Y%m%d-%H%M%S-%f")
     out.parent.mkdir(parents=True, exist_ok=True)
     try:
-        proc = run_core_quiet("import-asset", str(export), str(out), "--tissue-settings", TISSUE_SETTINGS, timeout=IMPORT_TIMEOUT_S)
+        choice = scene.asrp_tet_choice or "coarse"
+        proc = run_core_quiet("import-asset", str(export), str(out), *import_arguments(choice), timeout=IMPORT_TIMEOUT_S)
     except (RuntimeError, OSError, subprocess.TimeoutExpired) as exc:
         raise ValueError(f"The asset could not be imported: {exc}") from exc
+    except ValueError:
+        raise
     if proc.returncode != 0:
         raise ValueError(f"The asset could not be imported: {last_error(proc)}")
     scene_json = out / "scene.json"
@@ -508,6 +577,7 @@ def open_asset(context) -> dict:
     scene.asrp_asset_report = "\n".join(report_lines(out / "import_report.json"))
     scene.asrp_asset_setup = make_setup(scene_json, data)
     scene.asrp_setup_check = ""
+    scene.asrp_asset_tet = choice
     sync_landmarks(scene)
     fill_motions(scene, motions)
     for other in context.selected_objects:
@@ -599,6 +669,9 @@ def clear_result(scene) -> None:
         clear_motion(obj)
     scene.asrp_asset_run = ""
     scene.asrp_asset_layer = ""
+    from . import compare
+
+    compare.drop(scene)  # the comparison belongs to the result that is going away
     sync_landmarks(scene)
 
 
@@ -643,6 +716,9 @@ def show_layer(scene, run_dir: Path, layer: str) -> None:
                          f"{len(manifest['vertices'])}: the run was made from another asset. Press Open asset again.")
     set_cache(obj, cache_file)
     scene.asrp_asset_layer = layer
+    from . import compare
+
+    compare.sync(bpy.context)  # Ziva's lips and the difference colours follow the layer on display
 
 
 def key_bone(obj, rows: list) -> None:
