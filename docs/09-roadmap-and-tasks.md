@@ -62,7 +62,7 @@ M0 基础 ✅ ──► M1 原料就绪 ✅ ──► M2 物理段 ──► M3 
 | 1 | **T-31 的真实数据验收**：训练接口 `final_shape(rest_model(...))` 对实验室的训练程序存下的 145 份结果 | ✅ 2026-11-13 做完：145 份的复现和 AA 的收敛指标都是测试（[13](13-explanations.md) E-15 第 1、8 条） |
 | 2 | **T-34** 用实验室的真实运动和 Ziva 的材料重跑嘴唇，和 Ziva 逐帧比 | ✅ 2026-11-13 做完，结果在 [13](13-explanations.md) E-19。给实验室看的版本的核心 |
 | 3 | **T-35** 在 Blender 里三步：打开资产、选运动、Run，在同一组物体上回放 | 2026-11-13 做完，命令行下的检查用真实的 AA 运动通过；2026-11-15 带窗口用鼠标走了一遍，使用者会被挡住的问题列在卡片末尾，还没修完 |
-| 4 | **T-36** 重写原型机一、二的结果页（15） | 等 T-34、T-35。T-34 到 T-36 是下周实验室会议前要做完的 |
+| 4 | **T-36** 重写原型机一、二的结果页（15） | 页面和数字 2026-11-15 做完；剩没参与的人照页面走一遍，和用鼠标走一遍的截图。T-34 到 T-36 是下周实验室会议前要做完的 |
 | 5 | **T-37** 代码跟上实测的事实 | 说明文字和诊断可以先做；改物理默认值的几项（第 1、2、3 项）等 T-34 的基线：每一项都要有改之前和之后的数，不能拿调材料或弹簧去补选错参考造成的偏差 |
 | 6 | **T-38** 一次性开发文件移出仓库 | 等 T-36、T-37 |
 | 之后，互不依赖 | **T-10** 剩下的部分；**T-11** 比较工具；**T-12** 按对比和评审调参；**T-33** 甩头的时间步收敛；**T-06b** 网格加密和参数影响报告；**T-13** 里还没做的小节 | |
@@ -171,7 +171,7 @@ M0 基础 ✅ ──► M1 原料就绪 ✅ ──► M2 物理段 ──► M3 
 
 ---
 
-### T-36 重写原型机一、二的结果页（15） 🔴（等 T-34、T-35）
+### T-36 重写原型机一、二的结果页（15） 🟡（页面已写，2026-11-15；剩一位没参与的人照页面走一遍）
 - **目标**：[15](15-prototype.md) 改成读者能照着用的结果页，四部分：这是什么；怎么跑（三步）；离 Ziva 多远；已知的差距。
 - **为什么**：15 现在大半是替身 AA（甲、乙）的表和做的过程，已退役（ADR-42）。下周给实验室看。
 - **内容**：
@@ -189,6 +189,7 @@ M0 基础 ✅ ──► M1 原料就绪 ✅ ──► M2 物理段 ──► M3 
 - **依赖**：T-34、T-35。
 - **改动范围**：`docs/15`、`tools/prototype_numbers.py`、`tools/prototype2_numbers.py`、`tests/test_prototype_page.py`、`tests/test_prototype2_page.py`。
 - **规模**：小到中。
+- **结果**（2026-11-15）：[15](15-prototype.md) 按上面四部分加第 5 节（仍然成立的核对）重写。页面里的数字来自 `data/preview/` 里产品自己写的报告，由 `tools/prototype_archive.py` 重新生成（导入、三段运动各跑一次、`asrp compare` 对 Ziva 整张脸和只留嘴唇各一次、`tools/ziva_comparison.py`、画图），粗格子和细网格各做一套；表由 `tools/prototype_numbers.py` 写进页面，`tests/test_prototype_page.py` 在两边对不上时失败（改页面里的一个数、改存档里的一个数、让页面引的数在出处里消失，各试过一次，都失败）。图用 `tools/render_comparison.py`（无窗口的 Blender，同一个相机和着色）。引自别的文档的数（ADR-44、E-20、本文件 T-33 和 T-34 的结果）写明了出处，`tools/prototype_numbers.py` 的 `QUOTES` 检查它们还在出处里。**没做的**：没参与的开发者照页面走一遍并记下输出；用鼠标走一遍的截图位置留空（`<!-- WALK: ... -->`，由协调人填）；第 2 节面板第 1 步的两个单选按钮按 06 将要有的样子写，面板落地后核对一次文字；没有在实验室的演示机上重新计时。
 
 ---
 
@@ -219,7 +220,7 @@ M0 基础 ✅ ──► M1 原料就绪 ✅ ──► M2 物理段 ──► M3 
   4. **`src/asrp_core/final_shape.py`**：Q20 有了一条观察（在第 14 帧转下颌，读出来的蒙皮前嘴唇没有变；只是这一种条件下的输出），训练的底由存下的训练结果钉住（E-13）。去掉 `jaw_changes_base="resolve"` 选项和 `JawIgnoredWarning`；文档字符串写明实测结果和 0.000016 mm 的一致；同一个文件里 Q20 一处写已实测、一处写没核实，统一。`rest_model` 写成训练接口的正式入口（现在它的说明还把它写成核对用的辅助函数）；`load`（沉降形状作底）调用时提示它不是实验室已有训练的底，只给明确要做的新实验用。`tests/test_final_shape.py` 里对应的测试跟着改；
   5. **A-33 的措辞**：`lab.py`、`tools/asset_report.py`、`tools/lip_attachments.py`、`tests/test_lip_attachments.py`、`data/lab_export/lip_attachments.json` 里"强推断，待 `ziva_maps.json` 确认"改成"2026-11-12 已证实"。这句话写进了带哈希的文件和每个导入的场景，改了以后记录的哈希会变，所以**一次改完、重新生成、一起提交**；
   6. **其余过时的说明**：`lab.py` 里写着 Ziva 属性、权重表、运动文件"还没到"的说明（`asrp import-asset` 会打印它，并写进 `scene.json` 和导入报告），改成现状；`lab.py` 里"没有实验室的运动"（D2）和"下唇跟随比例等 Ziva 的结果"（Q17）；`src/asrp_core/run.py` 里 `mode` 的注释；
-  7. **甲、乙两种拼法退役**（ADR-42）：`tools/aa_standin.py`、`tools/prototype2_numbers.py` 里的甲乙、`spikes/audit_cycles_aa.py`、`spikes/audit_aa_fit.py`、`tests/test_aa_standin.py`、`tests/test_audit_cycles_aa.py` 和 `data/preview/` 里 `aa_*` 的存档。它们对着沉降形状拟合，又给回放的形状报"到目标的距离"，两处都建在错的理解上，验证门还锁着这些表：随 T-36 重写结果页时删掉（或随 T-38 移出仓库），不修；
+  7. **甲、乙两种拼法退役**（ADR-42）：`tools/aa_standin.py`、`tools/prototype2_numbers.py` 里的甲乙、`spikes/audit_cycles_aa.py`、`spikes/audit_aa_fit.py`、`tests/test_aa_standin.py`、`tests/test_audit_cycles_aa.py` 和 `data/preview/` 里 `aa_*` 的存档。它们对着沉降形状拟合，又给回放的形状报"到目标的距离"，两处都建在错的理解上，验证门还锁着这些表：随 T-36 重写结果页时删掉（或随 T-38 移出仓库），不修；**做了（2026-11-15，随 T-36）**：`tools/aa_standin.py`、`tools/prototype2_numbers.py`、`spikes/audit_cycles_aa.py`、`spikes/audit_aa_fit.py`、`tests/test_aa_standin.py`、`tests/test_audit_cycles_aa.py`、`tests/test_prototype2_page.py` 和 `data/preview/` 里 `aa_*` 的 8 个存档和 3 张图都删了，`git grep aa_standin` 在 `src/`、`tools/`、`tests/` 里为空；
   8. **`tools/ziva_machine_export.py`**：通用的 `check_motion` 会把下颌不转的运动判成有问题，改掉（IY、UW、T 当晚被标成 incomplete 是因为 zBuilder 导出失败，不是这项检查：现场已把下颌门限设成 −1.0）；报告里加"整张脸还是只留嘴唇"这一栏；
   9. **`tools/head_shake_motion.py`**：工具不用改。我们的甩头带着上下牙一起动，但生成器不把没有粘连、没有碰撞的骨头写进 FEBio，原型里的牙齿只是显示，不影响嘴唇；和 Ziva 那次（只动颅骨和下颌，另外 8 块骨头不动）的不同说的是 Ziva 那一侧，写在 T-34 的对比报告里；
 
