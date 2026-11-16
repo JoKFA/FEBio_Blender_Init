@@ -264,7 +264,7 @@ def test_the_panel_labels_the_page_quotes_are_the_add_ons():
     source = "\n".join(p.read_text(encoding="utf-8") for p in (REPO / "blender_addon").rglob("*.py"))
     for label in ("1  Open the asset", "2  Choose a motion", "3  Run", "Open asset", "Run", "Cancel", "Results", "Checks",
                   "Physics only", "Final shape", "Choose project folder", "Open folder", "Pause",
-                  "Choose the ASRP project folder (once)", "Computes the whole motion, then replays it. Not frame-by-frame.",
+                  "Choose the ASRP project folder.", "Computes the whole motion, then replays it. Not frame-by-frame.",
                   "Open: ", "Material: ", "measured in Ziva", "Frame "):
         assert label in text, f"the page no longer quotes {label!r}"
         assert label in source, f"the add-on has no {label!r}"

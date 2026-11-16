@@ -22,9 +22,9 @@
 
 | 面板上的标题 | 是什么 |
 |---|---|
-| Prototype 1: jaw opens 12 degrees (test motion) | 原型机一。我们写的下颌铰链运动，张开到 12°，没有 Ziva 的对照 |
-| Prototype 2: neutral to AA (lab motion) | 原型机二。实验室的"中性到 AA"运动文件，转换后原样播放 |
-| Prototype 2: head shake (test motion) | 原型机二。甩头：关键帧是实验室脚本的，帧间的曲线是我们的读法 |
+| Prototype 1: jaw opens 12 deg | 原型机一。我们写的下颌铰链运动，张开到 12°，没有 Ziva 的对照 |
+| Prototype 2: neutral to AA | 原型机二。实验室的"中性到 AA"运动文件，转换后原样播放 |
+| Prototype 2: head shake | 原型机二。甩头：关键帧是实验室脚本的，帧间的曲线是我们的读法 |
 
 **两种嘴唇网格**：面板第 1 步有两个单选按钮。**Coarse lattice (Ziva's tet size)** 是默认：126 个四面体的规则格子，格边 25.37 mm（Ziva 自己的四面体尺寸），上下唇不分开，粘连都是软弹簧。**Fine (lips move separately)** 是细网格：26,721 个四面体，上下唇各自动，上唇粘在颅骨上（硬粘连）。为什么默认用粗格子，在第 3.3 节。材料是 Ziva 测到的值：杨氏模量 12 kPa、泊松比 0.4，两种网格相同。
 
@@ -46,7 +46,7 @@
 "C:/Program Files/Blender Foundation/Blender 5.2/blender.exe" --factory-startup --command extension build --source-dir blender_addon/asrp_blender --output-dir dist
 ```
 
-然后在 Blender 里：Edit > Preferences > Add-ons，右上角小箭头 > Install from Disk...，选 `dist/asrp_blender-0.0.1.zip`，勾上 ASRP。关掉设置，在 3D 视图按 N，打开 **ASRP** 标签。第一次它写 "Choose the ASRP project folder (once)"：按 **Choose project folder**，选下载下来的 ASRP 文件夹（里面有 `pyproject.toml` 和 `src`）。Blender 会记住。
+然后在 Blender 里：Edit > Preferences > Add-ons，右上角小箭头 > Install from Disk...，选 `dist/asrp_blender-0.0.1.zip`，勾上 ASRP。关掉设置，在 3D 视图按 N，打开 **ASRP** 标签。第一次它写 "Choose the ASRP project folder."：按 **Choose project folder**，选下载下来的 ASRP 文件夹（里面有 `pyproject.toml` 和 `src`）。Blender 会记住。
 
 ### 2.2 面板上的步骤
 
