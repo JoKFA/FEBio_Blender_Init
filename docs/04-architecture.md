@@ -126,7 +126,7 @@ runs/2026-11-03_neutral-to-AA_001/
 | `timing` | `generate_s`、`febio_s`、`febio_s_per_frame`、`post_s`；没有速度预算的键：耗时只报告，不和别的数并排（ADR-38 第 5 条） |
 | `reason` | 见 `settled_shape`：沉降形状不可用时的原因 |
 
-运行用的线程数记在溯源里（`febio_env`）。应变能的键在 T-26 定，`compare/` 的内容在 T-11 定。
+运行用的线程数记在溯源里（`febio_env`）。应变能的键在 T-26 定。`compare/` 是 `asrp compare` 的输出（第 7 节、[07](07-validation.md) 第 4.2 节）：对比报告、每个顶点的差（热力图用）和 Ziva 结果的回放包。
 
 **失败的运行不留结果**（ADR-37 第 4 条，T-25）：
 1. FEBio 失败或取消，或整段没有全部算完，只写 `run_report.json`（检查 (a) 不通过），不写任何结果；
@@ -233,7 +233,7 @@ FEBio 是第一个实现。Ziva 不在我们的软件里运行：它的结果在
 | 命令 | 作用 | 对应需求 |
 |---|---|---|
 | `asrp doctor` | 检查环境 | — |
-| `asrp import-asset <导出文件夹> <输出文件夹> [--tissue-settings lab]` | 导入资产，生成场景描述和检查报告。默认写我们自己的材料值；`--tissue-settings lab` 把杨氏模量、泊松比、密度和子步数写成 Ziva 实测的值（来源标 `lab_setting`），本构、粘连、阻尼、重力和物理尺度不变（T-34） | R-01 |
+| `asrp import-asset <导出文件夹> <输出文件夹> [--tissue-settings lab\|ours] [--tetmesh <四面体网格文件>] [--attachments ours\|ziva-soft]` | 导入资产，生成场景描述和检查报告。材料默认是 Ziva 实测的值（杨氏模量、泊松比、密度和子步数，来源标 `lab_setting`，T-37）；`--tissue-settings ours` 换回我们早先定的 15 kPa、0.45。`--tetmesh` 选嘴唇的四面体网格，默认是细网格 `data/tetmesh/lips.json`，粗格子是 `data/tetmesh/lips_lattice.json`（ADR-44）。`--attachments` 默认 `ours`（上唇硬粘连，其余弹簧）；`ziva-soft` 把四组粘连都写成按 Ziva 的刚度换算的弹簧（[05](05-ziva-to-febio.md) 第 3 节），粗格子要用它。本构、阻尼、重力和物理尺度不随这些选项变 | R-01 |
 | `asrp convert-motion <实验室的运动文件> <scene.json> <输出的 trajectory.json> --starts-at-rest` | 把实验室的 `combined_checkpoints.pkl` 转成运动文件：第 0 到 14 帧不动，第 i 步落在第 15 + i 帧，最后的姿态再停 10 帧。文件当数据读，不执行其中任何东西。文件不带起始姿态，所以要明说 `--starts-at-rest`；从别的姿态出发的段不能单独转（T-34、T-10） | R-03 |
 | `asrp check <scene.json> [<trajectory.json>]` | 检查场景设置；带上运动时，再查运动和场景对不对得上。有错误才失败，提醒照样通过 | R-02 |
 | `asrp run <scene.json> <trajectory.json> [--threads N]` | 运行一次，生成运行文件夹；运行文件夹一建好就先打印 `run folder <路径>`（结束时再打一次）；之后打印生成器报告、max\|u\|÷δ、五项检查（a、b、b2、c、d）、一行 `landmarks`（叠上了：移动的个数、最大平移、最终形状离物理结果最远多少；没叠上：原因）和每帧用时，检查有不通过的就以 1 退出。`--threads N`：FEBio 的线程数，默认 4（取 N 和本机核数中小的），1 时回放文件逐位相同（ADR-38） | R-03、R-06 |
