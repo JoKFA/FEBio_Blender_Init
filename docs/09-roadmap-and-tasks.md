@@ -167,6 +167,12 @@ M0 基础 ✅ ──► M1 原料就绪 ✅ ──► M2 物理段 ──► M3 
   10. Checks 里两行名字被截断（"(b) Hard attachments follow b…"），整节要往下滚才看得全，用语是内部的（Tet mesh valid、edges < 0.5x）；**名字已修**：名字最长 28 个字符，Checks 默认收着；"Tet mesh valid" 和 "edges < 0.5x" 的用语没有改；
   11. Load result 的文件窗口从"文档"文件夹开始，不是项目的 runs；右边有一个要手打的 version 文本框；
   12. 面板的 Open asset 用的是默认材料（15 kPa），T-34 的报告用的是 Ziva 的值（12 kPa），所以面板里的短边是 108 条、报告里是 109 条；面板上不写用的是哪一套。**已修**：Open asset 用 `--tissue-settings lab`，Asset 小节从导入的 `scene.json` 读出并写 "Material: 12 kPa, 0.4 (measured in Ziva)"。第 7 条（甩头看不清）这一包没动；第 11 条（Load result 的文件窗口）没动。
+- **第二轮 A 部分**（R-01、R-02 剩下的部分，写法在 06 第 3.1、3.2 节）：
+  - 一个 .blend 就是一个场景：存盘、另开一个 Blender 进程打开，面板认得资产和资产上的结果，结果照样能播、能切层、能换一条运动再 Run；场景文件夹或运行文件夹不在了，面板用一句话说清并仍可按 Open asset；File > New 回到空状态。Asset 小节写 "This .blend is the scene. Save it to keep the asset and the last result."；
+  - R-01：第六个物体 "ASRP landmarks"（300 个 landmark，每个一个 1.6 mm 宽的小八面体，位置读 `scene.json` 的 `rest_positions_mm`，核心程序没改）、Show landmarks 复选框（默认开，有结果时自动隐藏并说明原因）、单位一行、导入报告几行和 Open import report 按钮；
+  - R-02：Physics setup 小节（软组织、骨头、连接，来源用人话写，每行一个高亮按钮，Clear highlight，Check setup 跑 `asrp check`，最后一行写明只读）；
+  - `tools/check_panel.py` 新增：case 13（真实存盘、另一个 Blender 进程重开、文件夹被搬走）、三步检查里的 landmark、单位、报告、Physics setup 行、高亮（结果不被打乱、Clear highlight 逐项还原）和 Check setup（好场景和一个连接没有顶点的场景）；每一项都在把对应的修复关掉以后看到它失败过。
+  - **没验证的**：带窗口时的样子（280 像素下有没有被截断的字、高亮的黄色在视口里是否一眼看得出、Open folder 和 Open import report 真的打开）；带着结果列表（Load result 等）的 .blend 存盘再打开。
   第 4 条当天修了，并且加进了检查：命令行下的三步检查原来在按 Open asset 之前先把场景里的网格（包括那个方块）删掉，所以看不到这个问题；现在它保留一个和启动场景一样的 2 米方块，要求打开资产后方块被隐藏而不是删除、旁边的物体不受影响，关掉修复时检查失败。其余各条还没有修。
 
 ---
@@ -379,7 +385,8 @@ M0 基础 ✅ ──► M1 原料就绪 ✅ ──► M2 物理段 ──► M3 
 ### T-13 Blender 面板 v0.1 🟡（各小节随对应命令完成）
 - **目标**：实现 [06 界面设计](06-ui.md) 的五个小节。
 - **已完成的小节**（2026-11-12）：**Run**（后台启动 `asrp run`、进度、取消、完成后自动加载、失败不加载）、**Results**（已加载运行的列表，在 physics only 和各运行的 final shape 之间切换，可加载以前的运行文件夹，可移除；老的 Load result 也走这个列表）、**Checks**（读 `run_report.json`，列 a、b、b2、c、d 五项 PASS / FAIL / NOT RUN 和 landmark 层一行）。写法和边界在 06 第 3.3、3.4 节。这是**先算完整个动作再回放**，不是逐帧互动的；逐帧接着算取决于 T-30。
-- **还没做的小节**：资产（3.1）和运动下拉框由 T-35 做；物理设置（3.2）；对比（3.5，要 T-11 的 `asrp compare`）；运行小节里失败时的"打开运行文件夹"按钮和回放小节里的"两者叠加"见 06 的"设计里有、还没做"。
+- **后来做了的小节**：资产（3.1）、运动列表（3.3）由 T-35 做；物理设置（3.2，只读，R-02）：软组织、骨头、连接各一行加高亮按钮，Check setup 按钮，见 T-35 卡的"第二轮"。
+- **还没做的小节**：对比（3.5，要 T-11 的 `asrp compare`）；运行小节里失败时的"打开运行文件夹"按钮和回放小节里的"两者叠加"见 06 的"设计里有、还没做"。
 - **做法**：每个小节等对应的命令完成后再做。运行结果的合理性检查不通过时，面板上醒目提示（读 `run_report.json` 的 `checks` 和 `not_run`，[07](07-validation.md) 第 3 节）：已做，不通过的一项标红并带说明。
 - **验收**：06 第 6 节；插件里没有任何计算代码。
 - **结果**（2026-11-12）：

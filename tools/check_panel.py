@@ -867,7 +867,8 @@ BYSTANDER = "asrp_check_bystander"  # marks the objects this check puts in the s
 
 
 def mesh_objects():
-    return [o for o in bpy.data.objects if o.type == "MESH" and o.users_collection and BYSTANDER not in o]
+    return [o for o in bpy.data.objects if o.type == "MESH" and o.users_collection and BYSTANDER not in o
+            and o.get(asrp_blender.asset.ROLE_KEY) != "landmarks"]  # the landmark dots are the sixth object, not one of the five
 
 
 def bystander(name, size, at):
@@ -1113,6 +1114,8 @@ def case_three_steps():
     print(f"three steps, step 1 Open asset: {len(meshes)} mesh objects {sorted(objs)}, vertices "
           f"{ {r: len(o.data.vertices) for r, o in objs.items()} }, motions listed {[asrp_blender.asset.motion_label(m) for m in sc.asrp_motions]}")
     draw_new_panels()
+    check_landmarks_units_report(sc)
+    check_setup_rows(sc)
     done = {}
     for file, (layer, mid, movers, still) in MOTIONS.items():
         motion = json.loads((REPO / "data" / "lab_export" / "trajectories" / file).read_text(encoding="utf-8"))
@@ -1130,7 +1133,10 @@ def case_three_steps():
               f"checks {[f'{r[0]}={r[2]}' for r in rows]}")
         done[file] = case
         check_panels_on_result(file, layer, report, rows)
+        check_landmarks_hidden_with_result(sc)
         if file == "jaw_open_12deg.json":
+            check_highlight(case)
+            check_check_setup(sc)
             expect_caught(case, "bones", "jaw does not move in the jaw motion", lambda: asset_now()["jaw"].animation_data_clear(),
                           names="the jaw")
             repair(case)
@@ -1147,6 +1153,7 @@ def case_three_steps():
             expect_caught(case, "identity", "result put on newly created objects", lambda c=case: recreate_objects(c["run_dir"]))
     # leave nothing behind
     asrp_blender.asset.remove_objects(list(asset_now().values()))
+    asrp_blender.asset.remove_landmarks(sc)
     sc.asrp_asset_objects.clear()
     print("three steps passed")
 
@@ -1217,10 +1224,11 @@ def draw_new_panels():
         assert log, panel
     # the words and the order of the panel
     titles = {c.__name__: c.bl_label for c in asrp_blender.classes if hasattr(c, "bl_label") and c.__name__.startswith("ASRP_PT_")}
-    assert [titles[n] for n in ("ASRP_PT_asset", "ASRP_PT_motion", "ASRP_PT_run", "ASRP_PT_results", "ASRP_PT_checks", "ASRP_PT_advanced")] == [
-        "1  Open the asset", "2  Choose a motion", "3  Run", "Results", "Checks", "Advanced"], titles
+    assert [titles[n] for n in ("ASRP_PT_asset", "ASRP_PT_setup", "ASRP_PT_motion", "ASRP_PT_run", "ASRP_PT_results", "ASRP_PT_checks", "ASRP_PT_advanced")] == [
+        "1  Open the asset", "Physics setup", "2  Choose a motion", "3  Run", "Results", "Checks", "Advanced"], titles
     order = [c.__name__ for c in asrp_blender.classes if c.__name__.startswith("ASRP_PT_") and getattr(c, "bl_parent_id", "") == "ASRP_PT_main"]
-    assert order == ["ASRP_PT_asset", "ASRP_PT_motion", "ASRP_PT_run", "ASRP_PT_results", "ASRP_PT_checks", "ASRP_PT_advanced"], order
+    assert order == ["ASRP_PT_asset", "ASRP_PT_setup", "ASRP_PT_motion", "ASRP_PT_run", "ASRP_PT_results", "ASRP_PT_checks", "ASRP_PT_advanced"], order
+    assert "DEFAULT_CLOSED" not in getattr(asrp_blender.ASRP_PT_setup, "bl_options", ())  # open by default
     for name in ("ASRP_PT_checks", "ASRP_PT_advanced", "ASRP_PT_run_files"):
         assert "DEFAULT_CLOSED" in getattr(asrp_blender, name).bl_options, name
     assert asrp_blender.ASRP_PT_run_files.bl_parent_id == "ASRP_PT_advanced"
@@ -1236,7 +1244,8 @@ def draw_new_panels():
     assert any(t.startswith("Open: ") for t in texts), texts
     scene_files = f"Scene files: {asrp_blender.asset.relative_to_project(Path(bpy.context.scene.asrp_asset_scene).parent)}"
     assert scene_files.replace(" ", "") in "".join(texts).replace(" ", ""), (scene_files, texts)  # a long path wraps over lines
-    opens = [r for r in draw_panel(asrp_blender.ASRP_PT_asset) if r[0] == "op" and r[1] == "wm.path_open"]
+    assert "This .blend is the scene. Save it to keep the asset and the last result." in " ".join(texts), texts
+    opens = [r for r in draw_panel(asrp_blender.ASRP_PT_asset) if r[0] == "op" and r[1] == "wm.path_open" and r[2] == "Open folder"]
     assert len(opens) == 1 and opens[0][2] == "Open folder" and opens[0][4].filepath == str(Path(bpy.context.scene.asrp_asset_scene).parent), opens
     # step 2: the title on the button, the details on a second, smaller line
     log = draw_panel(asrp_blender.ASRP_PT_motion)
@@ -1249,7 +1258,7 @@ def draw_new_panels():
     shown = " ".join(labels_of(draw_panel(asrp_blender.ASRP_PT_asset)) + details + [r[2] for r in ops])
     assert not re.search(r"\b(ours|lab_setting|ziva_default|teeth_upper|teeth_lower)\b", shown), shown
     log = draw_panel(asrp_blender.ASRP_PT_asset)
-    assert [r[1] for r in log if r[0] == "op"] == ["asrp.open_asset", "wm.path_open"]
+    assert [r[1] for r in log if r[0] == "op"] == ["asrp.open_asset", "wm.path_open", "wm.path_open"]
     assert [r[1] for r in draw_panel(asrp_blender.ASRP_PT_run) if r[0] == "op"] == ["asrp.run_motion"]
 
 
@@ -1371,6 +1380,8 @@ def run_child(phase: str, repo: Path, tmp: Path) -> None:
     """Inside the child Blender: the add-on is the installed copy (bl_ext...), not the repo's."""
     import importlib
 
+    if phase in ("save", "reopen", "missing"):
+        return blend_child(phase, repo, tmp)
     assert os.environ.get("BLENDER_USER_RESOURCES") and "ASRP_PROJECT" not in os.environ, "the child does not run in an isolated profile"
     assert Path(os.environ["BLENDER_USER_RESOURCES"]).resolve() == (tmp / "profile").resolve()
     ab = importlib.import_module("bl_ext.user_default.asrp_blender")
@@ -1420,6 +1431,339 @@ def run_child(phase: str, repo: Path, tmp: Path) -> None:
         print(f"CHILD phase b: after a restart the add-on is still enabled ({len(enabled)} add-ons on) and the project folder is still {Path(prefs.project_dir).name!r}")
 
 
+# --- round 2: landmarks, units, report, physics setup, highlight --------------------------------------------------------------
+
+
+def scene_data(sc):
+    return json.loads(Path(sc.asrp_asset_scene).read_text(encoding="utf-8"))
+
+
+def check_landmarks_units_report(sc):
+    """R-01: the sixth object, the units line, the import report lines. The numbers are read from the scene folder's files here, not
+    taken from the add-on."""
+    data = scene_data(sc)
+    rest = data["landmarks"]["rest_positions_mm"]
+    lm = sc.asrp_asset_landmarks
+    need(asrp_blender.asset.is_live(lm) and lm.get(asrp_blender.asset.ROLE_KEY) == "landmarks", "landmarks", "Open asset made no landmarks object")
+    need("landmarks" not in asset_now() and len(asset_now()) == 5, "landmarks", "the landmarks object counts as one of the five")
+    need(len(rest) == 300, "landmarks", f"the scene has {len(rest)} landmarks, expected 300 (a check that sees nothing proves nothing)")
+    verts = lm.data.vertices
+    per = len(verts) // len(rest)
+    need(len(verts) == per * len(rest) and per >= 4, "landmarks", f"the landmarks object has {len(verts)} vertices for {len(rest)} landmarks")
+    worst = 0.0
+    for i, p in enumerate(rest):
+        centre = [sum(verts[i * per + k].co[a] for k in range(per)) / per for a in range(3)]
+        worst = max(worst, max(abs(centre[a] - p[a]) for a in range(3)))
+    need(worst < 1e-5, "landmarks", f"a landmark dot is {worst:.3g} mm from its rest position in scene.json")
+    size = max(max(v.co[a] for v in verts[:per]) - min(v.co[a] for v in verts[:per]) for a in range(3))
+    need(size >= 1.0, "landmarks", f"a landmark dot is {size:.3g} mm across: too small to see at the head's size")
+    need(abs(lm.scale[0] - 0.001) < 1e-9 and not lm.hide_viewport and not lm.hide_render, "landmarks", "the dots are not shown at rest")
+    log = draw_panel(asrp_blender.ASRP_PT_asset)
+    props = [r for r in log if r[0] == "prop" and r[1] == "asrp_show_landmarks"]
+    need(len(props) == 1 and props[0][2] == "Show landmarks" and sc.asrp_show_landmarks, "landmarks", "no Show landmarks checkbox, or it is not on by default")
+    sc.asrp_show_landmarks = False
+    need(lm.hide_viewport, "landmarks", "Show landmarks off does not hide the dots")
+    sc.asrp_show_landmarks = True
+    need(not lm.hide_viewport, "landmarks", "Show landmarks on does not show the dots")
+    # units
+    mm = data["units"]["mm_per_scene_unit"]["value"]
+    text = " ".join(labels_of(log))
+    need(f"Units: mm (1 scene unit = {mm:g} mm)" in text and mm == 0.962, "units", f"the Asset section does not say 'Units: mm (1 scene unit = 0.962 mm)': {text}")
+    # the import report
+    report = json.loads((Path(sc.asrp_asset_scene).parent / "import_report.json").read_text(encoding="utf-8"))
+    lips = next(m for m in report["meshes"] if m["role"] == "soft tissue")
+    need(lips["vertices"] == len(asset_now()["lips"].data.vertices) == 10240, "report", "the report's lip vertex count is not the lips object's")
+    for line in (f"Imported: {len(report['meshes'])} meshes, {report['landmarks']} landmarks", f"Lips: {lips['vertices']} vertices",
+                 f"Problems found: {len(report['check']['errors'])} errors, {len(report['check']['warnings'])} warnings"):
+        need(line.replace(" ", "") in text.replace(" ", ""), "report", f"the Asset section does not say {line!r}: {text}")
+    need("Problems found: 0 errors, 0 warnings" in text and report["landmarks"] == 300 and len(report["meshes"]) == 5, "report", "the report is not the expected one")
+    opens = [r for r in log if r[0] == "op" and r[1] == "wm.path_open" and r[2] == "Open import report"]
+    need(len(opens) == 1 and opens[0][4].filepath.endswith("import_report.json") and Path(opens[0][4].filepath).is_file(), "report",
+         "no Open import report button for an existing file")
+    need("Landmarks show the rest positions" not in text, "landmarks", "the hidden-while-a-result-plays line is shown with no result on the asset")
+    print(f"  landmarks: {len(rest)} dots of {per} vertices ({size:.2f} mm across) centred on the rest positions in scene.json (worst {worst:.1e} mm), "
+          f"Show landmarks on by default, units and report lines drawn")
+
+
+def check_landmarks_hidden_with_result(sc):
+    lm = sc.asrp_asset_landmarks
+    need(sc.asrp_asset_run and lm.hide_viewport and lm.hide_render, "landmarks", "the landmark dots are still shown while a result is on the asset")
+    text = " ".join(labels_of(draw_panel(asrp_blender.ASRP_PT_asset)))
+    need("Landmarks show the rest positions; hidden while a result plays." in text, "landmarks", f"the panel does not say why the dots are hidden: {text}")
+    sc.asrp_show_landmarks = True
+    need(lm.hide_viewport, "landmarks", "Show landmarks showed the dots over a result")
+
+
+EXPECT_SETUP = {  # what the Physics setup says about the lab asset (read off the card by hand, not from the add-on)
+    "tissues": ["lips: 26721 tets, fine mesh"],
+    "material": "neo-Hookean: 12 kPa, nu 0.4, 1060 kg/m3 (measured in Ziva)",
+    "bones": ["jaw: follows jaw01", "skull: follows head", "teeth_upper: display only (follows head)", "teeth_lower: display only (follows jaw01)"],
+    "attachments": ["lips to skull: 74 vertices, hard", "lips to jaw: 76 vertices, spring 1.94 N/mm (our value)",
+                    "lips to lip_corner_anchor: 348 vertices, spring 1.94 N/mm (our value)",
+                    "lips to lip_corner_anchor: 309 vertices, spring 1.94 N/mm (our value)"],
+}
+
+
+def check_setup_rows(sc):
+    """R-02: the Physics setup rows, one button each, the sentences read from scene.json; the last line of the section."""
+    data = scene_data(sc)
+    tet = json.loads((Path(sc.asrp_asset_scene).parent / data["soft_tissues"][0]["tet_mesh"]["path"]).read_text(encoding="utf-8"))
+    need(len(tet["tets"]) == 26721 and "kind" not in tet, "setup", f"the lips tet mesh has {len(tet['tets'])} tets and kind {tet.get('kind')!r}")
+    need(asrp_blender.asset.read_tet_summary(REPO / "data" / "tetmesh" / "lips_lattice.json") == (126, "lattice"), "setup", "a lattice tet mesh is not reported as lattice")
+    log = draw_panel(asrp_blender.ASRP_PT_setup)
+    text = " ".join(labels_of(log)).replace(" ", "")
+    for key in ("tissues", "bones", "attachments"):
+        for line in EXPECT_SETUP[key]:
+            need(line.replace(" ", "") in text, "setup", f"the Physics setup does not say {line!r}: {labels_of(log)}")
+    need(EXPECT_SETUP["material"].replace(" ", "") in text, "setup", f"the material row is missing: {labels_of(log)}")
+    ops = [r for r in log if r[0] == "op" and r[1] == "asrp.highlight"]
+    need([(r[4].kind, r[4].target) for r in ops] == [("part", "lips")] + [("part", b) for b in ("jaw", "skull", "teeth_upper", "teeth_lower")] +
+         [("attachment", a["name"]) for a in data["attachments"]], "setup", f"the highlight buttons are {[(r[4].kind, r[4].target) for r in ops]}")
+    need(all(r[2] == "" for r in ops), "setup", "a highlight button has text (it should be a small icon button)")
+    need("Read-only in this version. Marking meshes as bone or tissue in Blender comes later.".replace(" ", "") in text, "setup", "the last line is missing")
+    need([r[1] for r in log if r[0] == "op" and r[1] != "asrp.highlight"] == ["asrp.clear_highlight", "asrp.check_setup"], "setup", "wrong buttons")
+    need(not [r for r in log if r[1] == "asrp.clear_highlight"][0][5], "setup", "Clear highlight is enabled with nothing highlighted")
+    print(f"  physics setup: {len(ops)} rows with a button each, tissue / bones / attachments say what scene.json says, last line present")
+
+
+def colour_of(mesh):
+    import array
+
+    attr = mesh.color_attributes[asrp_blender.asset.HIGHLIGHT_ATTR]
+    co = array.array("f", bytes(4 * 4 * len(mesh.vertices)))
+    attr.data.foreach_get("color", co)
+    return co
+
+
+def check_highlight(case):
+    """Highlight a part and an attachment while a result is on the asset: the result is not disturbed; Clear highlight puts the display
+    back exactly as it was."""
+    sc = bpy.context.scene
+    objs = asset_now()
+    lips = objs["lips"]
+    before_attrs = [a.name for a in lips.data.color_attributes]
+    before_active = lips.data.color_attributes.active_color.name if lips.data.color_attributes.active_color else None
+    spaces = list(asrp_blender.asset.view3d_spaces(bpy.context))
+    before_shading = [(k, sp.shading.type, sp.shading.color_type) for k, sp in spaces]
+    need(spaces, "highlight", "no 3D view in this Blender: the viewport part of the highlight cannot be checked (the check must be able to fail)")
+    run, layer, frame = sc.asrp_asset_run, sc.asrp_asset_layer, sc.frame_current
+    mods = [(o.name, [m.name for m in o.modifiers]) for o in objs.values()]
+    # a part: selected and active, nothing else
+    assert bpy.ops.asrp.highlight(kind="part", target="jaw") == {"FINISHED"}
+    need([o.name for o in bpy.context.view_layer.objects if o.select_get()] == [objs["jaw"].name] and bpy.context.view_layer.objects.active == objs["jaw"],
+         "highlight", "a part row did not select that object and make it active")
+    # an attachment: its vertices coloured, the others not
+    data = scene_data(sc)
+    att = data["attachments"][0]
+    verts = {int(w[0]) for w in att["weights"]}
+    need(len(verts) == 74, "highlight", f"the first attachment has {len(verts)} vertices, expected 74")
+    assert bpy.ops.asrp.highlight(kind="attachment", target=att["name"]) == {"FINISHED"}
+    co = colour_of(lips.data)
+    on = [i for i in range(len(lips.data.vertices)) if co[4 * i + 2] < 0.1]  # the yellow ones have no blue
+    need(set(on) == verts, "highlight", f"{len(on)} vertices are coloured, the attachment has {len(verts)}")
+    need(lips.data.color_attributes.active_color.name == asrp_blender.asset.HIGHLIGHT_ATTR and sc.asrp_highlight == att["name"], "highlight", "the highlight is not the active colour")
+    need(all(sp.shading.type == "SOLID" and sp.shading.color_type == "VERTEX" for _k, sp in asrp_blender.asset.view3d_spaces(bpy.context)), "highlight",
+         "the 3D views are not set to show the vertex colours")
+    # the result on the asset is as it was: verify_three_step reads the cache, the bones, the timeline
+    need((sc.asrp_asset_run, sc.asrp_asset_layer) == (run, layer) and sc.frame_current == frame, "highlight", "the highlight changed the result's state")
+    need(mods == [(o.name, [m.name for m in o.modifiers]) for o in objs.values()], "highlight", "the highlight changed the modifiers")
+    verify_three_step(case)
+    # another attachment replaces the first one
+    other = data["attachments"][1]
+    assert bpy.ops.asrp.highlight(kind="attachment", target=other["name"]) == {"FINISHED"}
+    on = {i for i in range(len(lips.data.vertices)) if colour_of(lips.data)[4 * i + 2] < 0.1}
+    need(on == {int(w[0]) for w in other["weights"]} and len(lips.data.color_attributes) == len(before_attrs) + 1, "highlight", "a second highlight did not replace the first")
+    # clear: exactly as it was
+    assert bpy.ops.asrp.clear_highlight() == {"FINISHED"}
+    after = [a.name for a in lips.data.color_attributes]
+    need(after == before_attrs and sc.asrp_highlight == "", "highlight", f"after Clear highlight the lips have the colour attributes {after}, before {before_attrs}")
+    active = lips.data.color_attributes.active_color.name if lips.data.color_attributes.active_color else None
+    need(active == before_active, "highlight", f"the active colour attribute is {active!r}, it was {before_active!r}")
+    now = [(k, sp.shading.type, sp.shading.color_type) for k, sp in asrp_blender.asset.view3d_spaces(bpy.context)]
+    need(now == before_shading, "highlight", f"the 3D views show {now} after Clear highlight, they showed {before_shading}")
+    verify_three_step(case)
+    print(f"  highlight: a part is selected and active; an attachment colours {len(verts)} vertices (others not), a second replaces it; the result is "
+          f"still the same (cache, bones, modifiers, timeline); Clear highlight restores the colour attributes {before_attrs} and the shading {before_shading[0][1:]}")
+
+
+def check_check_setup(sc):
+    """Check setup: the outcome of `asrp check` in plain English, on a good scene and on one with an attachment without vertices."""
+    assert bpy.ops.asrp.check_setup() == {"FINISHED"}
+    need(sc.asrp_setup_check == "Setup check: No problems found.", "check-setup", f"a good scene says {sc.asrp_setup_check!r}")
+    need("Setup check: No problems found." in " ".join(labels_of(draw_panel(asrp_blender.ASRP_PT_setup))), "check-setup", "the outcome is not drawn")
+    folder = Path(sc.asrp_asset_scene).parent
+    broken = folder.parent / (folder.name + "_broken")
+    shutil.copytree(folder, broken)
+    data = json.loads((broken / "scene.json").read_text(encoding="utf-8"))
+    data["attachments"][0]["weights"] = []
+    (broken / "scene.json").write_text(json.dumps(data), encoding="utf-8")
+    good = sc.asrp_asset_scene
+    sc.asrp_asset_scene = str(broken / "scene.json")
+    try:
+        assert bpy.ops.asrp.check_setup() == {"FINISHED"}
+        lines = sc.asrp_setup_check.splitlines()
+        log = draw_panel(asrp_blender.ASRP_PT_setup)
+    finally:
+        sc.asrp_asset_scene = good
+        shutil.rmtree(broken, ignore_errors=True)
+    need(lines and lines[0].startswith("Setup check: 1 errors") and len(lines) >= 2 and lines[1].startswith("Error: "), "check-setup",
+         f"a scene with an empty attachment says {lines}")
+    need(any(r[0] == "label" and r[2] and r[1].startswith("Error") for r in log), "check-setup", "the error line is not drawn in the alert colour")
+    sc.asrp_setup_check = ""
+    print(f"  check setup: good scene -> 'No problems found.'; an attachment without vertices -> {lines[0]!r}, then {lines[1][:70]!r}")
+
+
+# --- one .blend is one scene: save, reopen in another Blender process ---------------------------------------------------------
+
+
+def blend_child(phase, repo, tmp):
+    """Inside a child Blender of case_save_and_reopen: the add-on is the repo's, registered before the file is opened (as Blender
+    does at start-up)."""
+    assert os.environ.get("BLENDER_USER_RESOURCES") and "ASRP_PROJECT" not in os.environ
+    asrp_blender.register()
+    asrp_blender.save_preferences = lambda: True
+    sc = bpy.context.scene
+    blend, state_file = tmp / "saved" / "scene.blend", tmp / "saved" / "state.json"
+    try:
+        if phase == "save":
+            asrp_blender.asset.remove_objects([o for o in bpy.data.objects if o.type == "MESH"])
+            assert bpy.ops.asrp.open_asset() == {"FINISHED"}
+            assert sc.asrp_asset_landmarks is not None and not sc.asrp_asset_landmarks.hide_viewport
+            run_dir = three_steps_run("neutral_to_AA.json")
+            check_landmarks_hidden_with_result(sc)
+            assert SESSION.state == "complete"
+            state_file.write_text(json.dumps({"run_dir": str(run_dir), "scene": sc.asrp_asset_scene, "frame_end": sc.frame_end}), encoding="utf-8")
+            assert bpy.ops.wm.save_as_mainfile(filepath=str(blend)) == {"FINISHED"}
+            print(f"CHILD saved {blend.name} after Open asset and a run of neutral_to_AA ({sc.frame_end + 1} frames)")
+        elif phase == "reopen":
+            state = json.loads(state_file.read_text(encoding="utf-8"))
+            assert bpy.ops.wm.open_mainfile(filepath=str(blend)) == {"FINISHED"}
+            sc = bpy.context.scene
+            reopen_checks(sc, state, tmp)
+        else:
+            assert bpy.ops.wm.open_mainfile(filepath=str(blend)) == {"FINISHED"}
+            sc = bpy.context.scene
+            missing_checks(sc, tmp)
+    finally:
+        SESSION.close()
+        asrp_blender.unregister()
+
+
+def case_from_state(sc, file, state, layer):
+    motion = json.loads((REPO / "data" / "lab_export" / "trajectories" / file).read_text(encoding="utf-8"))
+    _layer, mid, movers, still = MOTIONS[file]
+    frames = [mid, 36 if motion["frames"] > 36 else motion["frames"] - 2, motion["frames"] - 1]
+    return dict(file=file, motion=motion, run_dir=state["run_dir"], layer=layer, frames=frames, movers=movers, still=still, ident=snapshot(asset_now()))
+
+
+def reopen_checks(sc, state, tmp):
+    objs = asset_now()
+    need(sorted(objs) == sorted(ROLES) and asrp_blender.asset_open(sc), "reopen", f"after reopening the panel knows the objects {sorted(objs)}")
+    need(asrp_blender.asset.is_live(sc.asrp_asset_landmarks), "reopen", "the landmarks object is gone after reopening")
+    texts = " ".join(labels_of(draw_panel(asrp_blender.ASRP_PT_asset)))
+    for part in ("Scene files:", "Material: 12 kPa, 0.4 (measured in Ziva)", "Units: mm (1 scene unit = 0.962 mm)", "Problems found: 0 errors, 0 warnings",
+                 "Landmarks show the rest positions; hidden while a result plays."):
+        need(part.replace(" ", "") in texts.replace(" ", ""), "reopen", f"after reopening the Asset section does not say {part!r}: {texts}")
+    need(not asrp_blender.asset.files_problem(sc), "reopen", "the files are there but the panel says they are gone")
+    need([m.title for m in sc.asrp_motions] == list(TITLES.values()), "reopen", "the motion list did not survive")
+    setup = " ".join(labels_of(draw_panel(asrp_blender.ASRP_PT_setup))).replace(" ", "")
+    need(all(x.replace(" ", "") in setup for x in EXPECT_SETUP["attachments"]), "reopen", "the Physics setup did not survive")
+    need((sc.frame_start, sc.frame_end) == (0, state["frame_end"]) and sc.asrp_asset_layer == "final" and sc.asrp_asset_run == state["run_dir"], "reopen",
+         f"timeline {sc.frame_start}..{sc.frame_end}, layer {sc.asrp_asset_layer!r}")
+    # the result plays: the same function the three-step check uses
+    case = case_from_state(sc, "neutral_to_AA.json", state, "final")
+    verify_three_step(case)
+    run = draw_panel(asrp_blender.ASRP_PT_run)
+    need(any(r[0] == "op" and r[1] == "screen.animation_play" for r in run), "reopen", "no Play button on the reopened result")
+    # Physics only / Final shape
+    for layer in ("physics", "final"):
+        assert bpy.ops.asrp.set_layer(layer=layer) == {"FINISHED"}
+        verify_three_step(dict(case, layer=layer))
+    # another motion, Run: the result is replaced on the same five objects
+    run_dir = three_steps_run("jaw_open_12deg.json", rest_check=True)
+    case2 = case_from_state(sc, "jaw_open_12deg.json", {"run_dir": str(run_dir)}, "physics")
+    case2["ident"] = case["ident"]
+    verify_three_step(case2)
+    need(sc.asrp_asset_run == str(run_dir) and sc.asrp_asset_run != state["run_dir"], "reopen", "the second run did not replace the result")
+    print(f"CHILD reopened: panel knows the five objects and the landmarks, the Asset section keeps its lines, neutral_to_AA still plays (final and "
+          f"physics layers equal their caches, bones equal the motion file, timeline 0..{state['frame_end']}); jaw_open_12deg then ran and replaced it on the same objects")
+    # File > New: the panel is empty, nothing of the previous file is left
+    assert bpy.ops.wm.read_homefile() == {"FINISHED"}
+    sc = bpy.context.scene
+    need(SESSION.state == "idle", "new-file", f"the run banner of the old file is still there: {SESSION.state}")
+    need(not [o for o in bpy.data.objects if o.name.startswith("ASRP")], "new-file", "ASRP objects are left in the new file")
+    need(not sc.asrp_asset_objects and not sc.asrp_asset_scene and not sc.asrp_asset_run and not sc.asrp_motions and not sc.asrp_results, "new-file", "scene properties are left")
+    texts = {}
+    for panel in (asrp_blender.ASRP_PT_asset, asrp_blender.ASRP_PT_setup, asrp_blender.ASRP_PT_motion, asrp_blender.ASRP_PT_run,
+                  asrp_blender.ASRP_PT_results, asrp_blender.ASRP_PT_checks):
+        log = draw_panel(panel)
+        texts[panel.bl_label] = " ".join(labels_of(log))
+        need(not [r for r in log if r[0] == "op" and r[1] in ("screen.animation_play", "wm.path_open", "asrp.highlight", "asrp.set_layer")], "new-file",
+             f"{panel.bl_label} still has buttons of the old asset")
+    need("No asset is open" in texts["1  Open the asset"] and "Scene files" not in texts["1  Open the asset"], "new-file", texts["1  Open the asset"])
+    need("Open the asset first" in texts["Physics setup"] and "Open the asset first" in texts["2  Choose a motion"], "new-file", "the empty state of steps 2 is wrong")
+    need("Complete" not in texts["3  Run"] and "No result is shown" in texts["Results"] and "No result is shown" in texts["Checks"], "new-file", str(texts))
+    print("CHILD File > New: the panel is in its empty state (no asset, no motions, no result, no banner, no ASRP objects)")
+
+
+def missing_checks(sc, tmp):
+    """The scene and run folders the .blend points to are gone: plain words, Open asset offered, no traceback."""
+    need(not Path(sc.asrp_asset_scene).exists(), "missing", "the scene folder is still there: this check would prove nothing")
+    problem = asrp_blender.asset.files_problem(sc)
+    need(problem and "scene files of this asset are gone" in problem and "Open asset again" in problem, "missing", f"the problem sentence is {problem!r}")
+    log = draw_panel(asrp_blender.ASRP_PT_asset)
+    text = " ".join(labels_of(log))
+    need("scene files of this asset are gone".replace(" ", "") in text.replace(" ", ""), "missing", f"the Asset section does not say so: {text}")
+    open_buttons = [r for r in log if r[0] == "op" and r[1] == "asrp.open_asset"]
+    need(len(open_buttons) == 1 and open_buttons[0][5], "missing", "Open asset is not offered (enabled)")
+    need(not [r for r in log if r[0] == "op" and r[1] == "wm.path_open"], "missing", "an Open folder button for a folder that is gone")
+    for panel in (asrp_blender.ASRP_PT_setup, asrp_blender.ASRP_PT_motion, asrp_blender.ASRP_PT_run, asrp_blender.ASRP_PT_results,
+                  asrp_blender.ASRP_PT_checks, asrp_blender.ASRP_PT_advanced):
+        draw_panel(panel)  # must not raise
+    runlog = draw_panel(asrp_blender.ASRP_PT_run)
+    need([r for r in runlog if r[1] == "asrp.run_motion"] and not [r for r in runlog if r[1] == "asrp.run_motion"][0][5], "missing", "Run is enabled with no scene files")
+    need(not [r for r in runlog if r[1] == "screen.animation_play"], "missing", "a Play button for files that are gone")
+    results = " ".join(labels_of(draw_panel(asrp_blender.ASRP_PT_results)))
+    need("are gone" in results, "missing", f"the Results section does not say the result is gone: {results}")
+    checks = " ".join(labels_of(draw_panel(asrp_blender.ASRP_PT_checks)))
+    need("gone" in checks, "missing", f"the Checks section does not say the run folder is gone: {checks}")
+    try:
+        bpy.ops.asrp.run_motion()
+        raise AssertionError("Run did not refuse")
+    except RuntimeError as exc:
+        need("gone" in str(exc) and "Traceback" not in str(exc), "missing", f"Run's refusal is {exc}")
+    try:
+        bpy.ops.asrp.check_setup()
+    except RuntimeError:
+        pass  # a refusal is fine; a traceback in the panel is not (draw above did not raise)
+    # Open asset again repairs it
+    assert bpy.ops.asrp.open_asset() == {"FINISHED"}
+    need(not asrp_blender.asset.files_problem(sc) and len(asset_now()) == 5 and not sc.asrp_asset_run, "missing", "Open asset did not repair the scene")
+    print("CHILD files gone: the panel says the scene files and the result are gone in plain words, offers Open asset (enabled), disables Run, "
+          "draws every section without an error, and Open asset puts it right")
+
+
+def case_save_and_reopen(tmp):
+    """A real save and a real second Blender process (headless, isolated profile): Open asset, run, save; reopen; then the folders gone."""
+    profile = tmp / "profile_blend"
+    profile.mkdir()
+    (tmp / "saved").mkdir()
+    runs = tmp / "blend_runs"
+    out = []
+    for phase in ("save", "reopen"):
+        done = subprocess.run([blender_exe(), "--background", "--python-exit-code", "1", "--python", str(THIS), "--", CHILD_MARK, phase, str(REPO), str(tmp)],
+                              capture_output=True, text=True, encoding="utf-8", errors="replace", env=isolated(profile, ASRP_RUNS_DIR=runs), timeout=TIMEOUT_S)
+        lines = [x for x in done.stdout.splitlines() if x.startswith("CHILD ")]
+        assert done.returncode == 0 and lines, f"the save / reopen check, phase {phase}, failed (exit {done.returncode}):\n{done.stdout[-3500:]}\n{done.stderr[-1500:]}"
+        out += lines
+    shutil.move(str(runs), str(tmp / "moved_runs"))  # the scene folder and the run folder are gone
+    done = subprocess.run([blender_exe(), "--background", "--python-exit-code", "1", "--python", str(THIS), "--", CHILD_MARK, "missing", str(REPO), str(tmp)],
+                          capture_output=True, text=True, encoding="utf-8", errors="replace", env=isolated(profile, ASRP_RUNS_DIR=runs), timeout=TIMEOUT_S)
+    lines = [x for x in done.stdout.splitlines() if x.startswith("CHILD ")]
+    assert done.returncode == 0 and lines, f"the files-gone check failed (exit {done.returncode}):\n{done.stdout[-3500:]}\n{done.stderr[-1500:]}"
+    print("case 13 one .blend is one scene (real save, three further Blender processes):\n  " + "\n  ".join(x[6:] for x in out + lines))
+
+
 if CHILD_MARK in sys.argv:  # a child Blender of case_installed_copy: runs one phase and ends
     run_child(sys.argv[sys.argv.index(CHILD_MARK) + 1], Path(sys.argv[sys.argv.index(CHILD_MARK) + 2]), Path(sys.argv[sys.argv.index(CHILD_MARK) + 3]))
     raise SystemExit(0)
@@ -1436,6 +1780,10 @@ try:
         case_installed_copy(tmp)
         print("INSTALLED ONLY PASSED")
         raise SystemExit(0)
+    if "--blend-only" in sys.argv:
+        case_save_and_reopen(tmp)
+        print("BLEND ONLY PASSED")
+        raise SystemExit(0)
     if "--three-steps-only" in sys.argv:
         case_three_steps()
         print("THREE STEPS ONLY PASSED")
@@ -1448,6 +1796,7 @@ try:
     case_english_only()
     case_project_order(tmp)
     case_installed_copy(tmp)
+    case_save_and_reopen(tmp)
     run1 = case_complete(box, runs, tmp)
     case_layout(run1, tmp)
     case_start_fails(box, runs, "complete")

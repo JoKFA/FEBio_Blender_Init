@@ -542,6 +542,8 @@ def ensure_timer() -> None:
 def on_load_post(*_args) -> None:
     """A file was loaded: a run may still be going (or have just ended), so poll it again. The panel's list belongs to
     the new file; the finished run's results are added to the scene that is current then."""
+    asset._SAVED_SHADING.clear()  # the highlight of the file that was open is not this file's
+    asset._SAVED_ACTIVE.clear()
     if SESSION.state == "running":
         show_entry(bpy.context.scene, -1)  # the opened file's saved shown result is not this run's
         ensure_timer()
@@ -675,6 +677,10 @@ class ASRP_OT_run_motion(bpy.types.Operator):
         except ValueError as exc:
             self.report({"ERROR"}, str(exc))
             return {"CANCELLED"}
+        problem = asset.files_problem(scene)
+        if scene.asrp_asset_scene and not Path(scene.asrp_asset_scene).is_file():
+            self.report({"ERROR"}, problem)
+            return {"CANCELLED"}
         motion = asset.picked_motion(scene)
         if motion is None or motion.error:
             self.report({"ERROR"}, "Pick a motion first")
@@ -686,6 +692,58 @@ class ASRP_OT_run_motion(bpy.types.Operator):
             return {"CANCELLED"}
         motion_file = Path(scene.asrp_asset_export) / "trajectories" / motion.file
         return start_run(self, context, Path(scene.asrp_asset_scene), motion_file, runs_dir, Path(motion.file).stem, "asset")
+
+
+class ASRP_OT_highlight(bpy.types.Operator):
+    bl_idname = "asrp.highlight"
+    bl_label = "Highlight"
+    bl_description = ("Show this row in the 3D view: a tissue or bone is selected and made active, an attachment colours its "
+                      "vertices on the lips. A result on the asset is not touched")
+
+    kind: bpy.props.StringProperty()  # "part" (a tissue or a bone) or "attachment"
+    target: bpy.props.StringProperty()  # the object's role, or the attachment's name
+
+    def execute(self, context):
+        scene = context.scene
+        try:
+            if self.kind == "part":
+                obj = asset.asset_objects(scene).get(self.target)
+                if obj is None:
+                    raise ValueError(f"{self.target} is not an object of the asset. Press Open asset again.")
+                asset.select_part(context, obj)
+            else:
+                asset.highlight_attachment(context, self.target)
+        except (ValueError, RuntimeError, OSError, KeyError) as exc:
+            self.report({"ERROR"}, str(exc))
+            return {"CANCELLED"}
+        return {"FINISHED"}
+
+
+class ASRP_OT_clear_highlight(bpy.types.Operator):
+    bl_idname = "asrp.clear_highlight"
+    bl_label = "Clear highlight"
+    bl_description = "Put the 3D view back as it was before an attachment was highlighted"
+
+    def execute(self, context):
+        asset.clear_highlight(context)
+        return {"FINISHED"}
+
+
+class ASRP_OT_check_setup(bpy.types.Operator):
+    bl_idname = "asrp.check_setup"
+    bl_label = "Check setup"
+    bl_description = "Run `asrp check` on the asset's scene file and say in plain words what it found"
+
+    def execute(self, context):
+        scene = context.scene
+        if not asset_open(scene) or not Path(scene.asrp_asset_scene).is_file():
+            self.report({"ERROR"}, "Open the asset first")
+            return {"CANCELLED"}
+        try:
+            scene.asrp_setup_check = asset.run_setup_check(scene)
+        except (ValueError, RuntimeError, OSError, subprocess.TimeoutExpired) as exc:
+            scene.asrp_setup_check = f"Setup check: could not be run. {exc}"
+        return {"FINISHED"}
 
 
 class ASRP_OT_set_layer(bpy.types.Operator):
@@ -769,9 +827,9 @@ class ASRP_OT_remove_result(bpy.types.Operator):
         return {"FINISHED"}
 
 
-def wrapped(context, layout, text: str, icon: str = "NONE", alert: bool = False) -> None:
-    """A label that wraps to the width of the side bar."""
-    width = max(16, int(getattr(context.region, "width", 300) / 8))
+def wrapped(context, layout, text: str, icon: str = "NONE", alert: bool = False, reserve: int = 0) -> None:
+    """A label that wraps to the width of the side bar (`reserve` characters narrower, when a button sits beside it)."""
+    width = max(16, int(getattr(context.region, "width", 300) / 8) - reserve)
     col = layout.column(align=True)
     col.alert = alert
     for i, line in enumerate(textwrap.wrap(text, width=width) or [""]):
@@ -815,6 +873,10 @@ def folder_lines(context, layout, label: str, folder) -> None:
     op.filepath = str(folder)
 
 
+def scene_files_gone(scene) -> bool:
+    return bool(scene.asrp_asset_scene) and not Path(scene.asrp_asset_scene).is_file()
+
+
 class ASRP_PT_asset(bpy.types.Panel):
     bl_label = "1  Open the asset"
     bl_space_type = "VIEW_3D"
@@ -825,23 +887,86 @@ class ASRP_PT_asset(bpy.types.Panel):
     def draw(self, context):
         layout, scene = step_layout(context, self.layout), context.scene
         wrapped(context, layout, "One asset for both prototypes: skull, jaw, teeth, lips.")
+        wrapped(context, layout, "This .blend is the scene. Save it to keep the asset and the last result.")
         row = layout.row()
         row.enabled = not SESSION.running
         row.operator(ASRP_OT_open_asset.bl_idname, icon="IMPORT")
         items = list(scene.asrp_asset_objects)
         if not items:
             layout.label(text="No asset is open")
-        elif not asset_open(scene):
+            return
+        if not asset_open(scene):
             wrapped(context, layout, "An asset object was deleted. Press Open asset again.", "ERROR", alert=True)
-        else:
-            wrapped(context, layout, "Open: " + ", ".join(ROLE_WORDS.get(i.role, i.role) for i in items), "CHECKMARK")
-            if scene.asrp_asset_material:
-                wrapped(context, layout, scene.asrp_asset_material)
-            if scene.asrp_asset_scene:
-                folder_lines(context, layout, "Scene files", Path(scene.asrp_asset_scene).parent)
-            if scene.asrp_asset_hidden:
-                wrapped(context, layout, f"Hidden, because the asset was inside it: {scene.asrp_asset_hidden}. "
-                                         "The eye icon in the outliner shows it again.", "HIDE_ON")
+            return
+        problem = asset.files_problem(scene)
+        if problem:
+            wrapped(context, layout, problem, "ERROR", alert=True)
+        wrapped(context, layout, "Open: " + ", ".join(ROLE_WORDS.get(i.role, i.role) for i in items), "CHECKMARK")
+        for text in (scene.asrp_asset_units, scene.asrp_asset_material, *scene.asrp_asset_report.splitlines()):
+            if text:
+                wrapped(context, layout, text)
+        if scene.asrp_asset_scene and not scene_files_gone(scene):
+            op = layout.operator("wm.path_open", text="Open import report", icon="TEXT")
+            op.filepath = str(Path(scene.asrp_asset_scene).parent / "import_report.json")
+            folder_lines(context, layout, "Scene files", Path(scene.asrp_asset_scene).parent)
+        if is_live(scene.asrp_asset_landmarks):
+            layout.prop(scene, "asrp_show_landmarks", text="Show landmarks")
+            if scene.asrp_show_landmarks and scene.asrp_asset_run:
+                wrapped(context, layout, "Landmarks show the rest positions; hidden while a result plays.", "INFO")
+        if scene.asrp_asset_hidden:
+            wrapped(context, layout, f"Hidden, because the asset was inside it: {scene.asrp_asset_hidden}. "
+                                     "The eye icon in the outliner shows it again.", "HIDE_ON")
+
+
+def part_row(context, layout, line: str, kind: str, target: str, icon: str = "RESTRICT_SELECT_OFF", extra: str = "") -> None:
+    """A row of the Physics setup: the sentence (wrapped), and a small button that highlights it in the 3D view."""
+    row = layout.row()
+    col = row.column()
+    wrapped(context, col, line, reserve=4)
+    if extra:
+        wrapped(context, col, extra, reserve=4)
+    op = row.operator(ASRP_OT_highlight.bl_idname, text="", icon=icon)
+    op.kind, op.target = kind, target
+
+
+class ASRP_PT_setup(bpy.types.Panel):
+    bl_label = "Physics setup"
+    bl_space_type = "VIEW_3D"
+    bl_region_type = "UI"
+    bl_category = "ASRP"
+    bl_parent_id = "ASRP_PT_main"
+
+    def draw(self, context):
+        layout, scene = self.layout, context.scene
+        if not asset_open(scene):
+            layout.label(text="Open the asset first")
+            return
+        try:
+            rows = json.loads(scene.asrp_asset_setup or "{}")
+        except ValueError:
+            rows = {"error": "The physics setup is not readable. Press Open asset again."}
+        if rows.get("error") or not rows:
+            wrapped(context, layout, rows.get("error") or "The physics setup is empty. Press Open asset again.", "ERROR", alert=True)
+            return
+        layout.label(text="Soft tissue")
+        for t in rows["tissues"]:
+            part_row(context, layout, t["line"], "part", t["name"], extra=t["material"])
+        layout.label(text="Bones")
+        for b in rows["bones"]:
+            part_row(context, layout, b["line"], "part", b["name"])
+        layout.label(text="Attachments")
+        for a in rows["attachments"]:
+            on = scene.asrp_highlight == a["name"]
+            part_row(context, layout, a["line"], "attachment", a["name"], icon="COLOR" if on else "VERTEXSEL")
+        row = layout.row()
+        row.enabled = bool(scene.asrp_highlight)
+        row.operator(ASRP_OT_clear_highlight.bl_idname, icon="X")
+        row = layout.row()
+        row.enabled = not scene_files_gone(scene)
+        row.operator(ASRP_OT_check_setup.bl_idname, icon="CHECKMARK")
+        for i, line in enumerate(scene.asrp_setup_check.splitlines()):
+            wrapped(context, layout, line, alert=line.startswith("Error"), icon="INFO" if i == 0 else "BLANK1")
+        wrapped(context, layout, "Read-only in this version. Marking meshes as bone or tissue in Blender comes later.")
 
 
 class ASRP_PT_motion(bpy.types.Panel):
@@ -885,9 +1010,11 @@ class ASRP_PT_run(bpy.types.Panel):
         else:
             row = layout.row()
             picked = asset.picked_motion(scene)
-            row.enabled = asset_open(scene) and picked is not None and not picked.error
+            row.enabled = asset_open(scene) and picked is not None and not picked.error and not scene_files_gone(scene)
             row.operator(ASRP_OT_run_motion.bl_idname, icon="PLAY")
-            if not row.enabled:
+            if scene_files_gone(scene):
+                wrapped(context, layout, asset.files_problem(scene), "ERROR", alert=True)
+            elif not row.enabled:
                 layout.label(text="Open the asset and pick a motion first")
             self.draw_outcome(context, layout)
             self.draw_playback(context, layout)
@@ -905,8 +1032,10 @@ class ASRP_PT_run(bpy.types.Panel):
     def draw_playback(self, context, layout):
         """After a run: Play / Pause, what is playing, and where the run's files are."""
         scene = context.scene
-        if not (SESSION.state == "complete" and not SESSION.load_error and scene.asrp_asset_run and asset_open(scene)):
+        if SESSION.running or SESSION.load_error or not (scene.asrp_asset_run and asset_open(scene)):
             return
+        if asset.files_problem(scene):
+            return  # the Asset section says the files are gone
         playing = bool(getattr(context.screen, "is_animation_playing", False))
         layout.operator("screen.animation_play", text="Pause" if playing else "Play", icon="PAUSE" if playing else "PLAY")
         first, last = scene.frame_start, scene.frame_end
@@ -970,7 +1099,9 @@ class ASRP_PT_results(bpy.types.Panel):
         layout, scene = self.layout, context.scene
         shown = scene.asrp_shown if shown_entry(scene) is not None else -1  # a deleted object is not "shown"
         run = Path(scene.asrp_asset_run) if scene.asrp_asset_run and asset_open(scene) else None
-        if run is not None:
+        if run is not None and not (run / "playback.json").is_file():
+            wrapped(context, layout, f"The files of the result on the asset ({run.name}) are gone. Run the motion again.", "ERROR", alert=True)
+        elif run is not None:
             layout.label(text=f"On the asset: {run.name}")
             for layer in ("physics", "final"):
                 if layer == "final" and not (run / "playback_final.pc2").is_file():
@@ -1013,6 +1144,9 @@ class ASRP_PT_checks(bpy.types.Panel):
             layout.label(text="No result is shown")
             return
         run_name, run_dir, version = current
+        if not Path(run_dir).is_dir():
+            wrapped(context, layout, f"The run folder is gone ({run_name}). Run the motion again.", "ERROR", alert=True)
+            return
         report = read_report(run_dir)
         layout.label(text=f"Run: {run_name}")
         rows = check_rows(report) if report is not None else None
@@ -1073,7 +1207,8 @@ class ASRP_PT_advanced(bpy.types.Panel):
 classes = (ASRP_Preferences, ASRP_OT_choose_project, ASRP_OT_check_backend, ASRP_OT_load_playback, ASRP_Result, ASRP_Motion,
            ASRP_AssetObject, ASRP_OT_run, ASRP_OT_open_asset, ASRP_OT_pick_motion, ASRP_OT_run_motion, ASRP_OT_set_layer,
            ASRP_OT_cancel_run, ASRP_OT_load_run_folder, ASRP_OT_show_result, ASRP_OT_remove_result,
-           ASRP_PT_main, ASRP_PT_asset, ASRP_PT_motion, ASRP_PT_run, ASRP_PT_results, ASRP_PT_checks, ASRP_PT_advanced,
+           ASRP_OT_highlight, ASRP_OT_clear_highlight, ASRP_OT_check_setup,
+           ASRP_PT_main, ASRP_PT_asset, ASRP_PT_setup, ASRP_PT_motion, ASRP_PT_run, ASRP_PT_results, ASRP_PT_checks, ASRP_PT_advanced,
            ASRP_PT_run_files)
 
 
@@ -1096,6 +1231,14 @@ def register():
     S.asrp_asset_hidden = bpy.props.StringProperty(description="Objects Open asset hid because the asset was inside them")
     S.asrp_asset_run = bpy.props.StringProperty(description="The run folder whose result is on the asset's objects")
     S.asrp_asset_layer = bpy.props.StringProperty(description="physics or final: the layer on the asset's lips")
+    S.asrp_asset_landmarks = bpy.props.PointerProperty(type=bpy.types.Object, description="The landmark dots (the sixth object of Open asset)")
+    S.asrp_asset_units = bpy.props.StringProperty(description="The units line of the imported scene")
+    S.asrp_asset_report = bpy.props.StringProperty(description="Lines of the import report, one per line")
+    S.asrp_asset_setup = bpy.props.StringProperty(description="The Physics setup rows of the imported scene (JSON)")
+    S.asrp_setup_check = bpy.props.StringProperty(description="The outcome of the last Check setup")
+    S.asrp_highlight = bpy.props.StringProperty(description="The attachment whose vertices are coloured on the lips, if any")
+    S.asrp_show_landmarks = bpy.props.BoolProperty(default=True, name="Show landmarks", update=lambda self, _ctx: asset.sync_landmarks(self),
+                                                   description="Show the landmarks' rest positions as dots (hidden while a result is on the asset)")
     S.asrp_asset_material = bpy.props.StringProperty(description="The material line of the imported scene, for the Asset section")
     S.asrp_motions = bpy.props.CollectionProperty(type=ASRP_Motion)
     S.asrp_motion_index = bpy.props.IntProperty(default=-1, description="The motion picked for the next run, -1 for none")
@@ -1123,7 +1266,8 @@ def unregister():
         _exit_handler = None
     S = bpy.types.Scene
     session.preference_project = lambda: ""
-    for name in ("asrp_asset_material", "asrp_motion_index", "asrp_motions", "asrp_asset_layer", "asrp_asset_run", "asrp_asset_export", "asrp_asset_hidden",
+    for name in ("asrp_show_landmarks", "asrp_highlight", "asrp_setup_check", "asrp_asset_setup", "asrp_asset_report", "asrp_asset_units",
+                 "asrp_asset_landmarks", "asrp_asset_material", "asrp_motion_index", "asrp_motions", "asrp_asset_layer", "asrp_asset_run", "asrp_asset_export", "asrp_asset_hidden",
                  "asrp_asset_scene", "asrp_asset_objects", "asrp_show_messages", "asrp_shown", "asrp_results", "asrp_run_name", "asrp_runs_dir",
                  "asrp_trajectory_path", "asrp_scene_path"):
         delattr(S, name)
