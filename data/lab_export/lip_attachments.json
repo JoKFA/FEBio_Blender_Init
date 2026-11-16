@@ -1,7 +1,7 @@
 {
  "format_version": 1,
  "inventory_sha256": "28e3363b2b3595add6e42842b76d10c917ff7ca009f245d976b35c62caf6e7ae",
- "note": "强推断，待 ziva_maps.json 确认",
+ "note": "2026-11-12 已证实：权重表的默认值是 1.0（A-33）",
  "groups": [
   {
    "attachment": "zAttachment1",
@@ -386,7 +386,7 @@
     9756
    ],
    "default_weight": 1.0,
-   "note": "强推断，待 ziva_maps.json 确认"
+   "note": "2026-11-12 已证实：权重表的默认值是 1.0（A-33）"
   },
   {
    "attachment": "zAttachment2",
@@ -704,7 +704,7 @@
    ],
    "defaulted_vertices": [],
    "default_weight": 1.0,
-   "note": "强推断，待 ziva_maps.json 确认"
+   "note": "2026-11-12 已证实：权重表的默认值是 1.0（A-33）"
   },
   {
    "attachment": "zAttachment9",
@@ -2110,7 +2110,7 @@
    ],
    "defaulted_vertices": [],
    "default_weight": 1.0,
-   "note": "强推断，待 ziva_maps.json 确认"
+   "note": "2026-11-12 已证实：权重表的默认值是 1.0（A-33）"
   },
   {
    "attachment": "zAttachment10",
@@ -3360,7 +3360,7 @@
    ],
    "defaulted_vertices": [],
    "default_weight": 1.0,
-   "note": "强推断，待 ziva_maps.json 确认"
+   "note": "2026-11-12 已证实：权重表的默认值是 1.0（A-33）"
   }
  ]
 }

@@ -47,7 +47,7 @@ class Prepared:
     """What the shell needs to run. Scene, trajectory and meshes are the generator's business, not the shell's."""
 
     feb: Path
-    mode: str  # "stand-in" now; "generated" once T-06a plugs in
+    mode: str  # "stand-in": an existing .feb run as is (`asrp run --feb`); "generated": the generator wrote it (`asrp run <scene> <trajectory>`, T-06a)
     command: list[str]  # the asrp command line, paths reduced to names, as recorded in provenance
     parameters: dict = field(default_factory=dict)
     extra_inputs: dict[str, Path] = field(default_factory=dict)  # name inside the run folder -> source file

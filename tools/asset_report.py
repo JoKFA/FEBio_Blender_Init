@@ -46,14 +46,14 @@ def world_box_size(lo, hi, rot, scale):
 
 # Maya leaves out of the file every list element that equals the attribute's default, and an
 # element that is not in the file takes the default. For a zAttachment weight list the default is
-# taken to be 1.0: a strong inference, not yet confirmed. Evidence: all 21 weight lists stored
+# 1.0, confirmed on 2026-11-12 (A-33). Evidence at the time: all 21 weight lists stored
 # element by element hold only 0.0 (nobody stores thousands of zeros if 0 is the default), and the
 # 74 lip indices left out of zAttachment1 sit on the skull exactly as the 76 stored ones of
-# zAttachment2 sit on the jaw. To be confirmed by the `default` field of ziva_maps.json from the
-# Ziva machine (docs/12 item 2).
+# zAttachment2 sit on the jaw. Confirmed by the `default` field of ziva_maps.json from the Ziva
+# machine (docs/11 A-33).
 ATTACHMENT_WEIGHT_DEFAULT = 1.0
-DEFAULT_NOTE = ("default 1.0 is a strong inference, to be confirmed by the 'default' field "
-                "in ziva_maps.json exported on the Ziva machine")
+DEFAULT_NOTE = ("default 1.0 confirmed on 2026-11-12 by the 'default' field "
+                "in ziva_maps.json exported on the Ziva machine (A-33)")
 
 
 def attachment_weights(attrs, vertex_count):

@@ -42,6 +42,7 @@ SETTINGS = {
     "accepted": [],  # words from problems a researcher has checked by eye, e.g. ["zCache"]
     "stage": "preflight",  # preflight | static | pilot | export | probe
     "kind": "expression",  # expression | head_translation
+    "jaw_turns": None,  # True: the motion must turn jaw01 (AA); None/False: it may leave it still (IY, UW, T)
     "namespace": "",  # e.g. character: ; leave empty for the lab's unreferenced scene
     "pilot_last": 30,
     "budget_minutes": 60,
@@ -135,8 +136,12 @@ def file_name(node):
     return "".join(c if c.isalnum() or c in "_-" else "_" for c in node)
 
 
-def check_motion(stats, kind="expression"):
-    """Did the motion really play? True on any machine, with or without Ziva."""
+def check_motion(stats, kind="expression", jaw_turns=None):
+    """Did the motion really play? True on any machine, with or without Ziva.
+
+    A motion that leaves the jaw still (IY, UW, T) is a real motion: only the landmarks move. So the jaw not turning is
+    a problem only when the caller says the motion must turn it (`jaw_turns=True`, e.g. AA); otherwise "was the motion
+    loaded" is answered by the landmarks below (T-37 item 8)."""
     problems = []
     if stats["frames_sampled"] != stats["frames_expected"]:
         problems.append("sampled %d frames, expected %d" % (stats["frames_sampled"], stats["frames_expected"]))
@@ -144,7 +149,7 @@ def check_motion(stats, kind="expression"):
         if stats.get("bone_translation", 0) < MIN_MOVEMENT:
             problems.append("no bone translation: load the head-translation motion")
         return problems
-    if stats["jaw_degrees"] < MIN_JAW_DEGREES:
+    if jaw_turns and stats["jaw_degrees"] < MIN_JAW_DEGREES:
         problems.append("jaw01 turned only %.3f degrees: is the motion loaded?" % stats["jaw_degrees"])
     if stats["landmark_travel"] < MIN_MOVEMENT:
         problems.append("no landmark moved: is the motion loaded?")
@@ -157,10 +162,11 @@ def check_simulation(stats):
     """Did Ziva really solve, on every frame, from rest? Returns (problems, notes).
 
     A little or no gravity sag is only a note: gravity may be off or the tissue stiff, and the
-    file does not say. A shape that ignores the jaw has no such excuse.
+    file does not say. A shape that ignores a turning jaw has no such excuse; when the jaw does not turn
+    (IY, UW, T) the physics shape has nothing to follow after frame 14 and not moving is right.
     """
     problems, notes = [], []
-    if stats["motion_move"] < MIN_MOVEMENT:
+    if stats["jaw_degrees"] >= MIN_JAW_DEGREES and stats["motion_move"] < MIN_MOVEMENT:
         problems.append("the physics shape did not move after frame 14: Ziva did not follow the jaw")
     if stats["frozen_frames"]:
         problems.append("the physics shape froze on %d frames while the jaw moved: the solve stopped "
@@ -271,8 +277,13 @@ def preflight(settings, first, last):
                 problems.append("neither the bones nor jaw01 translate on the timeline; load and key "
                                 "the head motion")
         elif turned < MIN_JAW_DEGREES:
-            problems.append("jaw01 does not turn on the timeline (%.3f degrees): is the motion "
-                            "loaded and keyed? A script-driven motion cannot be exported" % turned)
+            text = ("jaw01 does not turn on the timeline (%.3f degrees): is the motion loaded and keyed? "
+                    "A script-driven motion cannot be exported" % turned)
+            if settings.get("jaw_turns"):
+                problems.append(text)
+            else:  # IY, UW and T leave the jaw still; the captured landmarks decide afterwards (check_motion)
+                notes.append(text + ". Fine for a motion that leaves the jaw still (IY, UW, T); "
+                             "set jaw_turns to True for one that must turn it")
     if settings["require_simulation"]:
         if not ziva_plugin():
             problems.append("the Ziva plug-in is not loaded")
@@ -652,6 +663,42 @@ def maya_indices(counts, alembic_indices):
         result.extend(reversed(indices[at:at + count]))
         at += count
     return result
+
+
+def solved_scope(entries, enabled):
+    """The report's "whole face or lips only" column (T-37 item 8; docs/07 section 4.1): which of the simulated bodies
+    were switched on for this capture. `entries` are expected_outputs() entries (body, vertices); `enabled` maps a body
+    to True, False or None (the node has no enable attribute). Returns {"scope", "bodies", "enabled", "disabled"}:
+    scope is "full_face" (every body on), "lips_only" (only the body of the 10,240-vertex lip mesh on, the others off),
+    "other" (some other subset) or "unknown" (a body's state could not be read, or there are no bodies)."""
+    bodies = [e["body"] for e in entries if "body" in e]
+    states = {b: enabled.get(b) for b in bodies}
+    on = sorted(b for b, s in states.items() if s is True)
+    off = sorted(b for b, s in states.items() if s is False)
+    lips = sorted(e["body"] for e in entries if e.get("vertices") == LIP_VERTICES and "body" in e)
+    if not bodies or any(s is None for s in states.values()):
+        scope = "unknown"
+    elif not off:
+        scope = "full_face"
+    elif on and on == lips:
+        scope = "lips_only"
+    else:
+        scope = "other"
+    return {"scope": scope, "bodies": len(bodies), "enabled": on, "disabled": off}
+
+
+def read_enabled(entries):
+    """True, False or None (no such attribute, or it could not be read) for each expected body's enable switch."""
+    out = {}
+    for e in entries:
+        body = e.get("body")
+        if body is None:
+            continue
+        try:
+            out[body] = bool(cmds.getAttr(body + ".enable")) if cmds.attributeQuery("enable", node=body, exists=True) else None
+        except Exception:
+            out[body] = None
+    return out
 
 
 def expected_outputs():
@@ -1060,6 +1107,7 @@ def run(settings=None):
         else:
             entries, issues = config.get("_rehearsal_outputs", []), []
         report["expected_outputs"] = entries
+        report["solved"] = solved_scope(entries, read_enabled(entries) if config["require_simulation"] else {})
         report["problems"].extend(issues)
         if config["stage"] == "static":
             static_export(out, report)
@@ -1107,7 +1155,7 @@ def run(settings=None):
                 export_alembic([(s["node"], os.path.join(out, s["alembic"])) for s in streams], first, last, capture)
                 capture.close()
                 report["problems"].extend(capture.errors)
-                report["problems"].extend(check_motion(sampler.stats, config["kind"]))
+                report["problems"].extend(check_motion(sampler.stats, config["kind"], config.get("jaw_turns")))
                 if config["require_simulation"]:
                     found, more = check_simulation(sampler.stats)
                     report["problems"].extend(found)
@@ -1140,6 +1188,7 @@ def run(settings=None):
     if report["streams"]:
         report["readback"] = check_capture(out)
     print("ASRP %s: %s\nOUTPUT: %s" % (config["stage"].upper(), report["status"], out))
+    print("SOLVED: %s" % report.get("solved", {}).get("scope", "unknown"))  # full_face | lips_only | other | unknown
     for problem in report["problems"]:
         print("INCOMPLETE: " + problem)
     if report.get("readback"):

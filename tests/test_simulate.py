@@ -320,11 +320,58 @@ def test_the_reported_only_keys_change_nothing_else(tmp_path, monkeypatch):
     assert not any(k in without.report["settled_shape"] for k in new) and without.report["surface_health"] == "left out"
 
     def core(report):
-        out = {k: v for k, v in report.items() if k not in ("run_id", "timing", "surface_health")}
-        out["settled_shape"] = {k: v for k, v in report["settled_shape"].items() if k not in new}
+        out = {k: v for k, v in report.items() if k not in ("run_id", "timing", "surface_health", "surface_flags")}
+        out["settled_shape"] = {k: v for k, v in report["settled_shape"].items() if k not in new and k != "comparable"}
         return out
 
     assert core(with_keys.report) == core(without.report)
     assert with_keys.passed is without.passed is True and with_keys.report["settled_shape"]["available"] is True
     for f in ("physics/positions.npy", "physics/display.npy", "playback.pc2"):
         assert sha(with_keys.run_dir / f) == sha(without.run_dir / f)
+
+
+# --- T-37 item 13: a PASSED run with a flipped display surface says so on its own line ------------------------
+
+
+def test_a_passed_run_whose_surface_has_flipped_faces_reports_them_on_their_own_line(tmp_path, monkeypatch, capsys):
+    cs.write(tmp_path / "box")
+    traj = cs.motion(tmp_path / "box", cs.still(FRAMES), settle=2)
+    real = simulate._surface_health
+
+    def flipped(model, display, final):
+        health = real(model, display, final)
+        health["physics"]["worst"]["flipped_faces"] = 4  # what the prototype run had at frame 32
+        health["physics"]["worst"]["frame"] = 3
+        return health
+
+    monkeypatch.setattr(simulate, "_surface_health", flipped)
+    r = run(tmp_path / "box", traj, "flipped")
+    assert r.status == "complete" and r.passed  # the five checks look at the tet mesh: still PASSED, as before
+    flags = r.report["surface_flags"]
+    assert flags["any_flipped"] is True and flags["flipped_faces"]["physics"]["worst"] == 4
+    assert flags["flipped_faces"]["physics"]["worst_frame"] == 3 and flags["flipped_faces"]["final"] is None
+    assert flags["line"] in r.report["warnings"] and "4 in the physics version at frame 3" in flags["line"]
+    assert "not a check" in flags["line"] and "can still have them" in flags["line"]
+    code = cli.main(["run", str(tmp_path / "box" / "scene.json"), str(traj), "--runs-dir", str(tmp_path / "cli")])
+    out = capsys.readouterr().out
+    assert code == 0 and "WARNING  display surface: flipped faces, 4 in the physics version" in out
+    assert "plausibility PASSED" in out
+
+
+def test_a_run_without_flipped_faces_has_no_such_line(tmp_path):
+    cs.write(tmp_path / "box")
+    r = run(tmp_path / "box", cs.motion(tmp_path / "box", cs.still(FRAMES), settle=2), "clean")
+    flags = r.report["surface_flags"]
+    assert flags["any_flipped"] is False and flags["line"] is None and flags["flipped_faces"]["physics"]["worst"] == 0
+    assert not any("display surface" in w for w in r.report["warnings"])
+
+
+def test_available_tissue_settled_and_comparable_are_three_facts(tmp_path):
+    cs.write(tmp_path / "box")
+    r = run(tmp_path / "box", cs.motion(tmp_path / "box", cs.still(FRAMES), settle=2), "settle")
+    s = r.report["settled_shape"]
+    assert s["available"] is True and s["comparable"] is s["tissue_settled"]
+    assert r.report["settled_shape"]["tissue_settled"] is False  # the box is still falling at frame 2: three facts differ
+    none = run(tmp_path / "box", cs.motion(tmp_path / "box", cs.still(FRAMES)), "no_settle")
+    assert none.report["settled_shape"]["available"] is False and none.report["settled_shape"]["comparable"] is False
+    assert "tissue_settled" not in none.report["settled_shape"]
