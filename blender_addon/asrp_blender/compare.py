@@ -211,8 +211,7 @@ def disable_heat(context) -> None:
     for item in scene.asrp_asset_objects:
         if asset.is_live(item.obj):
             asset.drop_colour_attribute(item.obj.data, HEAT_ATTR)
-    if not scene.asrp_highlight:
-        asset.restore_views(context)
+    asset.restore_views(context)
 
 
 def enable_heat(context) -> bool:
@@ -220,8 +219,6 @@ def enable_heat(context) -> bool:
     obj = heat_lips(scene)
     if obj is None or heat_values(scene) is None:
         return False
-    if scene.asrp_highlight:
-        asset.clear_highlight(context)
     if HEAT_ATTR not in obj.data.color_attributes:
         asset.new_colour_attribute(obj.data, HEAT_ATTR)
     asset.show_vertex_colours(context)

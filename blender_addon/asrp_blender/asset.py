@@ -34,8 +34,8 @@ LAYER_WORDS = {"physics": "Physics only", "final": "Final shape"}
 TET_FILES = {"coarse": "lips_lattice.json", "fine": "lips.json"}  # data/tetmesh/ of the project
 TET_CHOICES = (("coarse", "Coarse lattice (Ziva's tet size)", "Imports with the regular lattice and Ziva's soft attachments"),
                ("fine", "Fine (lips move separately)", "Imports with the fine tet mesh and our attachments"))
-TET_LINES = {"coarse": "{n} tets. Moves the lips as one body, like Ziva. About 1 s per run.",
-             "fine": "{n} tets. Upper and lower lip move separately. About 30 s per run."}
+TET_LINES = {"coarse": "Moves the lips as one body, like Ziva. About 1 s per run.",
+             "fine": "Upper and lower lip move separately. About 30 s per run."}
 TISSUE_SETTINGS = "lab"  # Open asset imports with Ziva's measured material values (the T-34 report used them)
 IMPORT_TIMEOUT_S = 900  # the first import after installing may have to build the Python environment
 # After Open asset every 3D view looks at the asset from the front and a little to the right and above (the asset's
@@ -79,7 +79,7 @@ def tet_count(choice: str):
 
 def tet_line(choice: str) -> str:
     n = tet_count(choice)
-    return TET_LINES[choice].format(n="?" if n is None else f"{n:,}")
+    return (f"{n:,} tets. " if n is not None else "") + TET_LINES[choice]  # no count until it is known
 
 
 def import_arguments(choice: str) -> list[str]:
@@ -150,8 +150,9 @@ def fill_motions(scene, motions: list[dict]) -> None:
         item.fps = float(m.get("fps") or 0.0)
         item.source_tag = str(m.get("source_tag") or "")
         item.has_landmarks = bool(m.get("landmarks"))
-    first = next((i for i, m in enumerate(scene.asrp_motions) if not m.error), -1)
-    scene.asrp_motion_index = first
+    usable = [i for i, m in enumerate(scene.asrp_motions) if not m.error]
+    lab = [i for i in usable if scene.asrp_motions[i].source_tag == "lab_setting"]  # the lab's own motion first, else the first usable
+    scene.asrp_motion_index = (lab or usable or [-1])[0]
 
 
 SOURCE_WORDS = {"lab_setting": "lab motion", "ours": "test motion", "ziva_default": "Ziva default", "unstated": "source not stated"}
@@ -291,14 +292,23 @@ def setup_rows(scene_json: Path, data: dict) -> dict:
         if b["name"] not in used:
             does = f"display only ({does})"  # no attachment of the scene touches it
         bones.append({"name": b["name"], "line": f"{b['name']}: {does}"})
+    pairs: dict = {}
+    for a in attachments:
+        pairs.setdefault((a.get("from"), a.get("to")), []).append(a["name"].split("_"))
     for a in attachments:
         n = len(a.get("weights") or [])
         if a.get("kind") == "hard":
             how = "hard"
         else:
             k = a.get("stiffness") or {}
-            how = f"{a.get('kind')} {float(k['value']):g} N/mm ({source_phrase(k.get('source'))})" if k.get("value") is not None else str(a.get("kind"))
-        atts.append({"name": a["name"], "line": f"{a['from']} to {a['to']}: {n} vertices, {how}"})
+            # the per-volume stiffness of a "lab_setting" spring is Ziva's, the area rule that turns it into N/mm is ours
+            phrase = "Ziva's stiffness, our area rule" if k.get("source") == "lab_setting" else source_phrase(k.get("source"))
+            how = f"{a.get('kind')} {float(k['value']):g} N/mm ({phrase})" if k.get("value") is not None else str(a.get("kind"))
+        # two attachments between the same objects are told apart by the words of their own names that differ (left / right)
+        same = pairs[(a.get("from"), a.get("to"))]
+        common = set.intersection(*[set(x) for x in same])
+        who = " ".join(w for w in a["name"].split("_") if w not in common) if len(same) > 1 else ""
+        atts.append({"name": a["name"], "line": f"{a['from']} to {a['to']}{f' ({who})' if who else ''}: {n} vertices, {how}"})
     return {"tissues": tissues, "bones": bones, "attachments": atts}
 
 
@@ -426,40 +436,92 @@ def drop_colour_attribute(mesh, name: str) -> None:
             mesh.color_attributes.active_color = mesh.color_attributes[prev]
 
 
+HIGHLIGHT_NAME = "ASRP highlight points"
+HIGHLIGHT_ROLE = "highlight_points"
+HIGHLIGHT_RADIUS_MM = 0.9
+CACHE_PROPS = ("cache_format", "filepath", "deform_mode", "time_mode", "play_mode", "frame_start", "frame_scale", "forward_axis", "up_axis")
+
+
+def highlight_tree(material):
+    """A small geometry nodes group: the mesh's vertices that are marked in the boolean attribute become points (shown in front)."""
+    tree = bpy.data.node_groups.new(HIGHLIGHT_NAME, "GeometryNodeTree")
+    tree.interface.new_socket("Geometry", in_out="INPUT", socket_type="NodeSocketGeometry")
+    tree.interface.new_socket("Geometry", in_out="OUTPUT", socket_type="NodeSocketGeometry")
+    nodes, links = tree.nodes, tree.links
+    n_in, n_out = nodes.new("NodeGroupInput"), nodes.new("NodeGroupOutput")
+    named = nodes.new("GeometryNodeInputNamedAttribute")
+    named.data_type = "BOOLEAN"
+    named.inputs["Name"].default_value = HIGHLIGHT_ATTR
+    points = nodes.new("GeometryNodeMeshToPoints")
+    points.mode = "VERTICES"
+    points.inputs["Radius"].default_value = HIGHLIGHT_RADIUS_MM
+    paint = nodes.new("GeometryNodeSetMaterial")
+    paint.inputs["Material"].default_value = material
+    links.new(n_in.outputs["Geometry"], points.inputs["Mesh"])
+    links.new(named.outputs["Attribute"], points.inputs["Selection"])
+    links.new(points.outputs["Points"], paint.inputs["Geometry"])
+    links.new(paint.outputs["Geometry"], n_out.inputs["Geometry"])
+    return tree
+
+
+def follow_lips(scene) -> None:
+    """The highlight points use the same point cache as the lips, so they sit on the same vertices while a result plays."""
+    hobj = scene.asrp_highlight_object
+    if not is_live(hobj):
+        return
+    for mod in [m for m in hobj.modifiers if m.type == "MESH_CACHE"]:
+        hobj.modifiers.remove(mod)
+    lips = next((i.obj for i in scene.asrp_asset_objects if is_live(i.obj) and len(i.obj.data.vertices) == len(hobj.data.vertices)), None)
+    cache = next((m for m in lips.modifiers if m.type == "MESH_CACHE"), None) if lips is not None else None
+    if cache is not None:
+        mod = hobj.modifiers.new("ASRP result", "MESH_CACHE")
+        for prop in CACHE_PROPS:
+            setattr(mod, prop, getattr(cache, prop))
+        hobj.modifiers.move(len(hobj.modifiers) - 1, 0)  # before the nodes: the points are made from the deformed lips
+
+
 def clear_highlight(context) -> None:
-    """Put the display back as it was: the colour attribute removed, the previous active colour attribute and the viewport's
-    colour type restored. Nothing else of the scene is touched."""
+    """Remove the highlight points (object, mesh, node group). The lips are never changed by a highlight."""
     scene = context.scene
-    for item in scene.asrp_asset_objects:
-        if is_live(item.obj):
-            drop_colour_attribute(item.obj.data, HIGHLIGHT_ATTR)
-    if not scene.asrp_show_heat:  # the difference colours use the same views: they put them back when they go
-        restore_views(context)
+    obj = scene.asrp_highlight_object
+    if obj is not None:
+        tree = next((m.node_group for m in obj.modifiers if m.type == "NODES"), None)
+        remove_objects([obj])
+        if tree is not None and tree.users == 0:
+            bpy.data.node_groups.remove(tree)
+    scene.asrp_highlight_object = None
     scene.asrp_highlight = ""
 
 
 def highlight_attachment(context, name: str) -> int:
-    """Colour the vertices of an attachment on the object it comes from (the lips) and show vertex colours in the 3D views.
-    Returns the number of vertices coloured. The result on the asset (cache, keys, frame) is not touched."""
+    """Show the vertices of an attachment as points in front of the lips (the attached vertices are on the bone side, behind the
+    surface). The lips' own display is not touched, a result on the asset is not disturbed. Returns the number of points."""
     scene = context.scene
     entry = attachment_entry(scene, name)
     obj = asset_objects(scene).get(entry["from"])
     if obj is None:
         raise ValueError(f"The attachment starts on {entry['from']!r}, which is not an object of the asset")
     clear_highlight(context)
-    if scene.asrp_show_heat:  # one colour display at a time: the difference colours go
-        scene.asrp_show_heat = False
-    mesh = obj.data
     vertices = {int(w[0]) for w in entry.get("weights", [])}
-    if not vertices or max(vertices) >= len(mesh.vertices):
+    if not vertices or max(vertices) >= len(obj.data.vertices):
         raise ValueError(f"The attachment {name!r} has no vertices on the {entry['from']} object. Press Open asset again.")
-    attr = new_colour_attribute(mesh, HIGHLIGHT_ATTR)
-    colors = []
-    for i in range(len(mesh.vertices)):
-        colors += HIGHLIGHT_ON if i in vertices else HIGHLIGHT_OFF
-    attr.data.foreach_set("color", colors)
-    show_vertex_colours(context)
+    mesh = obj.data.copy()  # same vertices in the same order, so the lips' point cache fits it
+    mesh.name = HIGHLIGHT_NAME
+    flags = [i in vertices for i in range(len(mesh.vertices))]
+    mesh.attributes.new(HIGHLIGHT_ATTR, "BOOLEAN", "POINT").data.foreach_set("value", flags)
+    hobj = bpy.data.objects.new(HIGHLIGHT_NAME, mesh)
+    hobj[ROLE_KEY] = HIGHLIGHT_ROLE
+    hobj.scale = obj.scale
+    hobj.hide_select = True
+    hobj.show_in_front = True  # seen through the lips
+    context.collection.objects.link(hobj)
+    mat = bpy.data.materials.get(HIGHLIGHT_NAME) or bpy.data.materials.new(HIGHLIGHT_NAME)
+    mat.diffuse_color = HIGHLIGHT_ON
+    gn = hobj.modifiers.new(HIGHLIGHT_NAME, "NODES")
+    gn.node_group = highlight_tree(mat)
+    scene.asrp_highlight_object = hobj
     scene.asrp_highlight = name
+    follow_lips(scene)
     return len(vertices)
 
 
@@ -669,6 +731,7 @@ def clear_result(scene) -> None:
         clear_motion(obj)
     scene.asrp_asset_run = ""
     scene.asrp_asset_layer = ""
+    follow_lips(scene)
     from . import compare
 
     compare.drop(scene)  # the comparison belongs to the result that is going away
@@ -716,6 +779,7 @@ def show_layer(scene, run_dir: Path, layer: str) -> None:
                          f"{len(manifest['vertices'])}: the run was made from another asset. Press Open asset again.")
     set_cache(obj, cache_file)
     scene.asrp_asset_layer = layer
+    follow_lips(scene)
     from . import compare
 
     compare.sync(bpy.context)  # Ziva's lips and the difference colours follow the layer on display

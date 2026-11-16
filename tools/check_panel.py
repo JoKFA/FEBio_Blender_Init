@@ -428,10 +428,13 @@ LABEL_MAX = 34  # characters one line holds at the default sidebar width (280 px
 
 
 class Rec:
-    """A stand-in for a panel layout that records what is drawn: ('label', text, alert) and ('op', idname, text, depress, op)."""
+    """A stand-in for a panel layout that records what is drawn: ('label', text, alert, height, row), ('op', idname, text, depress, op,
+    enabled, height, row) and ('prop', name, text, height, row). `height` is the row's scale_y (small lines are 0.7); `row` is the
+    horizontal container the item is in (items of one row share one line of the panel), or None."""
 
-    def __init__(self, log, alert=False, parent=None):
-        self.log, self.alert, self.alignment, self.parent, self.own_enabled = log, alert, "EXPAND", parent, True
+    def __init__(self, log, alert=False, parent=None, kind="col"):
+        self.log, self.alert, self.alignment, self.parent, self.own_enabled, self.kind = log, alert, "EXPAND", parent, True, kind
+        self.own_scale = 1.0
 
     @property
     def enabled(self):  # as in Blender: a layout inside a greyed-out one is greyed out, whatever it sets for itself
@@ -441,21 +444,73 @@ class Rec:
     def enabled(self, value):
         self.own_enabled = value
 
+    @property
+    def scale_y(self):
+        return self.own_scale * (1.0 if self.parent is None else self.parent.scale_y)
+
+    @scale_y.setter
+    def scale_y(self, value):
+        self.own_scale = value
+
+    def line(self):
+        node = self
+        while node is not None:
+            if node.kind == "row":
+                return id(node)
+            node = node.parent
+        return None
+
     def label(self, text="", icon="NONE"):
-        self.log.append(("label", text, self.alert))
+        self.log.append(("label", text, self.alert, self.scale_y, self.line()))
 
     def operator(self, idname, text="", icon="NONE", depress=False):
         op = types.SimpleNamespace(index=-1)
-        self.log.append(("op", idname, text, depress, op, self.enabled))  # the sixth entry: the layout it is drawn in was enabled
+        self.log.append(("op", idname, text, depress, op, self.enabled, self.scale_y, self.line()))  # sixth: the layout it is drawn in was enabled
         return op
 
     def prop(self, *args, **kw):
-        self.log.append(("prop", args[1] if len(args) > 1 else "", kw.get("text")))
+        self.log.append(("prop", args[1] if len(args) > 1 else "", kw.get("text"), self.scale_y, self.line()))
 
     def row(self, **kw):
-        return Rec(self.log, self.alert, self)
+        return Rec(self.log, self.alert, self, "row")
 
-    column = split = row
+    split = row
+
+    def column(self, **kw):
+        return Rec(self.log, self.alert, self, "col")
+
+
+ROW_PX, HEADER_PX, PAD_PX, BUDGET_PX = 21, 26, 8, 650  # a row of the panel, a panel header, the margin round an open panel; a 1080p window
+EXPAND_ROWS = {"asrp_tet_choice": 2}  # a radio group is one row per choice
+
+
+def rows_of(log) -> float:
+    """How many rows of the panel a drawn log takes: one per item, items of one horizontal row count once (the tallest), a small line counts 0.7."""
+    total, lines = 0.0, {}
+    for r in log:
+        h = r[3] if r[0] in ("label", "prop") else r[6]
+        if r[0] == "prop":
+            h *= EXPAND_ROWS.get(r[1], 1)
+        line = r[4] if r[0] in ("label", "prop") else r[7]
+        if line is None:
+            total += h
+        else:
+            lines[line] = max(lines.get(line, 0.0), h)
+    return total + sum(lines.values())
+
+
+def panel_height(open_all: bool = False) -> float:
+    """Pixels from the top of the ASRP tab to the bottom of the Results buttons, with the panels in their default open / closed state
+    (`open_all`: every panel open), for what is drawn now: header per panel, rows, and a margin round every open panel."""
+    order = ["ASRP_PT_main", "ASRP_PT_asset", "ASRP_PT_asset_details", "ASRP_PT_setup", "ASRP_PT_motion", "ASRP_PT_run", "ASRP_PT_results"]
+    px = 0.0
+    for name in order:
+        cls = getattr(asrp_blender, name)
+        px += HEADER_PX
+        if open_all or "DEFAULT_CLOSED" not in getattr(cls, "bl_options", ()):
+            rows = rows_of(draw_panel(cls))
+            px += rows * ROW_PX + (PAD_PX if rows else 0)
+    return px
 
 
 def draw_panel(panel):
@@ -465,7 +520,7 @@ def draw_panel(panel):
         if hasattr(panel, name):
             setattr(me, name, types.MethodType(getattr(panel, name), me))
     panel.draw(me, bpy.context)
-    too_long = [(r[0], (r[1] if r[0] == "label" else r[2])) for r in log
+    too_long = [(r[0], (r[1] if r[0] == "label" else r[2] if r[0] == "op" else r[2])) for r in log
                 if r[0] in ("label", "op", "prop") and len(str((r[1] if r[0] == "label" else r[2]) or "").rstrip()) > LABEL_MAX]
     assert not too_long, f"{panel.bl_label}: text that does not fit {LABEL_MAX} characters (cut off at the default sidebar width): {too_long}"
     return log
@@ -884,7 +939,7 @@ BYSTANDER = "asrp_check_bystander"  # marks the objects this check puts in the s
 
 def mesh_objects():
     return [o for o in bpy.data.objects if o.type == "MESH" and o.users_collection and BYSTANDER not in o
-            and o.get(asrp_blender.asset.ROLE_KEY) not in ("landmarks", "ziva_lips")]  # the landmark dots are the sixth object, not one of the five
+            and o.get(asrp_blender.asset.ROLE_KEY) not in ("landmarks", "ziva_lips", "highlight_points")]  # the landmark dots are the sixth object, not one of the five
 
 
 def bystander(name, size, at):
@@ -1038,6 +1093,15 @@ def pick(file):
     assert bpy.ops.asrp.pick_motion(index=index) == {"FINISHED"} and sc.asrp_motion_index == index
 
 
+def views_state():
+    """Every 3D view's view matrix, perspective and distance (what a person sees of the camera)."""
+    out = []
+    for key, space in asrp_blender.asset.view3d_spaces(bpy.context):
+        v = space.region_3d
+        out.append((key, tuple(round(x, 9) for row in v.view_matrix for x in row), v.view_perspective, round(v.view_distance, 9)))
+    return out
+
+
 def three_steps_run(file, rest_check=False):
     """Step 2 and 3: pick the motion from the list, press Run, wait, return the run folder. No path is typed.
     rest_check: the moment the run has started, the result of the run before is gone from the asset.
@@ -1046,9 +1110,18 @@ def three_steps_run(file, rest_check=False):
     pick(file)
     sc.frame_start, sc.frame_end = 5, 9
     sc.frame_current = 20
+    if SESSION.state == "complete":  # a person would wait a moment too: a click within a second of the end of a run is refused
+        time.sleep(max(0.0, asrp_blender.RUN_AGAIN_S + 0.1 - (time.monotonic() - SESSION.ended_at)))
     plays = len(asrp_blender.asset.PLAY_REQUESTS)
+    views = views_state()
+    assert views, "no 3D view with a view matrix: the check that a run leaves the views alone would prove nothing"
     assert bpy.ops.asrp.run_motion() == {"FINISHED"} and SESSION.state == "running"
     assert SESSION.target == "asset"
+    try:  # a second click while it runs
+        bpy.ops.asrp.run_motion()
+        raise AssertionError("a second Run was accepted while a run is active")
+    except RuntimeError as exc:
+        assert "already in progress" in str(exc), exc
     if rest_check:
         assert_at_rest("a run has started")
     drive()
@@ -1061,6 +1134,12 @@ def three_steps_run(file, rest_check=False):
     requests = asrp_blender.asset.PLAY_REQUESTS[plays:]
     need(len(requests) == 1 and requests[0][:2] == (0, frames - 1), "after-run",
          f"after {file} the play request was {requests}, expected one request for frames 0..{frames - 1}")
+    need(views_state() == views, "views", f"a run moved a 3D view: {views} -> {views_state()}")  # docs/06: a later Run does not move the view
+    try:  # a click right after a run finished
+        bpy.ops.asrp.run_motion()
+        raise AssertionError("a Run was accepted at once after a run finished")
+    except RuntimeError as exc:
+        need("just finished" in str(exc), "run-twice", str(exc))
     return SESSION.run_dir
 
 
@@ -1124,8 +1203,16 @@ def case_three_steps():
     assert listed["neutral_to_AA.json"].has_landmarks and not listed["head_shake.json"].has_landmarks
     need([m.file for m in sc.asrp_motions] == list(TITLES) and [m.title for m in sc.asrp_motions] == list(TITLES.values()), "motions",
          f"the list shows {[(m.file, m.title) for m in sc.asrp_motions]}, expected the three titles in this order: {list(TITLES.values())}")
-    need(sc.asrp_motion_index == 0 and sc.asrp_motions[0].file == "jaw_open_12deg.json", "motions",
-         f"the motion picked by default is {sc.asrp_motion_index}, expected Prototype 1 (the first)")
+    need(sc.asrp_motions[sc.asrp_motion_index].file == "neutral_to_AA.json" and sc.asrp_motions[sc.asrp_motion_index].source_tag == "lab_setting", "motions",
+         f"the motion picked by default is {sc.asrp_motions[sc.asrp_motion_index].file}, expected the lab's motion")
+    # the rule, without file names: the first usable lab motion, else the first usable one
+    scratch = bpy.data.scenes.new("asrp_pick_rule")
+    fake = lambda f, tag, **k: dict(file=f, title=f, frames=2, fps=30, source_tag=tag, **k)  # noqa: E731
+    asrp_blender.asset.fill_motions(scratch, [fake("a.json", "ours"), dict(file="b.json", error="x"), fake("c.json", "ours")])
+    need(scratch.asrp_motions[scratch.asrp_motion_index].file == "a.json", "motions", "without a lab motion the first usable one is not picked")
+    asrp_blender.asset.fill_motions(scratch, [dict(file="a.json", error="x"), fake("b.json", "ours"), fake("c.json", "lab_setting"), fake("d.json", "lab_setting")])
+    need(scratch.asrp_motions[scratch.asrp_motion_index].file == "c.json", "motions", "the first usable lab motion is not picked")
+    bpy.data.scenes.remove(scratch)
     check_material(sc)
     print(f"three steps, step 1 Open asset: {len(meshes)} mesh objects {sorted(objs)}, vertices "
           f"{ {r: len(o.data.vertices) for r, o in objs.items()} }, motions listed {[asrp_blender.asset.motion_label(m) for m in sc.asrp_motions]}")
@@ -1197,6 +1284,11 @@ def recreate_objects(run_dir):
     asrp_blender.asset.apply_result(bpy.context, run_dir)
 
 
+def asset_log():
+    """What step 1 and its closed "Asset details" draw, one after the other."""
+    return draw_panel(asrp_blender.ASRP_PT_asset) + draw_panel(asrp_blender.ASRP_PT_asset_details)
+
+
 def labels_of(log):
     return [r[1] for r in log if r[0] == "label"]
 
@@ -1211,7 +1303,7 @@ def check_material(sc):
          f"the imported scene has E {params['E_mpa']['value']} MPa and nu {params['nu']['value']}, Ziva's are 0.012 MPa and 0.4")
     line = "Material: 12 kPa, 0.4 (measured in Ziva)"
     need(sc.asrp_asset_material == line, "material", f"the stored material line is {sc.asrp_asset_material!r}, expected {line!r}")
-    need(line in " ".join(labels_of(draw_panel(asrp_blender.ASRP_PT_asset))), "material", "the Asset section does not show the material line")
+    need(line in " ".join(labels_of(asset_log())), "material", "the Asset section does not show the material line")
 
 
 def check_run_section(run_dir, frames):
@@ -1225,15 +1317,21 @@ def check_run_section(run_dir, frames):
     need(len(plays) == 1 and plays[0][2] == word, "after-run", f"the Run section has no {word} button after a run: {[(r[1], r[2]) for r in log if r[0] == 'op']}")
     text = " ".join(labels_of(log))
     need("Complete" in labels_of(log), "after-run", f"after a run the Run section does not end in 'Complete': {labels_of(log)}")  # F6
-    res = labels_of(draw_panel(asrp_blender.ASRP_PT_results))
-    need("On the asset:" in res and Path(run_dir).name.replace(" ", "") in "".join(res).replace(" ", ""), "after-run", f"the run name is not on its own line: {res}")  # F3
+    shown = labels_of(draw_panel(asrp_blender.ASRP_PT_checks))
+    need(Path(run_dir).name.replace(" ", "") in "".join(shown).replace(" ", ""), "after-run", f"the run name is not on its own wrapped line in Checks: {shown}")  # F3
     adv = draw_panel(asrp_blender.ASRP_PT_advanced)
     need(f"Project: {asrp_blender.core_project().name}" in " ".join(labels_of(adv)) and "Change project folder" in [r[2] for r in adv if r[0] == "op"], "after-run",
          f"the Advanced section does not say which project folder is in use: {labels_of(adv)}")  # F4
-    need(f"Run files: {asrp_blender.asset.relative_to_project(run_dir)}".replace(" ", "") in text.replace(" ", ""), "after-run",
-         f"the Run section does not show the run folder: {text}")
-    opens = [r for r in log if r[0] == "op" and r[1] == "wm.path_open"]
+    need("Run files" not in text, "after-run", "the run folder is still in step 3")  # it is in Advanced now: step 3 stays short
+    atext = " ".join(labels_of(adv)).replace(" ", "")
+    need(f"Run files: {asrp_blender.asset.relative_to_project(run_dir)}".replace(" ", "") in atext, "after-run", f"Advanced does not show the run folder: {atext}")
+    opens = [r for r in adv if r[0] == "op" and r[1] == "wm.path_open"]
     need(len(opens) == 1 and opens[0][4].filepath == str(run_dir) and opens[0][2] == "Open folder", "after-run", "no Open folder button for the run folder")
+    # G2: with an asset open and a result on it, the three steps, Run / Pause, Complete and the Results buttons fit one screen (no scrolling)
+    px, everything = panel_height(), panel_height(open_all=True)
+    need(everything > BUDGET_PX, "height", f"with every panel open the height is {everything:.0f} px, not above the budget {BUDGET_PX}: this check could not fail")
+    need(px <= BUDGET_PX, "height", f"the panel is {px:.0f} px high down to the Results buttons, the budget is {BUDGET_PX} px (1080p window): too long, the next step is below the fold")
+    print(f"  height: {px:.0f} px down to the Results buttons in the default open / closed state (budget {BUDGET_PX}; every panel open: {everything:.0f})")
     for playing, button, line in ((True, "Pause", f"Playing frame 0 to {frames - 1}. Space bar pauses."),
                                   (False, "Play", f"Frame 0 to {frames - 1} is ready. Space bar plays.")):
         fake = types.SimpleNamespace(scene=sc, screen=types.SimpleNamespace(is_animation_playing=playing), region=None)
@@ -1255,8 +1353,8 @@ def draw_new_panels():
     order = [c.__name__ for c in asrp_blender.classes if c.__name__.startswith("ASRP_PT_") and getattr(c, "bl_parent_id", "") == "ASRP_PT_main"]
     assert order == ["ASRP_PT_asset", "ASRP_PT_setup", "ASRP_PT_motion", "ASRP_PT_run", "ASRP_PT_results", "ASRP_PT_compare", "ASRP_PT_checks",
                      "ASRP_PT_advanced"], order
-    assert "DEFAULT_CLOSED" not in getattr(asrp_blender.ASRP_PT_setup, "bl_options", ())  # open by default
-    for name in ("ASRP_PT_compare", "ASRP_PT_checks", "ASRP_PT_advanced", "ASRP_PT_run_files"):
+    assert asrp_blender.ASRP_PT_asset_details.bl_parent_id == "ASRP_PT_asset" and asrp_blender.ASRP_PT_asset_details.bl_label == "Asset details"
+    for name in ("ASRP_PT_asset_details", "ASRP_PT_setup", "ASRP_PT_compare", "ASRP_PT_checks", "ASRP_PT_advanced", "ASRP_PT_run_files"):
         assert "DEFAULT_CLOSED" in getattr(asrp_blender, name).bl_options, name
     assert asrp_blender.ASRP_PT_run_files.bl_parent_id == "ASRP_PT_advanced"
     main = draw_panel(asrp_blender.ASRP_PT_main)
@@ -1266,26 +1364,26 @@ def draw_new_panels():
     for panel in (asrp_blender.ASRP_PT_asset, asrp_blender.ASRP_PT_motion, asrp_blender.ASRP_PT_run, asrp_blender.ASRP_PT_results):
         assert "asrp.check_backend" not in [r[1] for r in draw_panel(panel) if r[0] == "op"]
     # step 1
-    texts = labels_of(draw_panel(asrp_blender.ASRP_PT_asset))
+    texts = labels_of(asset_log())
     assert "One asset for both prototypes: skull, jaw, teeth, lips." in " ".join(texts), texts
     assert any(t.startswith("Open: ") for t in texts), texts
     scene_files = f"Scene files: {asrp_blender.asset.relative_to_project(Path(bpy.context.scene.asrp_asset_scene).parent)}"
     assert scene_files.replace(" ", "") in "".join(texts).replace(" ", ""), (scene_files, texts)  # a long path wraps over lines
     assert "This .blend is the scene. Save it to keep the asset and the last result." in " ".join(texts), texts
-    opens = [r for r in draw_panel(asrp_blender.ASRP_PT_asset) if r[0] == "op" and r[1] == "wm.path_open" and r[2] == "Open folder"]
+    opens = [r for r in asset_log() if r[0] == "op" and r[1] == "wm.path_open" and r[2] == "Open folder"]
     assert len(opens) == 1 and opens[0][2] == "Open folder" and opens[0][4].filepath == str(Path(bpy.context.scene.asrp_asset_scene).parent), opens
     # step 2: the title on the button, the details on a second, smaller line
     log = draw_panel(asrp_blender.ASRP_PT_motion)
     ops = [r for r in log if r[0] == "op"]
-    assert [r[2] for r in ops] == list(TITLES.values()) and sum(1 for r in ops if r[3]) == 1 and ops[0][3], [(r[2], r[3]) for r in ops]
+    assert [r[2] for r in ops] == list(TITLES.values()) and sum(1 for r in ops if r[3]) == 1 and ops[1][3], [(r[2], r[3]) for r in ops]  # the lab's motion is picked
     details = [t for t in labels_of(log)]
     assert details == ["  51 frames, 30 fps, test motion", "  47 frames, 30 fps, lab motion", "  87 frames, 30 fps, test motion"], details
     assert all(len(t) <= LABEL_MAX for t in TITLES.values()), "a motion title is longer than its button holds"
     # no internal word where a plain one exists
     import re
-    shown = " ".join(labels_of(draw_panel(asrp_blender.ASRP_PT_asset)) + details + [r[2] for r in ops])
+    shown = " ".join(labels_of(asset_log()) + details + [r[2] for r in ops])
     assert not re.search(r"\b(ours|lab_setting|ziva_default|teeth_upper|teeth_lower)\b", shown), shown
-    log = draw_panel(asrp_blender.ASRP_PT_asset)
+    log = asset_log()
     assert [r[1] for r in log if r[0] == "op"] == ["asrp.open_asset", "wm.path_open", "wm.path_open"]
     assert [r[1] for r in draw_panel(asrp_blender.ASRP_PT_run) if r[0] == "op"] == ["asrp.run_motion"]
 
@@ -1324,7 +1422,7 @@ def check_tet_choice(sc):
     imported scene really has."""
     coarse, fine = tet_file_facts("lips_lattice.json"), tet_file_facts("lips.json")
     need(coarse[:2] == (126, "lattice") and fine[:2] == (26721, "fine"), "tet-choice", f"the tet mesh files are {coarse[:2]} and {fine[:2]}")
-    log = draw_panel(asrp_blender.ASRP_PT_asset)
+    log = asset_log()
     props = [r for r in log if r[0] == "prop" and r[1] == "asrp_tet_choice"]
     need(len(props) == 1 and sc.asrp_tet_choice == "coarse" and sc.asrp_asset_tet == "coarse", "tet-choice", "no tet mesh choice on the panel, or it is not Coarse by default")
     items = {i.identifier: i.name for i in sc.bl_rna.properties["asrp_tet_choice"].enum_items}
@@ -1335,14 +1433,14 @@ def check_tet_choice(sc):
     uid = {r: o.session_uid for r, o in asset_now().items()}
     scene_before = sc.asrp_asset_scene
     sc.asrp_tet_choice = "fine"
-    log = draw_panel(asrp_blender.ASRP_PT_asset)
+    log = asset_log()
     text = " ".join(labels_of(log)).replace(" ", "")
     need(lines["fine"].replace(" ", "") in text and lines["coarse"].replace(" ", "") not in text, "tet-choice", "the line under the choice does not change with it")
     need("Press Open asset again to use this mesh.".replace(" ", "") in text, "tet-choice", "no message after changing the choice of an open asset")
     need(sc.asrp_asset_scene == scene_before and {r: o.session_uid for r, o in asset_now().items()} == uid, "tet-choice", "changing the choice changed the open asset")
     need("lattice" in " ".join(labels_of(draw_panel(asrp_blender.ASRP_PT_setup))), "tet-choice", "the Physics setup does not show the mesh the open asset has")
     sc.asrp_tet_choice = "coarse"
-    need("Press Open asset again" not in " ".join(labels_of(draw_panel(asrp_blender.ASRP_PT_asset))), "tet-choice", "the message stays after the choice is back")
+    need("Press Open asset again" not in " ".join(labels_of(asset_log())), "tet-choice", "the message stays after the choice is back")
     # the scene the panel imported: the lattice, all four attachments springs
     data = scene_data(sc)
     tet = data["soft_tissues"][0]["tet_mesh"]
@@ -1649,6 +1747,8 @@ def run_child(phase: str, repo: Path, tmp: Path) -> None:
         assert "Choose the ASRP project folder." in labels_of(main) and "Asked once. Blender remembers." in labels_of(main), main
         assert mtext.count("stay grey") == 1, mtext  # the note is written once, under the chooser
         assert [r[1] for r in main if r[0] == "op"] == ["asrp.choose_project"], main
+        line = " ".join(labels_of(draw_panel(ab.ASRP_PT_asset)))
+        assert "Moves the lips as one body" in line and "?" not in line and "tets." not in line, line  # no count that is not known
         for panel in (ab.ASRP_PT_asset, ab.ASRP_PT_motion, ab.ASRP_PT_run):  # steps 1 to 3 greyed out, with the reason
             log = draw_panel(panel)
             assert "Choose the project folder first" not in " ".join(labels_of(log)), (panel.bl_label, log)  # no note on every step
@@ -1711,7 +1811,7 @@ def check_landmarks_units_report(sc):
     size = max(max(v.co[a] for v in verts[:per]) - min(v.co[a] for v in verts[:per]) for a in range(3))
     need(size >= 1.0, "landmarks", f"a landmark dot is {size:.3g} mm across: too small to see at the head's size")
     need(abs(lm.scale[0] - 0.001) < 1e-9 and not lm.hide_viewport and not lm.hide_render, "landmarks", "the dots are not shown at rest")
-    log = draw_panel(asrp_blender.ASRP_PT_asset)
+    log = asset_log()
     props = [r for r in log if r[0] == "prop" and r[1] == "asrp_show_landmarks"]
     need(len(props) == 1 and props[0][2] == "Show landmarks" and sc.asrp_show_landmarks, "landmarks", "no Show landmarks checkbox, or it is not on by default")
     sc.asrp_show_landmarks = False
@@ -1741,7 +1841,7 @@ def check_landmarks_units_report(sc):
 def check_landmarks_hidden_with_result(sc):
     lm = sc.asrp_asset_landmarks
     need(sc.asrp_asset_run and lm.hide_viewport and lm.hide_render, "landmarks", "the landmark dots are still shown while a result is on the asset")
-    text = " ".join(labels_of(draw_panel(asrp_blender.ASRP_PT_asset)))
+    text = " ".join(labels_of(asset_log()))
     need("Landmarks show the rest positions; hidden while a result plays." in text, "landmarks", f"the panel does not say why the dots are hidden: {text}")
     sc.asrp_show_landmarks = True
     need(lm.hide_viewport, "landmarks", "Show landmarks showed the dots over a result")
@@ -1752,8 +1852,8 @@ EXPECT_SETUP = {  # what the Physics setup says about the lab asset (read off th
     "material": "neo-Hookean: 12 kPa, nu 0.4, 1060 kg/m3 (measured in Ziva)",
     "bones": ["jaw: follows jaw01", "skull: follows head", "teeth_upper: display only (follows head)", "teeth_lower: display only (follows jaw01)"],
     "attachments": ["lips to skull: 74 vertices, hard", "lips to jaw: 76 vertices, spring 1.94 N/mm (our value)",
-                    "lips to lip_corner_anchor: 348 vertices, spring 1.94 N/mm (our value)",
-                    "lips to lip_corner_anchor: 309 vertices, spring 1.94 N/mm (our value)"],
+                    "lips to lip_corner_anchor (left): 348 vertices, spring 1.94 N/mm (our value)",
+                    "lips to lip_corner_anchor (right): 309 vertices, spring 1.94 N/mm (our value)"],
 }
 
 
@@ -1764,9 +1864,12 @@ def expected_setup(data, choice):
         return EXPECT_SETUP
     n = tet_file_facts("lips_lattice.json")[0]
     atts = []
+    pairs = [(a["from"], a["to"]) for a in data["attachments"]]
     for a in data["attachments"]:
         k = a["stiffness"]
-        atts.append(f"{a['from']} to {a['to']}: {len(a['weights'])} vertices, spring {k['value']:g} N/mm (measured in Ziva)")
+        side = f" ({a['name'].split('_')[0]})" if pairs.count((a["from"], a["to"])) > 1 else ""  # left / right, from the attachment's own name
+        atts.append(f"{a['from']} to {a['to']}{side}: {len(a['weights'])} vertices, spring {k['value']:g} N/mm (Ziva's stiffness, our area rule)")
+        need("measured" not in atts[-1], "setup", "an attachment's stiffness is called measured")
     return dict(EXPECT_SETUP, tissues=[f"lips: {n} tets, lattice mesh"], attachments=atts)
 
 
@@ -1794,64 +1897,75 @@ def check_setup_rows(sc, choice="coarse"):
     print(f"  physics setup: {len(ops)} rows with a button each, tissue / bones / attachments say what scene.json says, last line present")
 
 
-def colour_of(mesh):
+def evaluated_points(obj):
+    """The point cloud a geometry-nodes object makes: (number of points, flat float list of their positions in the object's own mm)."""
     import array
 
-    attr = mesh.color_attributes[asrp_blender.asset.HIGHLIGHT_ATTR]
-    co = array.array("f", bytes(4 * 4 * len(mesh.vertices)))
-    attr.data.foreach_get("color", co)
-    return co
+    bpy.context.view_layer.update()
+    depsgraph = bpy.context.evaluated_depsgraph_get()
+    ev = obj.evaluated_get(depsgraph)  # kept: the point cloud is owned by the evaluated object and the geometry set
+    geometry = ev.evaluated_geometry()
+    pc = geometry.pointcloud
+    n = 0 if pc is None else len(pc.points)
+    co = array.array("f", bytes(4 * 3 * n))
+    if n:
+        pc.attributes["position"].data.foreach_get("vector", co)
+    return n, co
 
 
 def check_highlight(case):
-    """Highlight a part and an attachment while a result is on the asset: the result is not disturbed; Clear highlight puts the display
-    back exactly as it was."""
+    """Highlight a part and an attachment while a result is on the asset. The attachment is shown as points in front of the lips, on the
+    same vertices (they follow the result); the lips' own display (colour attributes, shading) and the result are not touched; Clear
+    highlight removes the points."""
     sc = bpy.context.scene
     objs = asset_now()
     lips = objs["lips"]
-    before_attrs = [a.name for a in lips.data.color_attributes]
-    before_active = lips.data.color_attributes.active_color.name if lips.data.color_attributes.active_color else None
+    attrs = [a.name for a in lips.data.color_attributes]
     spaces = list(asrp_blender.asset.view3d_spaces(bpy.context))
-    before_shading = [(k, sp.shading.type, sp.shading.color_type) for k, sp in spaces]
-    need(spaces, "highlight", "no 3D view in this Blender: the viewport part of the highlight cannot be checked (the check must be able to fail)")
+    shading = [(k, sp.shading.type, sp.shading.color_type) for k, sp in spaces]
+    need(spaces, "highlight", "no 3D view in this Blender: the shading part of the check would prove nothing")
     run, layer, frame = sc.asrp_asset_run, sc.asrp_asset_layer, sc.frame_current
     mods = [(o.name, [m.name for m in o.modifiers]) for o in objs.values()]
+    names = {o.name for o in bpy.data.objects}
     # a part: selected and active, nothing else
     assert bpy.ops.asrp.highlight(kind="part", target="jaw") == {"FINISHED"}
     need([o.name for o in bpy.context.view_layer.objects if o.select_get()] == [objs["jaw"].name] and bpy.context.view_layer.objects.active == objs["jaw"],
          "highlight", "a part row did not select that object and make it active")
-    # an attachment: its vertices coloured, the others not
+    # an attachment: points on its vertices, in front
     data = scene_data(sc)
     att = data["attachments"][0]
-    verts = {int(w[0]) for w in att["weights"]}
+    verts = sorted({int(w[0]) for w in att["weights"]})
     need(len(verts) == 74, "highlight", f"the first attachment has {len(verts)} vertices, expected 74")
     assert bpy.ops.asrp.highlight(kind="attachment", target=att["name"]) == {"FINISHED"}
-    co = colour_of(lips.data)
-    on = [i for i in range(len(lips.data.vertices)) if co[4 * i + 2] < 0.1]  # the yellow ones have no blue
-    need(set(on) == verts, "highlight", f"{len(on)} vertices are coloured, the attachment has {len(verts)}")
-    need(lips.data.color_attributes.active_color.name == asrp_blender.asset.HIGHLIGHT_ATTR and sc.asrp_highlight == att["name"], "highlight", "the highlight is not the active colour")
-    need(all(sp.shading.type == "SOLID" and sp.shading.color_type == "VERTEX" for _k, sp in asrp_blender.asset.view3d_spaces(bpy.context)), "highlight",
-         "the 3D views are not set to show the vertex colours")
-    # the result on the asset is as it was: verify_three_step reads the cache, the bones, the timeline
+    h = sc.asrp_highlight_object
+    need(asrp_blender.asset.is_live(h) and h.get(asrp_blender.asset.ROLE_KEY) == "highlight_points" and h.show_in_front and sc.asrp_highlight == att["name"],
+         "highlight", "no highlight points object, or it is not shown in front of the lips")
+    for frame_to_check in (0, 32):  # at rest and in the middle of the result: the points sit on the lips' vertices
+        sc.frame_set(frame_to_check)
+        n, co = evaluated_points(h)
+        want = lips_local_mm(lips)
+        worst = max(abs(co[3 * i + a] - want[3 * v + a]) for i, v in enumerate(verts) for a in range(3)) if n == len(verts) else 1e9
+        need(n == len(verts) and worst < 1e-3, "highlight", f"frame {frame_to_check}: {n} points (expected {len(verts)}), up to {worst:.3g} mm from the lips' vertices")
+    sc.frame_set(frame)
+    # the lips' own display and the result are as they were
+    need([a.name for a in lips.data.color_attributes] == attrs, "highlight", "the highlight added a colour attribute to the lips")
+    need([(k, sp.shading.type, sp.shading.color_type) for k, sp in asrp_blender.asset.view3d_spaces(bpy.context)] == shading, "highlight", "the highlight changed the shading of a 3D view")
     need((sc.asrp_asset_run, sc.asrp_asset_layer) == (run, layer) and sc.frame_current == frame, "highlight", "the highlight changed the result's state")
-    need(mods == [(o.name, [m.name for m in o.modifiers]) for o in objs.values()], "highlight", "the highlight changed the modifiers")
+    need(mods == [(o.name, [m.name for m in o.modifiers]) for o in objs.values()], "highlight", "the highlight changed the modifiers of the asset")
     verify_three_step(case)
-    # another attachment replaces the first one
+    # another attachment replaces the first one; the points follow a layer switch
     other = data["attachments"][1]
     assert bpy.ops.asrp.highlight(kind="attachment", target=other["name"]) == {"FINISHED"}
-    on = {i for i in range(len(lips.data.vertices)) if colour_of(lips.data)[4 * i + 2] < 0.1}
-    need(on == {int(w[0]) for w in other["weights"]} and len(lips.data.color_attributes) == len(before_attrs) + 1, "highlight", "a second highlight did not replace the first")
-    # clear: exactly as it was
+    n, _ = evaluated_points(sc.asrp_highlight_object)
+    need(n == len({int(w[0]) for w in other["weights"]}) and len([o for o in bpy.data.objects if o.name.startswith("ASRP highlight")]) == 1, "highlight",
+         "a second highlight did not replace the first")
+    # clear: nothing of it is left
     assert bpy.ops.asrp.clear_highlight() == {"FINISHED"}
-    after = [a.name for a in lips.data.color_attributes]
-    need(after == before_attrs and sc.asrp_highlight == "", "highlight", f"after Clear highlight the lips have the colour attributes {after}, before {before_attrs}")
-    active = lips.data.color_attributes.active_color.name if lips.data.color_attributes.active_color else None
-    need(active == before_active, "highlight", f"the active colour attribute is {active!r}, it was {before_active!r}")
-    now = [(k, sp.shading.type, sp.shading.color_type) for k, sp in asrp_blender.asset.view3d_spaces(bpy.context)]
-    need(now == before_shading, "highlight", f"the 3D views show {now} after Clear highlight, they showed {before_shading}")
+    need(sc.asrp_highlight == "" and sc.asrp_highlight_object is None and {o.name for o in bpy.data.objects} == names, "highlight", "Clear highlight left objects behind")
+    need(not [g for g in bpy.data.node_groups if g.name.startswith("ASRP highlight")], "highlight", "Clear highlight left its node group behind")
     verify_three_step(case)
-    print(f"  highlight: a part is selected and active; an attachment colours {len(verts)} vertices (others not), a second replaces it; the result is "
-          f"still the same (cache, bones, modifiers, timeline); Clear highlight restores the colour attributes {before_attrs} and the shading {before_shading[0][1:]}")
+    print(f"  highlight: a part is selected and active; an attachment is {len(verts)} points in front of the lips on the same vertices (at rest and mid result), "
+          f"a second replaces it; the lips' colour attributes {attrs}, the shading {shading[0][1:]} and the result are untouched; Clear highlight leaves nothing")
 
 
 def check_check_setup(sc):
@@ -1928,7 +2042,7 @@ def reopen_checks(sc, state, tmp):
     objs = asset_now()
     need(sorted(objs) == sorted(ROLES) and asrp_blender.asset_open(sc), "reopen", f"after reopening the panel knows the objects {sorted(objs)}")
     need(asrp_blender.asset.is_live(sc.asrp_asset_landmarks), "reopen", "the landmarks object is gone after reopening")
-    texts = " ".join(labels_of(draw_panel(asrp_blender.ASRP_PT_asset)))
+    texts = " ".join(labels_of(asset_log()))
     for part in ("Scene files:", "Material: 12 kPa, 0.4 (measured in Ziva)", "Units: mm (1 scene unit = 0.962 mm)", "Problems found: 0 errors, 0 warnings",
                  "Landmarks show the rest positions; hidden while a result plays."):
         need(part.replace(" ", "") in texts.replace(" ", ""), "reopen", f"after reopening the Asset section does not say {part!r}: {texts}")
@@ -1953,6 +2067,10 @@ def reopen_checks(sc, state, tmp):
     case2["ident"] = case["ident"]
     verify_three_step(case2)
     need(sc.asrp_asset_run == str(run_dir) and sc.asrp_asset_run != state["run_dir"], "reopen", "the second run did not replace the result")
+    time.sleep(asrp_blender.RUN_AGAIN_S + 0.3)  # after that second a Run is accepted again
+    assert bpy.ops.asrp.run_motion() == {"FINISHED"} and SESSION.state == "running"
+    drive()
+    need(SESSION.state == "complete" and str(SESSION.run_dir) != str(run_dir), "run-twice", "a Run after the guard time did not run")
     print(f"CHILD reopened: panel knows the five objects and the landmarks, the Asset section keeps its lines, neutral_to_AA still plays (final and "
           f"physics layers equal their caches, bones equal the motion file, timeline 0..{state['frame_end']}); jaw_open_12deg then ran and replaced it on the same objects")
     # File > New: the panel is empty, nothing of the previous file is left
@@ -1979,7 +2097,7 @@ def missing_checks(sc, tmp):
     need(not Path(sc.asrp_asset_scene).exists(), "missing", "the scene folder is still there: this check would prove nothing")
     problem = asrp_blender.asset.files_problem(sc)
     need(problem and "scene files of this asset are gone" in problem and "Open asset again" in problem, "missing", f"the problem sentence is {problem!r}")
-    log = draw_panel(asrp_blender.ASRP_PT_asset)
+    log = asset_log()
     text = " ".join(labels_of(log))
     need("scene files of this asset are gone".replace(" ", "") in text.replace(" ", ""), "missing", f"the Asset section does not say so: {text}")
     open_buttons = [r for r in log if r[0] == "op" and r[1] == "asrp.open_asset"]
