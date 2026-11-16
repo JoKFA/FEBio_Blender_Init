@@ -24,7 +24,18 @@ PREVIEW = REPO / "data" / "preview"
 MESHES = ("coarse", "fine")
 RETIRED = "aa_" + "standin"  # written in two pieces so that this file is not one of the hits it looks for
 PICTURES = [f"prototype_aa36_{layer}_{who}.png" for layer in ("physics", "final") for who in ("coarse", "fine", "ziva")] + [
-    "prototype_jaw32_coarse.png", "prototype_jaw32_fine.png"]
+    "prototype_jaw32_coarse.png", "prototype_jaw32_fine.png",
+    "prototype_aa36_front_final.png", "prototype_aa36_front_physics.png", "prototype_jaw32_front.png"]
+# the animated front views: name -> (images in the file, width in pixels). Images = frames of the motion + 30 repeats of the
+# last one (the hold of about one second at 30 frames per second); width = panels x 420. Written out here on purpose: the
+# numbers the tool holds are checked against these, not the other way round.
+GIFS = {
+    "prototype_aa_front.gif": (47 + 30, 3 * 420),
+    "prototype_aa_front_physics.gif": (47 + 30, 3 * 420),
+    "prototype_jaw_front.gif": (51 + 30, 2 * 420),
+    "prototype_shake_front.gif": (87 + 30, 420),
+}
+GIF_LIMIT_BYTES = 2_700_000  # the tool aims at 2.5 MB; a little room so that a rerun that lands slightly over is not a failure
 
 
 def load_tool():
@@ -257,6 +268,85 @@ def test_every_picture_the_page_shows_exists_and_every_picture_made_is_shown():
     assert set(PICTURES) <= shown, sorted(set(PICTURES) - shown)
     for name in shown:
         assert (PREVIEW / name).stat().st_size > 10_000, name
+
+
+def read_gif(path: Path) -> dict:
+    """The header and block structure of a GIF, read without Pillow: width, number of images, whether it loops forever."""
+    data = path.read_bytes()
+    assert data[:6] in (b"GIF87a", b"GIF89a"), f"{path.name} is not a GIF"
+    width = int.from_bytes(data[6:8], "little")
+    pos = 13 + (3 * (2 << (data[10] & 7)) if data[10] & 0x80 else 0)
+
+    def skip_blocks(at: int) -> int:
+        while data[at] != 0:
+            at += data[at] + 1
+        return at + 1
+
+    images, loops_forever = 0, False
+    while pos < len(data) and data[pos] != 0x3B:
+        if data[pos] == 0x21:  # extension
+            label, pos = data[pos + 1], pos + 2
+            if label == 0xFF and data[pos] == 11 and data[pos + 1:pos + 12] == b"NETSCAPE2.0":
+                sub = pos + 12  # sub-block 1, 3 bytes: id, loop count (little endian); 0 = forever
+                loops_forever = data[sub] == 3 and data[sub + 1] == 1 and int.from_bytes(data[sub + 2:sub + 4], "little") == 0
+            pos = skip_blocks(pos)
+        elif data[pos] == 0x2C:  # image
+            images += 1
+            local = data[pos + 9]
+            pos += 10 + (3 * (2 << (local & 7)) if local & 0x80 else 0) + 1
+            pos = skip_blocks(pos)
+        else:
+            raise AssertionError(f"{path.name}: unexpected byte {data[pos]:#x} at {pos}")
+    assert pos < len(data) and data[pos] == 0x3B, f"{path.name} has no GIF trailer"
+    return {"width": width, "images": images, "loops_forever": loops_forever}
+
+
+def tool_module():
+    spec = importlib.util.spec_from_file_location("render_comparison", REPO / "tools" / "render_comparison.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_every_gif_the_page_shows_is_an_animated_gif_of_the_expected_length_and_every_gif_made_is_shown():
+    text = DOC.read_text(encoding="utf-8")
+    shown = set(re.findall(r"\]\(\.\./data/preview/(prototype_[\w.-]+\.gif)\)", text))
+    assert shown == set(GIFS), f"the page shows {sorted(shown)}"
+    assert sorted(p.name for p in PREVIEW.glob("prototype_*_front*.gif")) == sorted(GIFS)  # none made and left off the page
+    for name, (images, width) in GIFS.items():
+        info = read_gif(PREVIEW / name)
+        assert info["images"] == images, (name, info)
+        assert info["width"] == width, (name, info)
+        assert info["loops_forever"], f"{name} does not loop forever"
+        assert 100_000 < (PREVIEW / name).stat().st_size <= GIF_LIMIT_BYTES, (name, (PREVIEW / name).stat().st_size)
+
+
+def test_the_picture_tool_and_the_archive_manifest_name_exactly_the_pictures_of_the_page():
+    tool = tool_module()
+    assert {name: tool.GIF_FRAMES[name] for name in tool.GIF_FRAMES} == {name: images for name, (images, _) in GIFS.items()}
+    assert sorted(tool.FRONT_STILLS) == sorted(p for p in PICTURES if "front" in p)
+    listed = json.loads((PREVIEW / "prototype_archive_manifest.json").read_text(encoding="utf-8"))["pictures"]
+    assert sorted(listed) == sorted(PICTURES + list(GIFS)), "the manifest does not list the pictures of the page"
+    text = DOC.read_text(encoding="utf-8")
+    assert all(name in text for name in listed)
+    for name in listed:
+        assert (PREVIEW / name).is_file(), name
+
+
+def test_the_gif_reader_counts_what_it_is_given(tmp_path):
+    """The reader of the test above can fail: a file that is not a GIF and a GIF cut short are both refused."""
+    good = tmp_path / "x.gif"
+    good.write_bytes(b"GIF89a" + (2).to_bytes(2, "little") + (2).to_bytes(2, "little") + bytes([0x80, 0, 0]) + bytes(6)
+                     + bytes([0x21, 0xFF, 11]) + b"NETSCAPE2.0" + bytes([3, 1, 0, 0, 0])
+                     + (bytes([0x2C]) + bytes(8) + bytes([0, 2, 2, 0x4C, 0x01, 0]) ) * 3 + bytes([0x3B]))
+    info = read_gif(good)
+    assert info == {"width": 2, "images": 3, "loops_forever": True}
+    (tmp_path / "png.gif").write_bytes(b"\x89PNG\r\n")
+    with pytest.raises(AssertionError):
+        read_gif(tmp_path / "png.gif")
+    (tmp_path / "cut.gif").write_bytes(good.read_bytes()[:-1])
+    with pytest.raises(AssertionError):
+        read_gif(tmp_path / "cut.gif")
 
 
 def test_the_panel_labels_the_page_quotes_are_the_add_ons():

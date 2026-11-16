@@ -20,7 +20,9 @@ Written to <out>:
     prototype_ziva_comparison_<mesh>.json                 tools/ziva_comparison.py's report
     prototype_run_<mesh>_<aa|jaw>.json                    the run report of the AA run and of the 12 degree run
     prototype_archive_manifest.json                       when, from which commit, with which commands, what machine
-    prototype_aa36_*.png, prototype_jaw32_*.png           the pictures (tools/render_comparison.py)
+    prototype_aa36_*.png, prototype_jaw32_*.png           the stills of the lips alone (tools/render_comparison.py)
+    prototype_*_front*.gif, prototype_*_front*.png        the animated front views with the bones and their stills (the same tool;
+                                                          needs ffmpeg on the PATH); the manifest lists every picture
 
 <mesh> is `coarse` or `fine`. The Ziva results stay outside the repository (tools/local_paths.py says where on this
 machine); Blender runs with --background only. The work folder holds Ziva's shapes through `asrp compare`, so it is
@@ -44,6 +46,9 @@ REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "tools"))
 
 import local_paths  # noqa: E402
+import render_comparison  # noqa: E402
+
+PICTURES = render_comparison.LIPS_STILLS + render_comparison.ANIMATED_PICTURES
 
 MESHES = {
     "coarse": ["--tetmesh", "data/tetmesh/lips_lattice.json", "--attachments", "ziva-soft"],
@@ -81,6 +86,28 @@ def export(trip: Path, pattern: str) -> Path:
     return folders[-1]
 
 
+def render(runs: dict, full: Path, out: Path) -> None:
+    """The pictures of docs/15 (tools/render_comparison.py): stills of the lips, animated front views with the bones."""
+    subprocess.run([sys.executable, "-B", str(REPO / "tools" / "render_comparison.py"),
+                    "--coarse-aa", str(runs["coarse"]["aa"]), "--fine-aa", str(runs["fine"]["aa"]),
+                    "--coarse-jaw", str(runs["coarse"]["jaw"]), "--fine-jaw", str(runs["fine"]["jaw"]),
+                    "--coarse-shake", str(runs["coarse"]["shake"]),
+                    "--ziva", str(full), "--out", str(out)], cwd=REPO, check=True)
+
+
+def runs_of(work: Path) -> dict:
+    """The run folders an earlier run of this tool left in its --work folder: {mesh: {aa|shake|jaw: folder}}."""
+    found = {}
+    for mesh in MESHES:
+        found[mesh] = {}
+        for name in ("aa", "shake", "jaw"):
+            folders = sorted(p for p in (work / mesh / "runs").glob(f"*_{name}_*") if (p / "run_report.json").is_file())
+            if not folders:
+                raise SystemExit(f"{work} holds no run '{name}' of the {mesh} mesh: --pictures-from needs the --work folder of a full run")
+            found[mesh][name] = folders[-1]
+    return found
+
+
 def git(*args) -> str:
     done = subprocess.run(["git", *args], cwd=REPO, capture_output=True, text=True, encoding="utf-8")
     return done.stdout.strip() if done.returncode == 0 else "unknown"
@@ -93,15 +120,30 @@ def main() -> None:
     parser.add_argument("--threads", type=int, default=4)
     parser.add_argument("--note", default="", help="what else ran on this machine while FEBio was timed")
     parser.add_argument("--no-render", action="store_true", help="skip the pictures")
+    parser.add_argument("--pictures-from", metavar="WORK", help="only redo the pictures, from the runs a full run of this tool left in "
+                        "its --work folder; the numbers and reports in <out> stay as they are (the manifest gets the pictures "
+                        "and when they were made)")
     args = parser.parse_args()
 
     trip = local_paths.ziva_trip()
     if trip is None:
         raise SystemExit("NOT RUN: the Ziva trip data is not on this machine; " + local_paths.HOW_TO_SET)
-    work = Path(args.work).resolve() if args.work else Path(tempfile.mkdtemp(prefix="asrp_prototype_archive_"))
+    if not args.no_render:
+        render_comparison.ffmpeg_or_stop()  # before the runs, not after twenty minutes of them
     out = Path(args.out).resolve()
     out.mkdir(parents=True, exist_ok=True)
     full, lips_only = export(trip, FULL), export(trip, LIPS_ONLY)
+    if args.pictures_from:
+        render(runs_of(Path(args.pictures_from).resolve()), full, out)
+        path = out / "prototype_archive_manifest.json"
+        manifest = json.loads(path.read_text(encoding="utf-8"))
+        manifest["pictures"] = PICTURES
+        manifest["pictures_made"] = {"date": datetime.date.today().isoformat(), "git_commit": git("rev-parse", "--short", "HEAD"),
+                                     "command": "uv run python tools/prototype_archive.py --pictures-from <work folder of the full run>"}
+        path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8", newline="\n")
+        print(f"pictures written to {out}")
+        return
+    work = Path(args.work).resolve() if args.work else Path(tempfile.mkdtemp(prefix="asrp_prototype_archive_"))
     commands, runs = [], {}
 
     for mesh, options in MESHES.items():
@@ -133,11 +175,8 @@ def main() -> None:
                  "asrp compare <AA run> <Ziva full-face export> --out <folder>  (and the lips-only export)",
                  "uv run python tools/ziva_comparison.py <report> --aa-run <AA run> --shake-run <shake run>"]
     if not args.no_render:
-        subprocess.run([sys.executable, "-B", str(REPO / "tools" / "render_comparison.py"),
-                        "--coarse-aa", str(runs["coarse"]["aa"]), "--fine-aa", str(runs["fine"]["aa"]),
-                        "--coarse-jaw", str(runs["coarse"]["jaw"]), "--fine-jaw", str(runs["fine"]["jaw"]),
-                        "--ziva", str(full), "--out", str(out)], cwd=REPO, check=True)
-        commands.append("uv run python tools/render_comparison.py ...")
+        render(runs, full, out)
+        commands.append("uv run python tools/render_comparison.py ...  (needs ffmpeg for the animated pictures)")
     manifest = {
         "format": "asrp-prototype-archive/1",
         "tool": "tools/prototype_archive.py",
@@ -150,6 +189,7 @@ def main() -> None:
         "meshes": {"coarse": "data/tetmesh/lips_lattice.json, --attachments ziva-soft",
                    "fine": "data/tetmesh/lips.json, default attachments (upper lip hard)"},
         "ziva_runs": {"full_face": full.name, "lips_only": lips_only.name},
+        "pictures": [] if args.no_render else PICTURES,
     }
     (out / "prototype_archive_manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8", newline="\n")
     print(f"archives written to {out}")

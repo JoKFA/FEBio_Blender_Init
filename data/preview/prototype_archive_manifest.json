@@ -23,5 +23,27 @@
   "ziva_runs": {
     "full_face": "neutral_to_AA_export_20261112_202048_16aa06ab",
     "lips_only": "AA_lips_only_export_20261112_205041_de5be4be"
+  },
+  "pictures": [
+    "prototype_aa36_physics_coarse.png",
+    "prototype_aa36_physics_fine.png",
+    "prototype_aa36_physics_ziva.png",
+    "prototype_aa36_final_coarse.png",
+    "prototype_aa36_final_fine.png",
+    "prototype_aa36_final_ziva.png",
+    "prototype_jaw32_coarse.png",
+    "prototype_jaw32_fine.png",
+    "prototype_aa_front.gif",
+    "prototype_aa_front_physics.gif",
+    "prototype_jaw_front.gif",
+    "prototype_shake_front.gif",
+    "prototype_aa36_front_final.png",
+    "prototype_aa36_front_physics.png",
+    "prototype_jaw32_front.png"
+  ],
+  "pictures_made": {
+    "date": "2026-11-15",
+    "git_commit": "2b0e245",
+    "command": "uv run python tools/prototype_archive.py --pictures-from <work folder of the full run>"
   }
 }
