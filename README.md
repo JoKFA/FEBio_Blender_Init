@@ -8,7 +8,7 @@ ASRP replaces Ziva (the physics plug-in under the lab's facial controller) with 
 
 **Scope.** The prototypes cover the lab's bones plus the lips (one tissue), for two motions: neutral to the phoneme "AA", and a head shake. The other 40 tissues of the face are not developed yet (phase two). The lab's own tools (the controller, the "piano" expression UI in Maya, the paper's experiments) are the lab's; we read their files and give their training code one function, `final_shape`, that returns the lip shape without Maya.
 
-**Where to read more.** Tasks and their status: [docs/09-roadmap-and-tasks.md](docs/09-roadmap-and-tasks.md). Open questions and risks: [docs/11-risks-and-questions.md](docs/11-risks-and-questions.md). What was measured on the lab's Ziva machine: [docs/13-explanations.md](docs/13-explanations.md) entry E-11. The prototype's numbers and their limits: **[docs/15-prototype.md](docs/15-prototype.md)**. All of these documents are in Chinese.
+**Where to read more.** Tasks and their status: [docs/09-roadmap-and-tasks.md](docs/09-roadmap-and-tasks.md). Open questions and risks: [docs/11-risks-and-questions.md](docs/11-risks-and-questions.md). What was measured on the lab's Ziva machine: [docs/13-explanations.md](docs/13-explanations.md) entry E-11. The prototype's numbers and their limits: **[docs/15-prototype.md](docs/15-prototype.md)**. All of these documents are in Chinese. Two have an English translation: [docs/15-prototype.en.md](docs/15-prototype.en.md) (the prototype: how to run it, how far it is from Ziva) and [docs/16-pipeline.en.md](docs/16-pipeline.en.md) (the whole pipeline from Maya to Blender).
 
 ## Run the prototype
 

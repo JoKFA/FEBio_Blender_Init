@@ -55,7 +55,7 @@
 | `tools/check_lab_export.py` | 不用 Maya，直接读 `.mb` 里的顶点，和导出的 OBJ 逐点核对 |
 | `tools/mb_inventory.py`、`tools/lip_attachments.py` | 不用 Maya 解析 `.mb`，读出嘴唇的四组粘连顶点，写成 `data/lab_export/lip_attachments.json` |
 
-**结果**：`data/lab_export/`，已提交。Ziva 机器上的导出（⑫ 要用的参考结果）是另一件事，见第 9 节。
+**结果**：`data/lab_export/`，已提交。Ziva 机器上的导出（⑫ 要用的参考结果）是另一件事，见第 8 节。
 
 ## 3. ② 四面体化（只做一次）
 

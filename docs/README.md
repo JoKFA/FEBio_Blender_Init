@@ -35,8 +35,8 @@
 | 12 | [导出清单](12-lab-export-checklist.md) | 从实验室机器上已经拿到了哪些数据、怎么拿的、下次还要取什么、问实验室什么 |
 | 13 | [设计解释（问答）](13-explanations.md) | 看文档、做任务时冒出的"为什么要这样""这一步从哪来"，包括 Ziva 机器上实测的结果（E-11） |
 | 14 | [实验室的操作流程](14-ziva-demo-walkthrough.md) | 实验室在 Maya + Ziva 里怎么工作、钢琴界面怎么用（2026-11-10 演示录像） |
-| 15 | [原型机](15-prototype.md) | 原型机长什么样、怎么自己跑、跑出的数字说明什么、不说明什么 |
-| 16 | [从 Maya 到 Blender 的完整流程](16-pipeline.md) | 从 Maya 导出到 Blender 播放、和 Ziva 对比，一共哪几步、每一步用哪条命令和哪些 `.py` 文件 |
+| 15 | [原型机](15-prototype.md)（[English](15-prototype.en.md)） | 原型机长什么样、怎么自己跑、跑出的数字说明什么、不说明什么 |
+| 16 | [从 Maya 到 Blender 的完整流程](16-pipeline.md)（[English](16-pipeline.en.md)） | 从 Maya 导出到 Blender 播放、和 Ziva 对比，一共哪几步、每一步用哪条命令和哪些 `.py` 文件 |
 | — | [术语表](glossary.md) | 文档里出现的专业词是什么意思 |
 | — | [templates/](templates/) | 任务卡和合并请求的模板 |
 
@@ -90,7 +90,7 @@ asrp/
 ├─ tests/                     自动测试（pytest）
 │  ├─ fixtures/s1/            示例 scene.json、trajectory.json，由同目录的 build.py 生成
 │  ├─ test_prototype.py       真实嘴唇整条运行（约 2 分钟；只有验证门的 full 级设 ASRP_SLOW=1 跑它，docs、core 级不跑；单独跑 pytest 时要自己设）
-│  ├─ test_docs_references.py 文档里的相对链接都指向存在的文件；引用的 T-、ADR-、E- 编号都有定义
+│  ├─ test_docs_references.py 文档里的相对链接和图片都指向存在、而且 git 收着的文件（大小写也要一致）；引用的 T-、ADR-、E- 编号都有定义；英文译文的数字和链接和中文原文一致
 │  ├─ test_no_lab_files.py    不许实验室和厂商文件进 git 的检查的测试
 │  ├─ test_verify_gate.py     验证门本身
 │  ├─ test_one_off_files_gone.py  一次性开发文件（13 E-12 的清单）和本机 AI 开发文件一个都不能被跟踪
@@ -135,4 +135,5 @@ asrp/
 - **每个数字都要能复现。** 文档里写的实测数字，要注明是哪个脚本或命令得出的，或指向 13 里的条目。
 - **解释写进 13。** 回答"为什么要这样"这类问题时，如果答案要翻好几份文档才拼得出来，就整理成 13 里的一条，并在相关文档的对应位置链过去。
 - 文档用中文写，代码、文件名、命令保持英文。专业词第一次出现时解释，并收进术语表。
+- **英文译文跟着中文走。** 15、16 各有一份英文译文（`15-prototype.en.md`、`16-pipeline.en.md`），给不读中文的人看。中文那份是原文：先改中文，再照着改译文。译文里的数字或链接和原文对不上时，`tests/test_docs_references.py` 失败并指出是哪一个。
 - 每份文档开头用两三句话写清：给谁看、读完能做什么、不包括什么。
