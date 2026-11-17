@@ -73,6 +73,8 @@ The difference between the two layers: **Physics only** is the lips as FEBio com
 
 ### Walking through it with the mouse (screenshots)
 
+**To see it move first**: [a recording of the prototype](https://github.com/JoKFA/FEBio_Blender_Init/releases/tag/demo-2026-11-17) (`asrp_prototype_demo.mp4`, 81 seconds, no sound). It was recorded on the development machine on 2026-11-17, again with only the mouse, with the coarse lattice and the lab's neutral to AA: it starts at Blender's splash screen, presses N and opens the ASRP tab, then Open asset, Run, switching between Physics only and Final shape, Compare with Ziva, Show difference as colours, Show Ziva's lips, Checks. The add-on was already installed and the project folder already chosen; the pauses spent waiting for results were cut out. The recording is not in the repository (`*.mp4` is kept out of git); it is in a GitHub Release, and downloading it needs access to this repository.
+
 On 2026-11-15 to 16, on the development machine, Blender 5.2 was opened from the start menu and the steps above were followed with only the mouse and keyboard (not a script pressing buttons for a person). It was walked four times in all. The fourth walk was made after fixing the problems found in the first three, and the screenshots are from the fourth (seen from the front). The window is 1920 × 1080 and the sidebar is at its default width.
 
 | Step | Screenshot |

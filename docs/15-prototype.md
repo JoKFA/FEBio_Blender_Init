@@ -73,6 +73,8 @@
 
 ### 用鼠标走一遍（截图）
 
+**想先看它动起来**：[原型机演示录像](https://github.com/JoKFA/FEBio_Blender_Init/releases/tag/demo-2026-11-17)（`asrp_prototype_demo.mp4`，81 秒，无声）。2026-11-17 在开发机上录的，同样只用鼠标，粗格子，实验室的中性到 AA：从 Blender 的启动画面开始，按 N 打开 ASRP 标签，Open asset，Run，切换 Physics only 和 Final shape，Compare with Ziva，Show difference as colours，Show Ziva's lips，Checks。插件已经装好、项目文件夹已经选过；等结果的停顿剪掉了。录像不在仓库里（`*.mp4` 不进 git），放在 GitHub 的 Release 里，要有这个仓库的访问权限才能下载。
+
 2026-11-15 到 16 在开发机上，从开始菜单打开 Blender 5.2，只用鼠标和键盘照上面的步骤走的（不是脚本替人按按钮）。一共走了四遍，前三遍发现的问题改完以后走的第四遍，截图是第四遍的（从正面看）。窗口 1920 × 1080，侧边栏是默认宽度。
 
 | 步骤 | 截图 |
