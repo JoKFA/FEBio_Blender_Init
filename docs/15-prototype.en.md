@@ -244,7 +244,7 @@ The same frame, close-up of the lips only:
 |---|---|
 | ![Coarse lattice, jaw open 12°, frame 32](../data/preview/prototype_jaw32_coarse.png) | ![Fine mesh, jaw open 12°, frame 32](../data/preview/prototype_jaw32_fine.png) |
 
-The animation at the top of the README is from an earlier run (the material was still our 15 kPa, and the fine mesh). It shows that the pipeline works, and does not represent the current defaults.
+The animation in the README's "Playing a result in Blender" section is from an earlier run (the material was still our 15 kPa, and the fine mesh). It shows that the pipeline works, and does not represent the current defaults. The animation at the top of the README is the one at the top of this page.
 
 ## 4. Known gaps
 
