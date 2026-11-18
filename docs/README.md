@@ -118,7 +118,7 @@ asrp/
 │  ├─ lab_export/        ✅   网格 OBJ、mesh_report.json、skin_skinCluster7.json、joints.json、
 │  │                          lip_attachments.json；T-10 转换后的运动放 trajectories/；
 │  │                          ziva_trip_pointer.json 指向仓库外的 Ziva 机器数据
-│  ├─ preview/           ✅   Blender 预览图和归档的运行报告，15 的数字来源；README 里的动图 prototype_motion.gif
+│  ├─ preview/           ✅   Blender 预览图和归档的运行报告，15 的数字来源；README 顶上的动图 prototype_aa_front.gif 和更早一次运行的 prototype_motion.gif
 │  ├─ tetmesh/           ✅   嘴唇四面体网格 lips.json，由 tools/build_tetmesh.py 生成一次（ADR-20）
 │  └─ asset_inventory*.json  🚫  .mb 的完整清单，约 40 MB，能重新生成
 │

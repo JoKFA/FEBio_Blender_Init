@@ -1,8 +1,10 @@
 # ASRP
 
-![The lab's real lips opening and closing as the jaw turns, computed by FEBio and played back in Blender](data/preview/prototype_motion.gif)
+![The lab's "neutral to AA" motion, lower face from the front: our coarse lattice, our fine mesh, Ziva full face](data/preview/prototype_aa_front.gif)
 
-*The lab's real lips, pulled by the jaw (red: lips computed by FEBio; blue: jaw; grey: skull). Prototype one: a test jaw motion, not the lab's own. Which values this picture used and how it was made: [docs/15-prototype.md](docs/15-prototype.md).*
+*The lab's own "neutral to AA" motion, lower face from the front, final shape. Left: our lips on the coarse lattice (the panel's default). Middle: our lips on the fine mesh. Right: Ziva's result for the whole face. The bones in all three are ours, moved from the lab's motion file; Ziva's export holds only the lips. How far the lips are from Ziva's, and what that does and does not show: [docs/15-prototype.en.md](docs/15-prototype.en.md) section 3 (Chinese: [docs/15-prototype.md](docs/15-prototype.md)).*
+
+**See it run.** A recording of the prototype in Blender, done with the mouse (81 seconds, no sound): [release demo-2026-11-17](https://github.com/JoKFA/FEBio_Blender_Init/releases/tag/demo-2026-11-17), file `asrp_prototype_demo.mp4`. It opens the asset, runs the lab's neutral to "AA" motion, switches between the physics layer and the final shape, and compares the lips with Ziva's. What each step is and what the numbers mean: [docs/15-prototype.en.md](docs/15-prototype.en.md).
 
 ASRP replaces Ziva (the physics plug-in under the lab's facial controller) with FEBio, and Maya with Blender, so that the lab's research can go on after Ziva's end of sale and the whole computation is open and checkable. It is for developers who join the project and for the lab's lead. This page covers how to install, run and check the code; what the project is and where it stands is in [docs/01-overview.md](docs/01-overview.md).
 
@@ -12,7 +14,9 @@ ASRP replaces Ziva (the physics plug-in under the lab's facial controller) with 
 
 ## Run the prototype
 
-After the setup below (`uv sync`, `uv run asrp doctor` all `ok`), three commands, no Maya or Ziva needed (the output folders are git-ignored). The motion is a test hinge motion made by `tools/placeholder_jaw_motion.py`, not the lab's own motion:
+**With the mouse, in Blender.** Do "Setup (Windows)" and "Install the Blender add-on" below once. Then the ASRP panel has three steps: Open asset, choose a motion (the lab's neutral to "AA", a head shake, or a test jaw opening), Run. The result plays on the asset, and Compare with Ziva reports how far the lips are from Ziva's. Every step with screenshots: [docs/15-prototype.en.md](docs/15-prototype.en.md) section 2 (Chinese: [docs/15-prototype.md](docs/15-prototype.md)).
+
+**From the command line.** After the setup below (`uv sync`, `uv run asrp doctor` all `ok`), three commands, no Maya or Ziva needed (the output folders are git-ignored). The motion is a test hinge motion made by `tools/placeholder_jaw_motion.py`, not the lab's own motion; the commands for the lab's motion and the comparison with Ziva are at the end of docs/15 section 2:
 
 ```bash
 uv run asrp import-asset data/lab_export runs/prototype_scene
@@ -34,9 +38,13 @@ The last line printed is `run COMPLETE: 51 frames; plausibility PASSED`. The res
 |---|---|
 | `uv run asrp doctor` | check that FEBio, Blender and Python are usable |
 | `uv run asrp check <scene.json> [trajectory.json]` | check a scene (and a motion against it) |
-| `uv run asrp import-asset <export folder> <new folder>` | turn the lab export in `data/lab_export` into a `scene.json` |
+| `uv run asrp import-asset <export folder> <new folder>` | turn the lab export in `data/lab_export` into a `scene.json`. Options `--tetmesh`, `--attachments`, `--tissue-settings`: [docs/16-pipeline.en.md](docs/16-pipeline.en.md) section 4 |
+| `uv run asrp list-motions <export folder>` | list the motions of an export folder, one JSON line each (the panel's motion list) |
+| `uv run asrp convert-motion <lab motion file> <scene.json> <new trajectory.json> --starts-at-rest --title "<name>"` | turn a lab motion file (`combined_checkpoints.pkl`) that starts at rest into a `trajectory.json` |
+| `uv run asrp set-motion-title <trajectory.json> "<title>"` | set the name the Blender panel shows for a motion |
 | `uv run asrp run <scene.json> <trajectory.json> [--threads N]` | generate the FEBio model, solve it, run the five plausibility checks (a, b, b2, c, d), write a run folder (generated mode). FEBio uses 4 threads by default; `--threads 1` makes the playback files bit-identical between runs |
 | `uv run asrp run --feb <model.feb>` | stand-in mode: run an existing `.feb` as is, same run folder |
+| `uv run asrp compare <run folder> <Ziva export folder> --out <folder>` | compare a run of ours with a Ziva export folder: a report, heat-map data and Ziva's lips as a playback package. The output holds Ziva's shapes, so `--out` must be outside the repo or under `runs/` |
 | `uv run python tools/verify.py [--level docs\|core\|full\|auto]` | the project check, see "Checks" below; no argument means `full` |
 
 `asrp run` options: `--runs-dir` (default `runs`, an English-only path), `--name`, `--timeout`.
@@ -120,7 +128,11 @@ In Blender (with the add-on installed, above): delete the default cube, then sid
 "C:/Program Files/Blender Foundation/Blender 5.2/blender.exe" --background --factory-startup --python-exit-code 1 --python tools/render_prototype.py -- runs/<run folder> --out runs/<run folder>/render
 ```
 
-It checks the Blender result against the solver's numbers, then renders three side views (rest, settled, jaw fully open). Add `--frames-dir <folder>` to render every frame (that is how `data/preview/prototype_motion.gif` was made).
+It checks the Blender result against the solver's numbers, then renders three side views (rest, settled, jaw fully open). Add `--frames-dir <folder>` to render every frame. That is how this animation was made:
+
+![The lab's real lips opening and closing as the jaw turns, computed by FEBio and played back in Blender](data/preview/prototype_motion.gif)
+
+*The lab's real lips, pulled by the jaw (red: lips computed by FEBio; blue: jaw; grey: skull). Prototype one: a test jaw motion, not the lab's own. It is from an earlier run (our own 15 kPa material, the fine mesh) and shows that the pipeline works, not today's defaults.*
 
 ## Lab asset
 

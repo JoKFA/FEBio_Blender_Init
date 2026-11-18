@@ -258,7 +258,7 @@ Ziva 的数是整张脸（只移动了颅骨和下颌，另外 8 块骨头没动
 |---|---|
 | ![粗格子，张嘴 12°，第 32 帧](../data/preview/prototype_jaw32_coarse.png) | ![细网格，张嘴 12°，第 32 帧](../data/preview/prototype_jaw32_fine.png) |
 
-README 顶上的动图是更早的一次运行（材料还是我们定的 15 kPa、细网格），它说明管线通了，不代表现在的默认设置。
+README 的 "Playing a result in Blender" 一节里的动图是更早的一次运行（材料还是我们定的 15 kPa、细网格），它说明管线通了，不代表现在的默认设置。README 顶上的动图就是本页顶上那一张。
 
 ## 4. 已知的差距
 
