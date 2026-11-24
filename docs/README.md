@@ -37,6 +37,7 @@
 | 14 | [实验室的操作流程](14-ziva-demo-walkthrough.md) | 实验室在 Maya + Ziva 里怎么工作、钢琴界面怎么用（2026-11-10 演示录像） |
 | 15 | [原型机](15-prototype.md)（[English](15-prototype.en.md)） | 原型机长什么样、怎么自己跑、跑出的数字说明什么、不说明什么 |
 | 16 | [从 Maya 到 Blender 的完整流程](16-pipeline.md)（[English](16-pipeline.en.md)） | 从 Maya 导出到 Blender 播放、和 Ziva 对比，一共哪几步、每一步用哪条命令和哪些 `.py` 文件 |
+| 17 | [系统论文大纲（草稿）](17-paper-outline.md) | 把原型机写成系统论文：贡献点、形式化、结构、投稿前要先解决的问题（待和项目负责人讨论） |
 | — | [术语表](glossary.md) | 文档里出现的专业词是什么意思 |
 | — | [templates/](templates/) | 任务卡和合并请求的模板 |
 
@@ -55,7 +56,7 @@ asrp/
 ├─ .gitattributes             data/、tests/fixtures/ 按字节检出，哈希在任何电脑上都对得上（08 第 10 节）
 │
 ├─ docs/                      设计文档（本目录），唯一依据
-│  ├─ 01 … 16、glossary.md    见上面的"全部文档"
+│  ├─ 01 … 17、glossary.md    见上面的"全部文档"
 │  └─ templates/              任务卡、合并请求模板
 │
 ├─ src/
