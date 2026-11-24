@@ -103,3 +103,78 @@ $$X_{\mathrm{play}}^{\mathrm{ours}}(t) - X_{\mathrm{play}}^{\mathrm{Ziva}}(t) = 
 3. 作者署名和投稿时间，怎么和实验室商量？
 4. 资产授权（Q6）和 Ziva 对比能否发表，谁去确认？
 5. 论文要不要等地基工作（ADR-45）完成、至少加上第二块组织以后再投？
+
+## 9. 参考文献（候选）
+
+按论文的章节分组，编号只在本文里用。**这是候选清单，不是定稿**：写作时再按目标期刊的格式整理，没用上的删掉，缺的补上。
+
+标记：**✔** 表示 2026-11-24 已在网上核对过作者、出处和 DOI（核对用的页面附在条目后）；**○** 表示按记忆列出，作者和题目应该没错，但卷期、页码还要在写作前核对。
+
+### 9.1 背景：Ziva 停售、实验室的工作（第 1 节引言）
+
+- [R1] **实验室的论文**（审稿中）。题目、作者、引用方式要等实验室同意后再定（第 6 节第 1 条）；在那之前不写进任何对外的稿子。
+- [R2] ✔ Unity. *An update about Ziva*. 2024-04-02（宣布停止销售和支持 Ziva 系列产品）. [unity.com/blog/news/update-about-ziva](https://unity.com/blog/news/update-about-ziva)
+
+### 9.2 基于解剖的面部仿真（第 2 节相关工作）
+
+- [R3] ○ Lee Y., Terzopoulos D., Waters K. Realistic modeling for facial animation. *SIGGRAPH 1995*, 55–62.
+- [R4] ○ Sifakis E., Neverov I., Fedkiw R. Automatic determination of facial muscle activations from sparse motion capture marker data. *ACM Transactions on Graphics* 24(3), 2005, 417–425.
+- [R5] ○ Teran J., Sifakis E., Irving G., Fedkiw R. Robust quasistatic finite elements and flesh simulation. *SCA 2005*, 181–190.
+- [R6] ✔ Cong M., Bao M., E J. L., Bhat K. S., Fedkiw R. Fully automatic generation of anatomical face simulation models. *SCA 2015*, 175–183. doi:10.1145/2786784.2786786（[researchr](https://researchr.org/publication/CongBEBF15/bibtex)）
+- [R7] ○ Ichim A.-E., Kadleček P., Kavan L., Pauly M. Phace: Physics-based face modeling and animation. *ACM Transactions on Graphics* 36(4), 2017.
+- [R8] ○ Bao M., Cong M., Grabli S., Fedkiw R. High-quality face capture using anatomical muscles. *CVPR 2019*, 10802–10811.
+- [R9] ✔ Yang L., Zoss G., Chandran P., Gotardo P., Gross M., Solenthaler B., Sifakis E., Bradley D. An implicit physical face model driven by expression and style. *SIGGRAPH Asia 2023*. doi:10.1145/3610548.3618156（[arXiv:2401.15414](https://arxiv.org/abs/2401.15414v1)）
+- [R10] ○ Park H., Grama Srinivasan S., Cong M., Kim D., Kim B., Swartz J., Museth K., Sifakis E. Near-realtime facial animation by deep 3D simulation super-resolution. *ACM Transactions on Graphics* 43(4), 2024.
+- [R11] ○ Kim T., Eberle D. Dynamic deformables: Implementation and production practicalities. *SIGGRAPH 2020 Courses*.（生产环境里的软组织仿真，可用来说明 Ziva 这一类工具的做法）
+
+### 9.3 生物力学的有限元平台和面部、口腔模型（第 2 节）
+
+- [R12] ○ Maas S. A., Ellis B. J., Ateshian G. A., Weiss J. A. FEBio: Finite elements for biomechanics. *Journal of Biomechanical Engineering* 134(1), 2012, 011005.
+- [R13] ✔ Maas S. A., Ateshian G. A., Weiss J. A. FEBio: History and advances. *Annual Review of Biomedical Engineering* 19, 2017, 279–299. doi:10.1146/annurev-bioeng-071516-044738（[PMC6141040](https://pmc.ncbi.nlm.nih.gov/articles/PMC6141040)）
+- [R14] ○ Lloyd J. E., Stavness I., Fels S. ArtiSynth: A fast interactive biomechanical modeling toolkit combining multibody and finite element simulation. In Payan Y. (ed.), *Soft Tissue Biomechanical Modeling for Computer Assisted Surgery*, Springer, 2012, 355–394.
+- [R15] ○ Faure F., Duriez C., Delingette H., et al. SOFA: A multi-model framework for interactive physical simulation. 同上书, 2012, 283–321.
+- [R16] ✔ Stavness I., Lloyd J. E., Payan Y., Fels S. Coupled hard–soft tissue simulation with contact and constraints applied to jaw–tongue–hyoid dynamics. *International Journal for Numerical Methods in Biomedical Engineering* 27(3), 2011, 367–390. doi:10.1002/cnm.1423（[HAL](https://hal.archives-ouvertes.fr/hal-00599050)）
+- [R17] ✔ Barbarino G. G., Jabareen M., Trzewik J., Nkengne A., Stamatas G., Mazza E. Development and validation of a three-dimensional finite element model of the face. *Journal of Biomechanical Engineering* 131(4), 2009. doi:10.1115/1.3049857（[sciencegate](https://next.sciencegate.app/document/10.1115/1.3049857)；作者列表的后三位按记忆补，写作前再核对）
+
+### 9.4 离散化：四面体网格、规则格子、嵌入（第 4.2 节，C2）
+
+- [R18] ○ Si H. TetGen, a Delaunay-based quality tetrahedral mesh generator. *ACM Transactions on Mathematical Software* 41(2), 2015, Article 11.（FEBio Studio 用它，遇到自相交的嘴唇网格会停下，[05](05-ziva-to-febio.md) 坑 9）
+- [R19] ○ Hu Y., Zhou Q., Gao X., Jacobson A., Zorin D., Panozzo D. Tetrahedral meshing in the wild. *ACM Transactions on Graphics* 37(4), 2018.
+- [R20] ○ Hu Y., Schneider T., Wang B., Zorin D., Panozzo D. Fast tetrahedral meshing in the wild. *ACM Transactions on Graphics* 39(4), 2020.（fTetWild，细网格用它，ADR-20）
+- [R21] ○ Molino N., Bridson R., Teran J., Fedkiw R. A crystalline, red green strategy for meshing highly deformable objects with tetrahedra. *12th International Meshing Roundtable*, 2003, 103–114.
+- [R22] ○ Labelle F., Shewchuk J. R. Isosurface stuffing: Fast tetrahedral meshes with good dihedral angles. *ACM Transactions on Graphics* 26(3), 2007.
+- [R23] ○ Kuhn H. W. Some combinatorial lemmas in topology. *IBM Journal of Research and Development* 4(5), 1960, 518–524.（每个立方格切成 6 个四面体的切法，S1 和粗格子都用它）
+- [R24] ✔ Nesme M., Kry P. G., Jeřábková L., Faure F. Preserving topology and elasticity for embedded deformable models. *ACM Transactions on Graphics* 28(3), 2009（SIGGRAPH 2009）. doi:10.1145/1531326.1531358（[项目页](https://www.cs.mcgill.ca/~cg/projects/composite)）。**和 C2 最相关**：粗的嵌入网格会把"靠得很近但力学上分开"的部分连在一起，这正是上下唇在粗格子里被焊住的现象
+
+### 9.5 蒙皮控制层（第 3、4.5 节）
+
+- [R25] ○ Magnenat-Thalmann N., Laperrière R., Thalmann D. Joint-dependent local deformations for hand animation and object grasping. *Graphics Interface 1988*, 26–33.（线性蒙皮）
+- [R26] ○ Lewis J. P., Cordner M., Fong N. Pose space deformation: A unified approach to shape interpolation and skeleton-driven deformation. *SIGGRAPH 2000*, 165–172.
+- [R27] ○ Lewis J. P., Anjyo K., Rhee T., Zhang M., Pighin F., Deng Z. Practice and theory of blendshape facial models. *Eurographics 2014 State of the Art Reports*.
+
+### 9.6 材料模型（第 4、7 节：neo-Hookean 对 StVK）
+
+- [R28] ○ Bonet J., Wood R. D. *Nonlinear Continuum Mechanics for Finite Element Analysis*. 2nd ed., Cambridge University Press, 2008.
+
+### 9.7 验证、确认和报告规范（第 5 节，C1）
+
+- [R29] ○ Anderson A. E., Ellis B. J., Weiss J. A. Verification, validation and sensitivity studies in computational biomechanics. *Computer Methods in Biomechanics and Biomedical Engineering* 10(3), 2007, 171–184.
+- [R30] ✔ Henninger H. B., Reese S. P., Anderson A. E., Weiss J. A. Validation of computational models in biomechanics. *Proceedings of the IMechE, Part H: Journal of Engineering in Medicine* 224(7), 2010, 801–812.（[PMC2941217](https://pmc.ncbi.nlm.nih.gov/articles/PMC2941217)）
+- [R31] ✔ Erdemir A., Guess T. M., Halloran J., Tadepalli S. C., Morrison T. M. Considerations for reporting finite element analysis studies in biomechanics. *Journal of Biomechanics* 45(4), 2012, 625–633. doi:10.1016/j.jbiomech.2011.11.038（[PMC3278509](https://pmc.ncbi.nlm.nih.gov/articles/PMC3278509)）。论文的方法和附录可以按它的报告条目逐项写
+- [R32] ○ ASME V&V 40-2018. *Assessing Credibility of Computational Modeling through Verification and Validation: Application to Medical Devices*. ASME, 2018.（是否引用要看投稿方向；我们不做医疗器械，只借它"可信度要和用途相称"的思路）
+
+### 9.8 可复现性（第 4.6、5 节，C5）
+
+- [R33] ○ Peng R. D. Reproducible research in computational science. *Science* 334(6060), 2011, 1226–1227.
+
+### 9.9 软件（按各自要求的方式引用）
+
+- [R34] FEBio 4 和 FEBio Studio：按官网要求引用 R12、R13，并写明版本（本项目用 4.13）。
+- [R35] Blender：按官方建议的软件引用方式，写明版本（本项目用 5.2）。
+- [R36] fTetWild 的 Python 包 `pytetwild`：引用 R20，并写明包的版本（本项目用 0.2.x，ADR-20）。
+
+### 9.10 还要找的
+
+- 图形学或仿真里"替换求解器后怎么证明结果对"的先例：比如游戏、影视流程里换物理引擎的报告，或者"差分测试"一类方法。现在手上没有，C1 的相关工作要靠它撑；
+- 嘴唇或口周区域的生物力学模型（比如 ArtiSynth 的面部和口腔模型）；
+- Ziva 的技术说明：没有公开论文，只能引用厂商文档；要先确认能不能引、怎么引（第 6 节第 3 条）。
