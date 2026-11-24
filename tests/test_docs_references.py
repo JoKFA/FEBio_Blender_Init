@@ -2,7 +2,8 @@
 
 Three documents define ids that the others cite: task cards (`### T-xx` in docs/09), decisions (`### ADR-xx` in
 docs/10) and explanations (`## E-xx` in docs/13). A citation of an id nobody defines, or a relative link to a
-file that does not exist, is how the documents drift apart without anyone noticing; both fail here.
+file that does not exist, is how the documents drift apart without anyone noticing; both fail here. A task card or
+explanation may live in the live document or in its `docs/archive/` file, but never in both.
 
 Two more ways a page breaks for the next reader and not for its author:
 - a link or picture whose file is on this disk but ignored by git, or spelled in another case (Windows opens it,
@@ -23,11 +24,14 @@ DOCS = REPO / "docs"
 FILES = sorted(DOCS.rglob("*.md")) + [REPO / "README.md"]
 INLINE_LINK = re.compile(r"\]\(([^)]*)\)")  # everything between the parentheses; taken apart in `link_targets`
 REFERENCE_LINK = re.compile(r"^\[[^\]]+\]:\s*(\S+)", re.M)
-# kind -> (how it is cited anywhere, the document that defines it, how a definition's heading starts)
+# kind -> (how it is cited anywhere, the documents that may define it (the first is the live one), how a
+# definition's heading starts)
 IDS = {
-    "task card": (r"\bT-\d+[A-Za-z]?\b", "09-roadmap-and-tasks.md", r"^### (T-\d+[A-Za-z]?)\b"),
-    "decision": (r"\bADR-\d+[A-Za-z]?\b", "10-decisions.md", r"^### (ADR-\d+[A-Za-z]?)\b"),
-    "explanation": (r"\bE-\d+[A-Za-z]?\b", "13-explanations.md", r"^## (E-\d+[A-Za-z]?)\b"),
+    "task card": (r"\bT-\d+[A-Za-z]?\b", ("09-roadmap-and-tasks.md", "archive/09-completed-tasks.md"),
+                  r"^### (T-\d+[A-Za-z]?)\b"),
+    "decision": (r"\bADR-\d+[A-Za-z]?\b", ("10-decisions.md",), r"^### (ADR-\d+[A-Za-z]?)\b"),
+    "explanation": (r"\bE-\d+[A-Za-z]?\b", ("13-explanations.md", "archive/13-audit-history.md"),
+                    r"^## (E-\d+[A-Za-z]?)\b"),
 }
 
 
@@ -106,9 +110,24 @@ def translation_drift(translation: str, source: str, source_name: str, translati
     return out
 
 
+def definitions(kind: str, docs: Path) -> list[str]:
+    """Every id of a kind defined in its homes, once per definition. The live document must exist; an archive
+    that is not there defines nothing."""
+    _, homes, heading = IDS[kind]
+    out = []
+    for i, home in enumerate(homes):
+        if i == 0 or (docs / home).is_file():
+            out += re.findall(heading, (docs / home).read_text(encoding="utf-8"), re.M)
+    return out
+
+
+def defined_twice(kind: str, docs: Path) -> list[str]:
+    return sorted(i for i, n in Counter(definitions(kind, docs)).items() if n > 1)
+
+
 def undefined(kind: str, files, docs: Path) -> list[str]:
-    cited, home, heading = IDS[kind]
-    defined = set(re.findall(heading, (docs / home).read_text(encoding="utf-8"), re.M))
+    cited = IDS[kind][0]
+    defined = set(definitions(kind, docs))
     used = set()
     for f in files:
         used |= set(re.findall(cited, f.read_text(encoding="utf-8")))
@@ -138,9 +157,17 @@ def test_a_translation_carries_the_numbers_and_links_of_its_source(name):
 
 @pytest.mark.parametrize("kind", sorted(IDS))
 def test_every_cited_id_is_defined(kind):
-    home = DOCS / IDS[kind][1]
+    homes = IDS[kind][1]
+    assert all((DOCS / h).is_file() for h in homes)
+    home = DOCS / homes[0]
     assert len(re.findall(IDS[kind][2], home.read_text(encoding="utf-8"), re.M)) > 5  # the definitions are found at all
     assert undefined(kind, FILES, DOCS) == []
+
+
+@pytest.mark.parametrize("kind", sorted(IDS))
+def test_no_id_is_defined_in_two_places(kind):
+    assert len(definitions(kind, DOCS)) > 5  # the definitions are found at all
+    assert defined_twice(kind, DOCS) == []
 
 
 def test_the_check_can_fail(tmp_path):
@@ -156,6 +183,14 @@ def test_the_check_can_fail(tmp_path):
     assert broken_links(files) == [f"09-roadmap-and-tasks.md: {name}" for name in
                                    ("missing.md", "gone too.md", "lost.md", "nowhere.md")]
     assert undefined("task card", files, docs) == ["T-06c", "T-99"]
+    # the archive is a second home: an id defined only there is accepted, one defined in both homes is reported,
+    # one defined nowhere is still reported
+    (docs / "archive").mkdir()
+    (docs / "archive" / "09-completed-tasks.md").write_text("### T-06c finished\n### T-01 twice\n", encoding="utf-8")
+    assert undefined("task card", files, docs) == ["T-99"]
+    assert defined_twice("task card", docs) == ["T-01"]
+    (docs / "archive" / "09-completed-tasks.md").write_text("### T-06c finished\n", encoding="utf-8")
+    assert defined_twice("task card", docs) == []
 
 
 def test_the_git_check_can_fail(tmp_path):

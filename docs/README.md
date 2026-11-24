@@ -39,8 +39,8 @@
 | 16 | [从 Maya 到 Blender 的完整流程](16-pipeline.md)（[English](16-pipeline.en.md)） | 从 Maya 导出到 Blender 播放、和 Ziva 对比，一共哪几步、每一步用哪条命令和哪些 `.py` 文件 |
 | — | [术语表](glossary.md) | 文档里出现的专业词是什么意思 |
 | — | [templates/](templates/) | 任务卡和合并请求的模板 |
-
-旧文档 `spec-v0.1.md`、`lab-questions.md` 的内容已经并入上面这套文档，只保留跳转说明。
+| — | [archive/09-completed-tasks.md](archive/09-completed-tasks.md) | 已完成和取消的任务卡，整张原样保存；平时不用读 |
+| — | [archive/13-audit-history.md](archive/13-audit-history.md) | 历次审计记录和已过时的解释，整条原样保存；平时不用读 |
 
 ## 仓库目录
 
@@ -56,6 +56,9 @@ asrp/
 │
 ├─ docs/                      设计文档（本目录），唯一依据
 │  ├─ 01 … 16、glossary.md    见上面的"全部文档"
+│  ├─ archive/                归档，整张整条原样保存，平时不用读
+│  │  ├─ 09-completed-tasks.md   已完成和取消的任务卡
+│  │  └─ 13-audit-history.md     历次审计记录和已过时的解释
 │  └─ templates/              任务卡、合并请求模板
 │
 ├─ src/
