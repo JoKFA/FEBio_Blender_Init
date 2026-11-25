@@ -18,17 +18,17 @@
 | 项目 | 带皮肤演示场景（2026-08-26） | 不带皮肤训练场景（2025-06-14） |
 |---|---:|---:|
 | 软组织 `zTissue` / `zTet` | **41**（表面共 `117,302` 顶点，每块 `254–13,448`） | **26** |
-| 布料皮肤 `zCloth` | **2**（`47,142` 与 `15,905` 顶点，边长中位 `1.6 / 2.6 mm`） | **0** |
+| 布料皮肤 `zCloth` | **2**（`47,142` 与 `15,905` 顶点，边长中位 `1.6 / 2.6 mm`；Ziva 实际求解的规模估算见 [E-22](explanations/E-22.md)） | **0** |
 | 骨头 `zBone` | **10**（仅 `3` 块参与粘连；共 `193,257` 顶点） | **4** |
 | 粘连 `zAttachment` | **140** | **60** |
 | 纤维 `zFiber` / 材料 `zMaterial` | **18** / **43** | **18** / **26** |
 | Ziva 节点种类（手册共 23 种，由 `requires -nodeType` 读出） | **11 种**（含 `zSolverTransform`，无 `zLineOfAction` 等 12 种；测试 `test_the_lab_scenes_use_these_ziva_node_types`） | **10 种**（少 `zCloth`） |
 | 现有静态数据 | 属性、权重表、54 份 `zGeo` 网格（`zBuilder` 导出失败） | 仅 `.mb`（完整静态导出待 [D20](11-risks-and-questions.md)） |
 
-- **非中性起点场景（`*_as_rest_pose.mb`，读源码 `run_pipeline_update.py` 与 `d2-adhoc-for-b99-part2-generate-mb-use-V3.py`）**：不是另一套静止几何。脚本打开中性场景，仅在第 0 与第 14 帧给下颌和 landmark 关节打关键帧摆到目标姿态即存盘，无烘焙几何或 Ziva 修改；训练打开后仍走第 0–14 帧。
+- **非中性起点场景（`*_as_rest_pose.mb`，读源码 `run_pipeline_update.py` 第 633 到 676 行与 `d2-adhoc-for-b99-part2-generate-mb-use-V3.py`）**：不是另一套静止几何。脚本打开中性场景，仅在第 0 与第 14 帧给下颌和 landmark 关节打关键帧摆到目标姿态即存盘，无烘焙几何或 Ziva 修改；训练打开后仍走第 0–14 帧。
 - **脚本与读回规律（读源码）**：
-  - 训练驱动（`example_train/j77_V3_estimate_r_limit_newest.py`）与自动化流水线（`automation/run_pipeline_update.py`）写死不带皮肤族；甩头/按压脚本（`automation/passive_dynamics_*.py`）读布料皮肤顶点（🔍 推断跑在带皮肤族）。
-  - 钢琴界面（`h99-UI-mayascipt-V1.py`）作用在当前已开场景，按键期间不读仿真网格决定后续帧，不修改 Ziva 节点与属性；非中性时从上段末帧续算，中性时清关键帧重走第 0–14 帧（旧变体 `…_comsciV1.py` 才在沉降时降子步）。
+  - 训练驱动（`example_train/j77_V3_estimate_r_limit_newest.py` 第 44 行）与自动化流水线（`automation/run_pipeline_update.py` 第 520 行）写死不带皮肤族；甩头/按压脚本（`automation/passive_dynamics_*.py`）读布料皮肤顶点（🔍 推断跑在带皮肤族）。
+  - 钢琴界面（`h99-UI-mayascipt-V1.py` 第 1433 到 1665 行）作用在当前已开场景，按键期间不读仿真网格决定后续帧，不修改 Ziva 节点与属性；非中性时从上段末帧续算，中性时清关键帧重走第 0–14 帧（旧变体 `…_comsciV1.py` 才在沉降时降子步）。
   - 训练每步读 5 网格（嘴唇、下颌、左右眼、额肌）且不推进时间；分析脚本只读世界顶点坐标，不向 Ziva 查力/能量/速度。
 
 ### 1.2 140 条粘连边的真实结构（带皮肤场景，测试 `test_ziva_rig_structure` + 实测）
@@ -98,8 +98,8 @@
 
 - **实测验证**：蒙皮前 + `权重 × landmark 平移` 还原蒙皮后，47 帧 10,240 顶点最大误差 **`0.000016 mm`**（[E-11](explanations/E-11.md)）。
 - **`.mb` 动画曲线**：12,134 条曲线均不随时间变化（12,120 条仅第 0/14 帧关键帧），故 `.mb` 不含运动。
-- **运动文件 `combined_checkpoints.pkl`**（在仓库外，由训练日志 `final_epoch_action_list*.pkl` 累加并均匀取检查点，另伴 `overlap_metadata.pkl`；过渡表 167 条 → 161 目录 → 97 有文件 → **84 个文件 / 82 份不同**，全可读通）：
-  - 每步 1 个 **`3,603`** 维向量：嘴唇 300 landmark 平移（900）+ `jaw01` 欧拉角（3，度；钢琴只用俯仰）+ 左眼 900 + 右眼 900 + 额肌 900。
+- **运动文件 `combined_checkpoints.pkl`**（在仓库外，由训练日志 `final_epoch_action_list*.pkl` 累加并均匀取检查点（`UI:3023-3134`），另伴 `overlap_metadata.pkl`；过渡表 167 条 → 161 目录 → 97 有文件 → **84 个文件 / 82 份不同**，全可读通）：
+  - 每步 1 个 **`3,603`** 维向量：嘴唇 300 landmark 平移（900）+ `jaw01` 欧拉角（3，度；钢琴只用俯仰）+ 左眼 900 + 右眼 900 + 额肌 900（格式由源码确定：`UI:1453-1459`、`UI:1404-1426`、`UI:1522`，缩写见 [03 实验室源码](03-lab-source.md) 第 13.1 节）。
   - 值为相对**本段参考**的累计偏移（不含起点姿态；仅从中性出发时参考 = 静止）；第 `i` 项对应 `start_frame_offset + 1 + i` 帧（首段从第 15 帧起）。
   - 步长有 3/10/22/25/36/43/46 步；中性到 AA 为 22 步、下颌 `−5.16°`、landmark 最大移 `12.1 mm`（已转存 `data/lab_export/trajectories/neutral_to_AA.json`）；46 份动下颌（最大 `0.37°–6.65°`），12 份只动眼或额头。
 

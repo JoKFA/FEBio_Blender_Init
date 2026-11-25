@@ -75,7 +75,7 @@
 | 物理与数值阻尼 | `solver.damping = 0`（质量阻尼）· `numerical_damping_rhoi = 0`（最强数值阻尼） | 质量阻尼同为 0；**FEBio 无刚度阻尼，不建 Ziva 的 `0.001`** |
 | 材料与粘连 | `neo-Hookean` `12 kPa / 0.4 / 1060`；原型默认上唇 `hard` | Ziva 为 `StVK`（抗压 `20000`）与全软粘连 |
 
-- **物理阻尼写法（FEBio `doc/` 手册 `type="mass damping"` 体载荷，非 `dyn_damping`）**：`<body_load name="damping" type="mass damping"><C>45.0</C></body_load>`（`f = −Cρv`，单位 `s⁻¹`，与 `k` 无关）；`solver.damping` 为 0 时不写，`.feb` 逐字节相同。
+- **物理阻尼写法（FEBio 4.13 手册 3.13.3.7，`type="mass damping"` 体载荷，非 `dyn_damping`）**：`<body_load name="damping" type="mass damping"><C>45.0</C></body_load>`（`f = −Cρv`，单位 `s⁻¹`，与 `k` 无关）；`solver.damping` 为 0 时不写，`.feb` 逐字节相同。
   - 硬方块 4 弹簧对理论验证（`spikes/t28_damped_cube.py`，周期 `0.1 s`、阻尼比 `0.05` 即 `C = 6.283/s`、步长 `1/600 s`，用无数值阻尼 `Newmark`：`rhoi = −2`、`β 1/4`、`γ 1/2`）：无阻尼周期差 `+0.091%`（≤2% ✅），阻尼衰减率差 `−0.27%`（≤10% ✅），无阻尼与 `C/10` 对照均判败；另测底面固定的软方块衰减率差 `−9.6%`（每周期约 10 采样点，🔍 推断源于采样粗）。
 - **甩头时间步收敛现状（[T-33](tasks/T-33.md)）**：每帧 1–16 步相邻档最大差 `37%–194%`（未达 `5%` 门限）；`rhoi = −2`、C = 45 时每帧 1/2 步头不动对照也不衰减（`0.36 / 0.17 mm`），甩头幅度与衰减暂只作并排参考。
 - **全部 27 条实测踩坑**：统一维护在 **[05-febio-pits.md](05-febio-pits.md)**，改生成器前必查。

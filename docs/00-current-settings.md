@@ -46,14 +46,14 @@
 
 ## 3. 材料与本构（我们 vs Ziva）
 
-| 参数 | 我们当前默认（`--tissue-settings lab`） | 实验室 Ziva 实测（2026-11-12，43 个 zMaterial 全部相同） | 早先占位（`--tissue-settings ours`） | 出处与限定语 |
-|---|---|---|---|---|
-| 本构模型 | **`neo-Hookean`** | **`StVK`**，抗压参数 `compressionResistance = 20000` | `neo-Hookean` | 已知差异，受压反应不同（[03](03-asset.md) §5 · [05](05-ziva-to-febio.md) §4） |
-| 杨氏模量 `E` | **`12 kPa`**（`0.012 MPa`） | **`12 kPa`**（`youngsModulus = 12`，`Exp = 3`） | `15 kPa`（`0.015 MPa`） | 来源标 `lab_setting`（[05](05-ziva-to-febio.md) §1） |
-| 泊松比 `ν` | **`0.4`** | **`0.4`** | `0.45` | 来源标 `lab_setting` |
-| 密度 `ρ` | **`1060 kg/m³`**（`1.06×10⁻⁹ t/mm³`） | **`1060`**（体积保持项 `0`） | `1060 kg/m³` | 来源标 `lab_setting` |
-| 皮肤布料属性 `[地基]` | 随 [T-51](tasks/T-51.md) 接入 ANS 壳验证 | `BaraffWitkinZiva`；拉伸刚度 `5.0`、弯曲刚度 `1.0`、面密度 `0.1` | — | 仅演示场景带 2 层皮肤（[03](03-asset.md) §1） |
-| 肌肉纤维 `zFiber` | 当前不建（应变能延至地基之后） | 18 个纤维（嘴唇上无）；静态激活全 `0`，2 个接非 Ziva 上游，方向未取到 | — | 实测静态值，全程激活与被动作用待 [D21](11-risks-and-questions.md)（[ADR-33](decisions/ADR-33.md)） |
+| 参数 | 我们当前默认（`--tissue-settings lab`） | 实验室 Ziva 实测（2026-11-12，43 个 zMaterial 全部相同） | 出处与限定语  |
+|---|---|---|---|
+| 本构模型 | **`neo-Hookean`** | **`StVK`**，抗压参数 `compressionResistance = 20000` | 已知差异，受压反应不同（[03](03-asset.md) §5 · [05](05-ziva-to-febio.md) §4）  |
+| 杨氏模量 `E` | **`12 kPa`**（`0.012 MPa`） | **`12 kPa`**（`youngsModulus = 12`，`Exp = 3`） | 来源标 `lab_setting`（[05](05-ziva-to-febio.md) §1）  |
+| 泊松比 `ν` | **`0.4`** | **`0.4`** | 来源标 `lab_setting`  |
+| 密度 `ρ` | **`1060 kg/m³`**（`1.06×10⁻⁹ t/mm³`） | **`1060`**（体积保持项 `0`） | 来源标 `lab_setting`  |
+| 皮肤布料属性 `[地基]` | 随 [T-51](tasks/T-51.md) 接入 ANS 壳验证 | `BaraffWitkinZiva`；拉伸刚度 `5.0`、弯曲刚度 `1.0`、面密度 `0.1` | 仅演示场景带 2 层皮肤（[03](03-asset.md) §1）  |
+| 肌肉纤维 `zFiber` | 当前不建（应变能延至地基之后） | 18 个纤维（嘴唇上无）；静态激活全 `0`，2 个接非 Ziva 上游，方向未取到 | 实测静态值，全程激活与被动作用待 [D21](11-risks-and-questions.md)（[ADR-33](decisions/ADR-33.md)）  |
 
 ---
 
@@ -91,7 +91,7 @@
 | 组别 | 顶点数 | `--attachments ours`（CLI 默认） | `--attachments ziva-soft`（面板粗格子默认，`k=0.67`） |
 |---|---:|---|---|
 | 上唇 → 颅骨 `zAttachment1` | 74（按稀疏默认 `1.0`） | `hard`（并入颅骨刚体） | `spring`：`0.105 N/mm`（均面积 `2.339 mm²`） |
-| 下唇 → 下颌 `zAttachment2` | 76（显式 `1.0`） | `spring`：基础刚度 `100 × E × h`（`E=12 kPa` 时 `1.94 N/mm`，`15 kPa` 时 `2.43 N/mm`） | `spring`：`0.113 N/mm`（均面积 `2.526 mm²`） |
+| 下唇 → 下颌 `zAttachment2` | 76（显式 `1.0`） | `spring`：基础刚度 `100 × E × h`（`E=12 kPa` 时 `1.94 N/mm`） | `spring`：`0.113 N/mm`（均面积 `2.526 mm²`） |
 | 左嘴角 `zAttachment9` | 348 | `spring`，连嘴角锚（`α = 0.5`，同上基础刚度） | `spring`：`0.0407 N/mm`（均面积 `0.907 mm²`） |
 | 右嘴角 `zAttachment10` | 309 | `spring`，连嘴角锚（`α = 0.5`，同上基础刚度） | `spring`：`0.0431 N/mm`（均面积 `0.960 mm²`） |
 
@@ -145,6 +145,7 @@
 |---|---|---|---|
 | Ziva 求解设置（实测） | 每帧 `1` 子步、牛顿最多 `5` 次、30 fps、`BackwardEuler`、`Direct`、刚度阻尼 `0.001`、质量阻尼 `0`、碰撞关 | 源码注释写“全质量子步 2”，以场景实测为准；整张脸 AA 子步 2 对 1 差 `0.165 mm`（沉降）/ `0.075 mm`（运动） | [03](03-asset.md) §5 · [E-11](explanations/E-11.md) |
 | Ziva 求解速度（实验室 16 核机） | 整张脸平均每步 **`1.47–1.60 s`**（单步有 `>3 s`）；只留嘴唇每步 **`0.0095 s`** | 纯求解日志；含写文件导出为整张脸 `2.55 s/帧`、只留嘴唇 `1.03 s/帧`（不混用）；Ziva 实际线程数未量 | [02](02-requirements.md) N-07 · [E-15](archive/explanations/E-15.md) |
+| Ziva 实际求解的规模（估算） | 41 块组织按各自 `tetSize` 估约 **`2,143` 点 / `4,452` 四面体**；两层皮肤 **`63,047`** 个顶点 | 按我们的实测规律：软组织约 `0.2–0.3 s/步`；皮肤照 Ziva 分辨率约 `7–8 s/步`（外推）；用粗的计算网格则合计 `1 s` 以内（推算，没有实测） | [E-22](explanations/E-22.md) |
 | AA 第 36 帧对 Ziva 整张脸（物理层） | **粗格子：平均 `1.88` / 最大 `5.12 mm`**；**细网格：平均 `2.21` / 最大 `7.64 mm`** | 全部 `10,240` 嘴唇顶点；物理尺度未对齐前只报差别不解释原因（[15](15-prototype.md) 为绑定源） | [15](15-prototype.md) · [E-19](13-explanations.md) · [E-20](explanations/E-20.md) |
 | Ziva 整张脸 vs Ziva 只留嘴唇 | 第 36 帧平均 `1.98` / 最大 `7.98 mm`（第 14 帧平均 `1.51` / 最大 `5.09 mm`） | 关掉其余 42 个物体的整体影响（边界条件不同，不代表求解器差异） | [07](07-validation.md) §4 · [E-15](archive/explanations/E-15.md) |
 | 前 14 帧重力下垂（全部顶点平均 / 最大） | Ziva 整张脸 `0.29 / 1.2 mm`；Ziva 只留嘴唇 `1.78 / 5.39 mm`（未停稳）；我方原型细网格 `0.093 / 0.387 mm` | Ziva 只留嘴唇第 14 帧仍在下落（相邻帧差 `0.365 mm`），停稳值待 [D17](11-risks-and-questions.md) | [07](07-validation.md) §4 · [11](11-risks-and-questions.md) §4 |

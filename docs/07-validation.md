@@ -104,7 +104,7 @@
 - **两项不依赖 Ziva 的参考指标（[ADR-25](decisions/ADR-25.md)）**：
   1. **到美术目标姿态距离**（`--target` 读 `dataV22_*` 的 `x_middleres_OrbicularisOris1` 与起始组 `...0`；缺输入写 `available: false`）：报训练态（`final_shape.rest_model` 残差）、我方最终形状、Ziva 最终形状及 `最终 ÷ 初始`（论文 11% 只作参考非合格线；回放含下颌带唇，Ziva 自身离目标平均 `11.64 mm`）。
   2. **下唇跟随比例（纯物理段）**：`Σ(u·r) ÷ Σ(r·r)`（下唇 76 顶点 `lower_lip_on_jaw`，按第 0 与第 14 帧各报；Ziva AA 下唇平均动 `11.80 mm`）。
-- **`asrp compare` 输出**：`compare_report.json`（格式 `asrp-compare/1`，无本机路径）、热力图 `heatmap.json`（`asrp-heatmap/1`：含 `units`/`frames`/`vertex_count`/`fps`/`dtype`/`layout`/`reference` 与每层最大/平均/P99）+ 裸 float32 `.f32`（插件用 `array.array` 直读免 numpy）、Ziva 回放包 `ziva_playback/`（用第 0 帧 `lips_physics.obj` 拓扑并写明，回读差 `≤ 1e-4 mm`）；拒绝写进未 git 忽略路径。
+- **`asrp compare` 输出**：`compare_report.json`（格式 `asrp-compare/1`，无本机路径）、热力图 `heatmap.json`（`asrp-heatmap/1`：含 `units`/`frames`/`vertex_count`/`fps`/`dtype`/`layout`/`reference` 与每层最大/平均/P99）+ 裸 float32 `.f32`（小端，帧在前、顶点在后，下标 `f × vertex_count + v`，单位毫米；插件用 `array.array` 直读免 numpy）、Ziva 回放包 `ziva_playback/`（用第 0 帧 `lips_physics.obj` 拓扑并写明，回读差 `≤ 1e-4 mm`）；拒绝写进未 git 忽略路径。
 
 ### 4.3 廉价对照：下颌直线预测（硬性对比规矩，2026-11-21 定）
 

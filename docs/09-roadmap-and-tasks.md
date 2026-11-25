@@ -33,7 +33,7 @@
 |---|---|---|---|
 | **模型来源** | 整张脸 41 组织可执行；不带皮肤的第二族训练场景；**在 Blender 里从零搭建新模型** | 整脸清单位于 [T-32](tasks/T-32.md)；新模型在 [T-39](tasks/T-39.md) | `T-39` 仅需 `T-44`+`T-46`（不用等整脸）；第二族等 [D20](11-risks-and-questions.md) |
 | **物理与后端** | 19 条皮肤→骨偏心渐变边；物理尺度/本构/阻尼校准；主动纤维与应变能诊断；第二个求解器（如 ArtiSynth） | 尺度校准 [T-41](tasks/T-41.md)；网格/调参 [T-06b](tasks/T-06b.md)/[T-12](tasks/T-12.md)/[T-20](tasks/T-20.md)；**19 条皮肤→骨边尚无卡承接** | 皮肤→骨需专项偏心刚体试验；纤维与应变能延至地基后（[ADR-33](decisions/ADR-33.md)） |
-| **会话与速度** | 全脸带皮肤端到端速度与内存实测；全量非中性运动转换与整句音素连读 | 运动转换 [T-10](tasks/T-10.md)；landmark 进物理试探 [T-24](tasks/T-24.md) | 依赖 `T-50`/`T-51`；速度预算见 [02](02-requirements.md) N-07 |
+| **会话与速度** | 全脸带皮肤端到端速度与内存实测；全量非中性运动转换与整句音素连读 | 运动转换 [T-10](tasks/T-10.md)；landmark 进物理试探 [T-24](tasks/T-24.md) | 依赖 `T-50`/`T-51`；速度预算见 [02](02-requirements.md) N-07；按 Ziva 的四面体尺寸估，软组织约 2,100 点，瓶颈在皮肤（[E-22](explanations/E-22.md)） |
 | **宿主与出口** | **地基新约定下的 Blender 面板设计**；新操作步骤流；皮肤 `final` 曲线层；Maya 可选适配；实验室安装包与正式验收 | **新面板与新流程文档待设计**（见 [06](06-ui.md)）；安装包 [T-40](tasks/T-40.md)；正式验收 [T-14](tasks/T-14.md) | 皮肤 `final` 等上机取曲线绑定（[12](12-lab-export-checklist.md)）；`T-14` 衔接 `T-52` 四项签收 |
 | **进阶扩展** | 肌电对照、渲染出片、开源或商用推广 | 暂不立卡（[ADR-45](decisions/ADR-45.md)） | 在实验室原有实验全部替代之后 |
 
@@ -66,19 +66,19 @@
 
 ### A. 当前主线：起步与地基阶段（11 张）
 
-| 编号 | 任务卡 | 状态 | 前置依赖 | 规模 |
-|---|---|---|---|---|
-| **T-42** | [可信度小修一批：“错的结果不能亮绿灯”](tasks/T-42.md) | 🟢 并行起步 | 无 | 小–中 |
-| **T-43** | [封存旧嘴唇基线（`ours`/`ziva-soft`/改材料）](tasks/T-43.md) | 🟢 并行起步 | 无 | 小 |
-| **T-44** | [安全打开、另存和回放（场景版本库 + 插件契约）](tasks/T-44.md) | 🔴 待启动 | T-43 | 中 |
-| **T-45** | [导入整份演示包（41 组织/2 皮肤/10 骨/140 边）](tasks/T-45.md) | 🔴 待启动 | T-44 | 中 |
-| **T-46** | [从建造冷启动旧嘴唇（切开 `generate.build()`）](tasks/T-46.md) | 🔴 待启动 | T-43、T-44、T-45 | 中 |
-| **T-47** | [同一块嘴唇接着算（多段续算与旧 `asrp run` 切换）](tasks/T-47.md) | 🔴 待启动 | T-46 | 中 |
-| **T-48** | [失败、分支、删档重放（冻结会话与三条承诺）](tasks/T-48.md) | 🔴 待启动 | T-47 | 中 |
-| **T-49** | [第一条长间距边（仿射外推纯罚约束 + QR 合并 + 动力学取证）](tasks/T-49.md) | 🔴 待启动 | T-46、T-48 | 中–大 |
-| **T-50** | [真实嘴周间接连骨（11 组织/2 骨/22 边切片与多物体读回）](tasks/T-50.md) | 🔴 待启动 | T-45、T-48、T-49 | 中 |
-| **T-51** | [真实皮肤小片（渐变权重、重叠力矩与两档 ANS 壳）](tasks/T-51.md) | 🔴 待启动 | T-49、T-50 | 中 |
-| **T-52** | [一次实验室原操作（Python 3.9 `asrp_query` + 眼额 + 非中性 + 连续按键）](tasks/T-52.md) | 🔴 待启动 | 三支路各有前提（见卡） | 中–大 |
+| 编号 | 任务卡 | 状态 | 前置依赖 |
+|---|---|---|---|
+| **T-42** | [可信度小修一批：“错的结果不能亮绿灯”](tasks/T-42.md) | 🟢 并行起步 | 无 |
+| **T-43** | [封存旧嘴唇基线（`ours`/`ziva-soft`/改材料）](tasks/T-43.md) | 🟢 并行起步 | 无 |
+| **T-44** | [安全打开、另存和回放（场景版本库 + 插件契约）](tasks/T-44.md) | 🔴 待启动 | T-43 |
+| **T-45** | [导入整份演示包（41 组织/2 皮肤/10 骨/140 边）](tasks/T-45.md) | 🔴 待启动 | T-44 |
+| **T-46** | [从建造冷启动旧嘴唇（切开 `generate.build()`）](tasks/T-46.md) | 🔴 待启动 | T-43、T-44、T-45 |
+| **T-47** | [同一块嘴唇接着算（多段续算与旧 `asrp run` 切换）](tasks/T-47.md) | 🔴 待启动 | T-46 |
+| **T-48** | [失败、分支、删档重放（冻结会话与三条承诺）](tasks/T-48.md) | 🔴 待启动 | T-47 |
+| **T-49** | [第一条长间距边（仿射外推纯罚约束 + QR 合并 + 动力学取证）](tasks/T-49.md) | 🔴 待启动 | T-46、T-48 |
+| **T-50** | [真实嘴周间接连骨（11 组织/2 骨/22 边切片与多物体读回）](tasks/T-50.md) | 🔴 待启动 | T-45、T-48、T-49 |
+| **T-51** | [真实皮肤小片（渐变权重、重叠力矩与两档 ANS 壳）](tasks/T-51.md) | 🔴 待启动 | T-49、T-50 |
+| **T-52** | [一次实验室原操作（Python 3.9 `asrp_query` + 眼额 + 非中性 + 连续按键）](tasks/T-52.md) | 🔴 待启动 | 三支路各有前提（见卡） |
 
 ### B. 穿插与地基之上待做卡（13 张）
 
@@ -104,11 +104,11 @@
 
 平时无需阅读；需要追溯早期验收证据或历史背景时按编号查阅。
 
-- **已完成 / 已闭环原型卡（25 张）**：
-  - 基础与导入：[T-00](archive/tasks/T-00.md) · [T-02](archive/tasks/T-02.md) · [T-03](archive/tasks/T-03.md) · [T-04](archive/tasks/T-04.md) · [T-05](archive/tasks/T-05.md) · [T-08](archive/tasks/T-08.md) · [T-15](archive/tasks/T-15.md) · [T-19](archive/tasks/T-19.md)
-  - 原型物理与对比：[T-06a](archive/tasks/T-06a.md) · [T-07](archive/tasks/T-07.md)（第 3 步并入 T-45/49/51） · [T-09](archive/tasks/T-09.md) · [T-11](archive/tasks/T-11.md) · [T-27](archive/tasks/T-27.md)（已退役） · [T-28](archive/tasks/T-28.md) · [T-29](archive/tasks/T-29.md) · [T-31](archive/tasks/T-31.md)（v1 已完成，五输出归 T-52） · [T-34](archive/tasks/T-34.md) · [T-37](archive/tasks/T-37.md)（剩余归 T-41/T-42）
+- **已完成 / 已闭环原型卡（29 张）**：
+  - 基础与导入：[T-00](archive/tasks/T-00.md) · [T-02](archive/tasks/T-02.md) · [T-03](archive/tasks/T-03.md) · [T-04](archive/tasks/T-04.md) · [T-05](archive/tasks/T-05.md) · [T-08](archive/tasks/T-08.md) · [T-15](archive/tasks/T-15.md) · [T-19](archive/tasks/T-19.md) · [T-22](archive/tasks/T-22.md) · [T-25](archive/tasks/T-25.md)
+  - 原型物理与对比：[T-06a](archive/tasks/T-06a.md) · [T-07](archive/tasks/T-07.md)（第 3 步并入 T-45/49/51） · [T-09](archive/tasks/T-09.md) · [T-11](archive/tasks/T-11.md) · [T-27](archive/tasks/T-27.md)（已退役） · [T-28](archive/tasks/T-28.md) · [T-29](archive/tasks/T-29.md) · [T-31](archive/tasks/T-31.md)（v1 已完成，五输出归 T-52） · [T-34](archive/tasks/T-34.md) · [T-37](archive/tasks/T-37.md)（剩下的第 10 项由 T-35 做完）
   - 原型界面与交付：[T-13](archive/tasks/T-13.md)（v0.1 已由 T-35 交付） · [T-35](archive/tasks/T-35.md) · [T-36](archive/tasks/T-36.md)（外部走查并入 T-14） · [T-38](archive/tasks/T-38.md)
   - 能力复核与设计收敛：[T-17](archive/tasks/T-17.md) · [T-18](archive/tasks/T-18.md) · [T-23](archive/tasks/T-23.md) · [T-30](archive/tasks/T-30.md) · [T-26](archive/tasks/T-26.md)（设计完成，实施拆为 T-43–T-52）
-- **已取消（3 张）**：[T-21](archive/tasks/T-21.md) · [T-22](archive/tasks/T-22.md) · [T-25](archive/tasks/T-25.md)
+- **已取消（1 张）**：[T-21](archive/tasks/T-21.md)
 
 > **归档记录说明**：2026-11-24 前最早归档的 20 张卡（T-00、T-02–05、T-06a、T-08–09、T-15、T-17–19、T-21–23、T-25、T-27–30）是当时的完成摘要版；`T-11`、`T-26`、`T-34`、`T-35`、`T-38` 与本次新归档的 5 张卡保留完整全文。
