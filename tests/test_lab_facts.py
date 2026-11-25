@@ -268,7 +268,7 @@ def test_ziva_rig_structure(trip):
         return [src.split(".", 1)[0] for src, dst in maps[node]["connections"]["in"] if dst.split(".", 1)[1] == plug]
 
     attachments = [name for name, kind in of.items() if kind == "zAttachment"]
-    pairs, fractional = {}, {}
+    pairs, fractional, tissue_weights, attribute_names = {}, {}, set(), set()
     for name in attachments:
         (source,), (target,) = upstream(name, "iGeo1"), upstream(name, "iGeo2")
         assert source != target, "an attachment joins a body to itself"
@@ -278,17 +278,24 @@ def test_ziva_rig_structure(trip):
         assert list(stored) == ["0"] and stored["0"]["default"] == 1.0, "one weight map, unlisted vertices weigh 1"
         if any(0.0 < w < 1.0 for w in stored["0"]["values"]):
             fractional[ends] = fractional.get(ends, 0) + 1
+        if mode[source] == "tissue":
+            tissue_weights.update(stored["0"]["values"])
+        attribute_names.update(nodes[name]["attributes"])
     assert pairs == {("tissue", "bone"): 42, ("tissue", "tissue"): 36, ("cloth", "bone"): 22, ("cloth", "tissue"): 40}
     assert sum(pairs.values()) == 140
     # weights between 0 and 1 are painted only where the skin is the first body; tissue maps hold 0 and 1 only
     assert fractional == {("cloth", "bone"): 19, ("cloth", "tissue"): 30}
+    assert tissue_weights and tissue_weights <= {0.0, 1.0}
 
     def values(kind, attribute):
         return [n["attributes"][attribute] for n in nodes.values() if n["type"] == kind]
 
     assert set(values("zAttachment", "correspondence__label")) == {"worldSpace"}
     assert set(values("zAttachment", "envelope")) == {1.0}
-    assert not [a for a in nodes[attachments[0]]["attributes"] if any(w in a.lower() for w in ("dist", "length", "gap"))]
+    # all 140 attachments, not a sample: 26 attribute names in all, none of them a distance or a rest length
+    assert len(attribute_names) == 26
+    assert all(set(nodes[name]["attributes"]) == attribute_names for name in attachments)
+    assert not [a for a in attribute_names if any(w in a.lower() for w in ("dist", "length", "gap"))]
 
     # one material on each soft body, the two skins included: 43 = 41 + 2, no body carries two layers
     bodies = [body for name, kind in of.items() if kind == "zMaterial" for body in upstream(name, "iGeo")]
