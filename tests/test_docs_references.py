@@ -27,11 +27,12 @@ REFERENCE_LINK = re.compile(r"^\[[^\]]+\]:\s*(\S+)", re.M)
 # kind -> (how it is cited anywhere, the documents that may define it (the first is the live one), how a
 # definition's heading starts)
 IDS = {
-    "task card": (r"\bT-\d+[A-Za-z]?\b", ("09-roadmap-and-tasks.md", "archive/09-completed-tasks.md"),
-                  r"^### (T-\d+[A-Za-z]?)\b"),
-    "decision": (r"\bADR-\d+[A-Za-z]?\b", ("10-decisions.md",), r"^### (ADR-\d+[A-Za-z]?)\b"),
-    "explanation": (r"\bE-\d+[A-Za-z]?\b", ("13-explanations.md", "archive/13-audit-history.md"),
-                    r"^## (E-\d+[A-Za-z]?)\b"),
+    "task card": (r"\bT-\d+[A-Za-z]?\b", ("tasks/T-*.md", "archive/tasks/T-*.md"),
+                  r"^# (T-\d+[A-Za-z]?)\b"),
+    "decision": (r"\bADR-\d+[A-Za-z]?\b", ("decisions/ADR-*.md", "archive/decisions/ADR-*.md"),
+                 r"^# (ADR-\d+[A-Za-z]?)\b"),
+    "explanation": (r"\bE-\d+[A-Za-z]?\b", ("13-explanations.md", "explanations/E-*.md", "archive/explanations/E-*.md"),
+                    r"^#{1,2} (E-\d+[A-Za-z]?)\b"),
 }
 
 
@@ -110,14 +111,25 @@ def translation_drift(translation: str, source: str, source_name: str, translati
     return out
 
 
+def _home_files(docs: Path, pattern: str) -> list[Path]:
+    """Resolve one IDS home entry: either a literal relative file or a glob pattern under docs/."""
+    if any(ch in pattern for ch in "*?["):
+        return sorted(p for p in docs.glob(pattern) if p.is_file())
+    p = docs / pattern
+    return [p] if p.is_file() else []
+
+
 def definitions(kind: str, docs: Path) -> list[str]:
-    """Every id of a kind defined in its homes, once per definition. The live document must exist; an archive
-    that is not there defines nothing."""
+    """Every id of a kind defined in its homes, once per definition. The first home must yield at least one file;
+    archive homes that are not there define nothing."""
     _, homes, heading = IDS[kind]
     out = []
     for i, home in enumerate(homes):
-        if i == 0 or (docs / home).is_file():
-            out += re.findall(heading, (docs / home).read_text(encoding="utf-8"), re.M)
+        matched = _home_files(docs, home)
+        if i == 0 and not matched:
+            raise FileNotFoundError(docs / home)
+        for path in matched:
+            out += re.findall(heading, path.read_text(encoding="utf-8"), re.M)
     return out
 
 
@@ -158,9 +170,8 @@ def test_a_translation_carries_the_numbers_and_links_of_its_source(name):
 @pytest.mark.parametrize("kind", sorted(IDS))
 def test_every_cited_id_is_defined(kind):
     homes = IDS[kind][1]
-    assert all((DOCS / h).is_file() for h in homes)
-    home = DOCS / homes[0]
-    assert len(re.findall(IDS[kind][2], home.read_text(encoding="utf-8"), re.M)) > 5  # the definitions are found at all
+    assert all(_home_files(DOCS, h) for h in homes)
+    assert len(definitions(kind, DOCS)) > 5  # the definitions are found at all
     assert undefined(kind, FILES, DOCS) == []
 
 
@@ -172,24 +183,26 @@ def test_no_id_is_defined_in_two_places(kind):
 
 def test_the_check_can_fail(tmp_path):
     docs = tmp_path / "docs"
-    docs.mkdir()
+    (docs / "tasks").mkdir(parents=True)
     (docs / "there.md").write_text("x", encoding="utf-8")
-    (docs / "09-roadmap-and-tasks.md").write_text(
-        "### T-01 a card\n### T-06b another\n"
-        "fine: [a](there.md#part) [b](<there.md>) [c](there.md \"title\") [d](#here) [e](https://example.org/x.md) T-06b\n"
-        "broken: [f](missing.md) [g](<gone too.md>) [h](lost.md \"title\") and T-99 and T-06c\n"
-        "[ref]: nowhere.md\n", encoding="utf-8")
-    files = [docs / "09-roadmap-and-tasks.md"]
-    assert broken_links(files) == [f"09-roadmap-and-tasks.md: {name}" for name in
+    (docs / "tasks" / "T-01.md").write_text(
+        "# T-01 a card\n"
+        "fine: [a](../there.md#part) [b](<../there.md>) [c](../there.md \"title\") [d](#here) [e](https://example.org/x.md) T-06b\n"
+        "broken: [f](../missing.md) [g](<../gone too.md>) [h](../lost.md \"title\") and T-99 and T-06c\n"
+        "[ref]: ../nowhere.md\n", encoding="utf-8")
+    (docs / "tasks" / "T-06b.md").write_text("# T-06b another\n", encoding="utf-8")
+    files = [docs / "tasks" / "T-01.md", docs / "tasks" / "T-06b.md"]
+    assert broken_links(files) == [f"T-01.md: ../{name}" for name in
                                    ("missing.md", "gone too.md", "lost.md", "nowhere.md")]
     assert undefined("task card", files, docs) == ["T-06c", "T-99"]
     # the archive is a second home: an id defined only there is accepted, one defined in both homes is reported,
     # one defined nowhere is still reported
-    (docs / "archive").mkdir()
-    (docs / "archive" / "09-completed-tasks.md").write_text("### T-06c finished\n### T-01 twice\n", encoding="utf-8")
+    (docs / "archive" / "tasks").mkdir(parents=True)
+    (docs / "archive" / "tasks" / "T-06c.md").write_text("# T-06c finished\n", encoding="utf-8")
+    (docs / "archive" / "tasks" / "T-01.md").write_text("# T-01 twice\n", encoding="utf-8")
     assert undefined("task card", files, docs) == ["T-99"]
     assert defined_twice("task card", docs) == ["T-01"]
-    (docs / "archive" / "09-completed-tasks.md").write_text("### T-06c finished\n", encoding="utf-8")
+    (docs / "archive" / "tasks" / "T-01.md").unlink()
     assert defined_twice("task card", docs) == []
 
 
