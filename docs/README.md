@@ -22,7 +22,7 @@
 | **做物理建模或查 FEBio 坑** | [05 Ziva 到 FEBio 对应](05-ziva-to-febio.md) + [05 FEBio 踩坑清单](05-febio-pits.md) + [03 资产说明](03-asset.md) |
 | **做验证、写检查或代码审查** | [08 开发规范](08-engineering-standards.md) + [07 验证与验收](07-validation.md) + 对应单张任务卡 |
 | **看风险、拍板项、下次上机要取什么** | [11 风险与待决问题](11-risks-and-questions.md) + [12 导出清单](12-lab-export-checklist.md) |
-| **实验室成员** | [01](01-overview.md) → [15 原型机](15-prototype.md)（[English](15-prototype.en.md)） → [12 导出清单](12-lab-export-checklist.md)（第三部分是可直接回复的 3 个问题） |
+| **实验室成员** | [01](01-overview.md) → [15 原型机](15-prototype.md)（[English](15-prototype.en.md)） → [12 导出清单](12-lab-export-checklist.md)（“给实验室的一页”是可直接回复的 3 个问题） |
 | **读文档时遇到“为什么这样定”** | 查 [13 设计解释](13-explanations.md) 目录，只点开对应的 `explanations/E-xx.md` |
 
 ---
@@ -57,6 +57,7 @@
 | [15-prototype.md](15-prototype.md)（[English](15-prototype.en.md)） | 已交付原型机一、二的实测结果页（数字自动绑定 `data/preview/` 存档） |
 | [16-pipeline.md](16-pipeline.md)（[English](16-pipeline.en.md)） | 当前原型已跑通的 12 步实操命令流（地基新命令见 `architecture/README.md`，待 `T-47` 切换后更新） |
 | [14-ziva-demo-walkthrough.md](14-ziva-demo-walkthrough.md) | 2026-11-10 实验室 Maya + Ziva 与钢琴界面操作录像记录 |
+| [17-paper-outline.md](17-paper-outline.md) | 系统论文大纲（草稿）：把原型机写成系统论文的贡献点、形式化、结构、投稿前要先解决的问题（待和项目负责人讨论） |
 
 ### 第三层：归档（`archive/` — 原样保存历史事实，平时不用读）
 
@@ -104,7 +105,7 @@ asrp/
 
 ---
 
-## 文档怎么维护（精要，细则见 [08 第 9 节](08-engineering-standards.md)）
+## 文档怎么维护（精要，细则见 [08 第 7 节](08-engineering-standards.md)）
 
 1. **主线永远写“现在什么是真的”**：原型或历史过程不再占主文档篇幅，原样移进 `docs/archive/`，不删除数字和证据。
 2. **一处权威、别处链接**：生效参数只改 [00](00-current-settings.md) 与原设计页；任务状态只改 [09](09-roadmap-and-tasks.md) 与 `tasks/T-xx.md`；未决项只改 [11](11-risks-and-questions.md)。
