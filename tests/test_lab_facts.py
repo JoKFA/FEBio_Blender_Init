@@ -13,6 +13,7 @@ coming back unnoticed.
 import ast
 import hashlib
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -227,6 +228,88 @@ def test_ziva_settings(trip):
     assert len(values("zFiber", "excitation")) == 18 and set(values("zFiber", "excitation")) == {0.0}
     assert values("zCloth", "enable") == [True, True] and set(values("zTissue", "enable")) == {True}
     assert sorted(values("zCloth", "collisions")) == [False, True]  # set on one cloth; the solver's detection is off
+
+
+ZIVA_TYPES_WITH_SKIN = {"zAttachment", "zBone", "zCloth", "zEmbedder", "zFiber", "zGeo", "zMaterial", "zSolver",
+                        "zSolverTransform", "zTet", "zTissue"}
+
+
+def test_the_lab_scenes_use_these_ziva_node_types(trip):
+    """What a scene format has to cover comes from the node types the lab's scenes use, not from our own list.
+
+    Read from each .mb file's own header (`requires -nodeType`, written by Maya), so no list of ours filters it.
+    The two scenes differ by one type, the cloth skin, which is what shows the check can tell scenes apart."""
+    manual = {p.stem for p in (trip / "ziva_install_docs" / "VFX" / "Documentation" / "VFX" / "nodes").glob("*.html")}
+    assert len(manual) == 23, "the vendor manual's node pages changed"
+    used = []
+    for mb in sorted((trip / "scenes").glob("*.mb")):
+        with mb.open("rb") as f:
+            head = f.read(20000).decode("latin-1")
+        used.append(set(re.findall(r'-nodeType "(z\w+)"', head)))
+    assert len(used) == 2, "expected the two lab scenes"
+    with_skin = [u for u in used if "zCloth" in u]
+    without = [u for u in used if "zCloth" not in u]
+    assert len(with_skin) == 1 and len(without) == 1
+    assert with_skin[0] == ZIVA_TYPES_WITH_SKIN and without[0] == ZIVA_TYPES_WITH_SKIN - {"zCloth"}
+    assert with_skin[0] <= manual
+    assert not {"zLineOfAction", "zRestShape", "zRivetToBone"} & (with_skin[0] | without[0])
+
+
+def test_ziva_rig_structure(trip):
+    """How the bodies of the scene with skin are joined, and what each attachment and material carries.
+
+    These decide what an attachment and a body are in our scene format (docs/05 section 3.1)."""
+    nodes = json.loads((trip / "ziva_static" / "ziva_attributes.json").read_text(encoding="utf-8"))
+    maps = json.loads((trip / "ziva_static" / "ziva_maps.json").read_text(encoding="utf-8"))
+    of = {name: n["type"] for name, n in nodes.items()}
+    mode = {name: n["attributes"]["mode__label"] for name, n in nodes.items() if n["type"] == "zGeo"}
+
+    def upstream(node, plug):
+        return [src.split(".", 1)[0] for src, dst in maps[node]["connections"]["in"] if dst.split(".", 1)[1] == plug]
+
+    attachments = [name for name, kind in of.items() if kind == "zAttachment"]
+    pairs, fractional, tissue_weights, attribute_names = {}, {}, set(), set()
+    for name in attachments:
+        (source,), (target,) = upstream(name, "iGeo1"), upstream(name, "iGeo2")
+        assert source != target, "an attachment joins a body to itself"
+        ends = (mode[source], mode[target])
+        pairs[ends] = pairs.get(ends, 0) + 1
+        stored = maps[name]["weight_maps"]
+        assert list(stored) == ["0"] and stored["0"]["default"] == 1.0, "one weight map, unlisted vertices weigh 1"
+        if any(0.0 < w < 1.0 for w in stored["0"]["values"]):
+            fractional[ends] = fractional.get(ends, 0) + 1
+        if mode[source] == "tissue":
+            tissue_weights.update(stored["0"]["values"])
+        attribute_names.update(nodes[name]["attributes"])
+    assert pairs == {("tissue", "bone"): 42, ("tissue", "tissue"): 36, ("cloth", "bone"): 22, ("cloth", "tissue"): 40}
+    assert sum(pairs.values()) == 140
+    # weights between 0 and 1 are painted only where the skin is the first body; tissue maps hold 0 and 1 only
+    assert fractional == {("cloth", "bone"): 19, ("cloth", "tissue"): 30}
+    assert tissue_weights and tissue_weights <= {0.0, 1.0}
+
+    def values(kind, attribute):
+        return [n["attributes"][attribute] for n in nodes.values() if n["type"] == kind]
+
+    assert set(values("zAttachment", "correspondence__label")) == {"worldSpace"}
+    assert set(values("zAttachment", "envelope")) == {1.0}
+    # all 140 attachments, not a sample: 26 attribute names in all, none of them a distance or a rest length
+    assert len(attribute_names) == 26
+    assert all(set(nodes[name]["attributes"]) == attribute_names for name in attachments)
+    assert not [a for a in attribute_names if any(w in a.lower() for w in ("dist", "length", "gap"))]
+
+    # one material on each soft body, the two skins included: 43 = 41 + 2, no body carries two layers
+    bodies = [body for name, kind in of.items() if kind == "zMaterial" for body in upstream(name, "iGeo")]
+    assert len(bodies) == len(set(bodies)) == 43
+    assert sorted(of[b] for b in bodies) == ["zCloth"] * 2 + ["zTet"] * 41
+    assert set(values("zCloth", "material__label")) == {"BaraffWitkinZiva"}
+
+    # fibres are there but their direction is not in what we brought back (no end-point maps were painted or stored)
+    fibres = [name for name, kind in of.items() if kind == "zFiber"]
+    assert len(fibres) == 18 and all(not maps[f]["weight_maps"]["0"]["indices"] for f in fibres)
+    # tets: one size per tissue and no painted refinement, so a regular lattice at that size is the whole recipe
+    tets = [name for name, kind in of.items() if kind == "zTet"]
+    assert len(tets) == 41 and all(set(maps[t]["weight_maps"]["0"]["values"]) == {0.0} for t in tets)
+    assert set(values("zTet", "fillInterior__label")) == {"Filled Cavities"}
 
 
 def test_head_shake_reference(trip):

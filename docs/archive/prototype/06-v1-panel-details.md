@@ -1,0 +1,280 @@
+# 原型机（v1）Blender 面板完整规格（归档，原 06-ui.md）
+
+> **归档说明**：本文件原样保存已交付原型机（v1）的 Blender 侧边栏面板逐项规格与线框。
+> 现行宿主约定、面板缺口与精简摘要见 [06-ui.md](../../06-ui.md)。
+
+给谁看：开发 Blender 面板的人，和想知道面板现在能做什么的实验室负责人。读完能知道：面板每个小节的样子和行为，哪些已经做了，哪些是计划。面板上的每个按钮都对应 [04 系统设计](04-v1-architecture.md) 第 7 节的一条命令。不包括：实验室在 Maya 里的"钢琴界面"，它是实验室的工具（第 5 节）。
+
+**面板上的文字是英文**。本文用中文写，引用面板上的字时用英文原样。第 3 节各小节（包括 3.2 Physics setup 和 3.5 Compare with Ziva）都已做了；线框图上如果还有中文标签，那只是设计时用的名字，面板上以英文为准。线框图里没有标来源的数字只是示意；标了来源的（如 Ziva 的设置）是实测值。
+
+## 1. 设计原则
+
+1. **按研究员的工作顺序排列**：打开资产 → 选运动 → 运行 → 回放 → 对比，从上到下。
+2. **每一步都有明确的状态**：没开始、可以做、正在做、完成、出错。没完成前一步，后一步的按钮是灰的，并提示为什么。
+3. **说人话的提示**：出错时说"嘴唇和下颌之间的连接没有任何顶点，请检查导出"，不说"AttachmentError: empty weight map"。
+4. **不藏东西**：每个参数都显示它的来源（实验室 / Ziva 实测 / 我们定的），研究员能一眼看出哪些是我们定的。
+5. **不卡界面**：计算在后台进行，期间可以转动视角、查看其他东西。
+
+## 2. 面板位置和现状
+
+Blender 3D 视图右侧的侧边栏（按 N 键打开），标签名 **ASRP**。
+
+**面板现在有**（`blender_addon/asrp_blender/__init__.py`、`asset.py`、`session.py`）：主面板 ASRP 和八个小节，从上到下是 **1  Open the asset**（3.1）、**Physics setup**（3.2，只读）、**2  Choose a motion**（3.3）、**3  Run**（3.3）、**Results**（3.4）、**Compare with Ziva**（3.5，默认收着）、**Checks**（3.4 末尾，默认收着）、**Advanced**（默认收着，里面是 "Project: <文件夹名>"（只写最后一级，写不下就折行）和 Change project folder 按钮、Check backend、Load result、Load run folder，和折叠的 "Run other files"）。主面板本身在项目文件夹已知时是空的；不知道时它显示两行短字 "Choose the ASRP project folder." 和 "Asked once. Blender remembers."，下面是 Choose project folder 按钮，再下面一句 "The steps below stay grey until then."（见"找项目"）；这条说明只写这一次，三个步骤各自不再重复。
+
+**找项目**：插件靠项目文件夹找核心程序。顺序是环境变量 `ASRP_PROJECT`（设了就用），插件偏好里选的文件夹（Preferences > Add-ons > ASRP，或面板上的 Choose project folder，选一次，按下时检查它有 `pyproject.toml` 和 `src/asrp_core`，选错了会用一句话说清对的文件夹是什么样，选对了存进偏好并立刻存盘，所以重启以后还在），插件文件所在的仓库（从仓库加载时，检查就是这样跑的）。三处都找不到时，三步的内容整块灰掉（说明只在主面板写一次），按下按钮也只会得到一句让人去选文件夹的话，不会出现要设环境变量的提示。
+
+**面板还没有**：评审表（"写评审"，07 第 4.4 节）。面板用到的命令行都已有（`asrp import-asset`、`asrp list-motions`、`asrp check`、`asrp compare`）。进度见 [09](../../09-roadmap-and-tasks.md) 的 T-13、T-35 卡。
+
+**三步流程（T-35）**：**Open asset**（颅骨、下颌、上牙、下牙、嘴唇出现在视口里，是五个网格物体）→ 在 Choose a motion 的列表里点一条运动 → **Run**；算完以后结果在**打开资产时的那五个物体**上播放（物体身份不变，不新建一组），用 Blender 自己的时间轴。三步里没有任何输入文件路径的地方：资产来自项目的 `data/lab_export`，运动来自它的 `trajectories/` 文件夹，运行文件夹在项目的 `runs/`。需要手输路径跑别的场景和运动文件的人，用 Advanced 里折叠的 "Run other files"，它的结果仍加载成新物体放进 Results 列表（和 Advanced 里的 Load run folder 一样），不是三步流程的一部分。原型一（张嘴 12 度）和原型二（中性到 AA、甩头）在**同一个资产**上，只是在列表里选的运动不同。
+
+面板是**先算完整个动作，再回放**，不是逐帧互动的，面板上固定写着 "Computes the whole motion, then replays it. Not frame-by-frame."。逐帧接着算（每按一次键物理往前走一帧）是 T-30 的试验，没有做。面板自己不算任何东西：它启动命令行，读命令行写出的文件。
+
+**面板上的字一行放多少**：默认侧边栏宽 280 像素，一行大约放 34 个字符（带图标的折行文字按 32 个算）。面板上的每个标签、按钮、复选框的字都要在这个长度以内，更长的文字一律折行（`wrapped()`）；运动文件的标题最多 34 个字符（04 第 5.2 节，更长的 `trajectory.read` 拒绝）。`tools/check_panel.py` 画每一个小节时都量，超过 34 个字符就失败。运行完成以后 Run 小节总是停在 "Complete" 加 Play / Pause 和 "Frame 0 to N …" 那几行上（检查里核对）。
+
+## 3. 各小节
+
+### 3.1 资产（Asset）
+
+**面板要短**：打开资产、算出结果以后，三个步骤、Run / Pause 按钮、Complete 一行和 Results 的两个按钮要在 1080p 的窗口里不用滚动就看得到（面板高度约 650 像素）。所以第 1 步只留下一直要看的：两个单选按钮和它们下面的一行、Open asset、"Open: …" 一行、Show landmarks；其余都收进第 1 步里一个默认收着的小节 **Asset details**。**Physics setup** 默认也收着（收着的标题就说明它在）。运行文件夹（Run files 和 Open folder）在 Advanced 里。`tools/check_panel.py` 在默认的打开 / 收着状态下算面板从顶到 Results 按钮的高度（标题 26 像素、每行 21 像素、每个打开的小节外加 8 像素边距；次要的小字行按 0.7 行算，单选按钮每个选项一行），要求不超过 650 像素，并且把所有小节都展开时必须超过它（检查自己能失败）。
+
+已做的样子（默认状态，已有资产和结果）：
+
+```
+┌ 1  Open the asset ───────────────────┐
+│ (●) Coarse lattice (Ziva's tet size)   │
+│ ( ) Fine (lips move separately)        │
+│ 126 tets. Moves the lips as one body,  │
+│ like Ziva. About 1 s per run.          │
+│ [ Open asset ]                         │
+│ ✔ Open: lips, jaw, skull, upper teeth, │
+│   lower teeth                          │
+│ ☑ Show landmarks (hidden now)          │
+│ ▸ Asset details                        │
+└───────────────────────────────────────┘
+```
+
+**Asset details**（收着）里有：One asset for both prototypes（"One asset for both prototypes: skull, jaw, teeth, lips."）、"This .blend is the scene. Save it to keep the asset and the last result."、Units、Material、Imported / Lips / Problems found 几行、Open import report、Scene files 和 Open folder、"Landmarks show the rest positions; hidden while a result plays."、被隐藏物体的说明。没有选项目文件夹时，按钮下面那一行不写四面体数（"Moves the lips as one body, like Ziva. About 1 s per run."），知道以后才加上 "126 tets. "。
+
+- **Open asset** 用的导出文件夹是项目里的 `data/lab_export`（环境变量 `ASRP_EXPORT` 可以改成别处），不让研究员输路径。它在项目的 `runs/_asset/` 下（环境变量 `ASRP_RUNS_DIR` 改的是整个 `runs` 的位置）建一个带时间戳的新文件夹，在里面运行 `asrp import-asset <导出文件夹> <新文件夹> --tissue-settings lab`（组织的材料用 Ziva 实测的值，T-34 的报告用的就是这一套），再运行 `asrp list-motions` 取运动列表（3.3），然后用导入出来的场景文件夹里的 OBJ（毫米，Z 朝上，和求解器读的是同一批数）建网格物体：场景里的软组织一个（`lips`）、骨头四个（`skull`、`jaw`、`teeth_upper`、`teeth_lower`），名字是 "ASRP skull" 这样，每个物体带自定义属性 `asrp_role`。网格留在毫米，物体的缩放 0.001 把它显示成米（和回放包一致）。骨头灰白，嘴唇红色。
+- 导入时窗口会等着（导入几秒钟；第一次在新机器上要先建 Python 环境，可能更久），没有进度条。导入失败时面板弹出命令行打印的 ERROR 原因，不建物体。
+- 再按一次 Open asset：旧的五个物体和它们的网格被删掉，换成新的五个（这是明确的"重新打开"，物体身份就此换掉）；已经算出来的结果不跟过去。运行进行中按钮不可用。
+- **打开以后资产要看得见**。资产按真实大小显示（一个头，约 0.2 × 0.3 × 0.3 米），Blender 启动场景里那个 2 米的方块正好把它整个罩在里面。所以 Open asset 把每一个把资产整个包住的网格物体隐藏掉（不删除，大纲里的眼睛图标可以再显示），面板上写 "Hidden, because the asset was inside it: Cube. …"；不包住资产的物体不动。然后把窗口里每个 3D 视图对准资产：从正面看（嘴型要从正面才看得出来），距离是资产半径的 2.6 倍。之后再 Run 不会动视角。
+- **四面体网格的选择**（在 Open asset 按钮上面，两个单选按钮，选择存在 .blend 里）：**Coarse lattice (Ziva's tet size)** 是默认，Open asset 用 `--tetmesh data/tetmesh/lips_lattice.json --attachments ziva-soft --tissue-settings lab` 导入（路径从项目文件夹来；粗格子 ADR-44，软连接 docs/05 第 3 节）；**Fine (lips move separately)** 和以前一样（不带 `--tetmesh`，`--attachments ours`）。按钮下面一行随选择变："126 tets. Moves the lips as one body, like Ziva. About 1 s per run." 或 "26,721 tets. Upper and lower lip move separately. About 30 s per run."，四面体数从网格文件读（粗格子的嘴只张成一条缝，上唇跟着下颌走，这是和 Ziva 一样的有意行为，不是错误）；时间是写死的说法。已经打开资产以后改选择，什么都不会悄悄改变，面板写 "Press Open asset again to use this mesh."；Physics setup 显示打开的资产真正用的网格和连接种类。用粗格子时检查 (b) 是 NOT RUN（设计如此），面板把它显示成 NOT RUN，不算失败，运行也不因此算不通过。
+- **视角**：Open asset 把每个 3D 视图对准资产（从正面看）；之后的 Run、换层、时间轴缩放、高亮都不动任何 3D 视图。`tools/check_panel.py` 在每次 Run 前后记下每个 3D 视图的视图矩阵、透视方式和距离，要求不变。（手走时看到过第二次 Run 前后视角从三四分之三变成正前方；插件里只有 Open asset 一处设视角，而按钮位置会随结果出现而移动，所以怀疑是点到了别的按钮或是按键，面板缩短以后按钮不再移动。）
+- **Run 按两下**：Run 按钮是第 3 步的第一行，运行中变灰、位置不动；运行中再按一次被拒绝（"A run is already in progress"）；一次运行刚结束的 1 秒内再按也被拒绝（"The last run has just finished. Press Run again if you want another one."），一秒以后才再接受；检查里三种情况都试。
+- **一个 .blend 就是一个场景**：资产、结果、运动列表、物理设置的内容都存在 .blend 里，存盘再打开，面板仍然认得这五个物体、Asset 小节的各行、结果还能播放（嘴唇的网格缓存、骨头的关键帧、帧范围都随文件走），Physics only / Final shape 照常切换，再选一条运动按 Run，结果仍替换在同一组五个物体上。.blend 指向的场景文件夹或运行文件夹不在了（搬走、删除）时，面板用一句话说清（"The scene files of this asset are gone (…). Press Open asset again." 或 "The files of the last result are gone (…). Run the motion again, or press Open asset again."），Open asset 仍可按，Run 变灰，Play 按钮和 Open folder 按钮不出现，没有报错。File > New（或打开一个没有资产的 .blend）时面板回到空状态：No asset is open，没有运动、没有结果、没有上一个文件的运行状态条。
+- **第六个物体 "ASRP landmarks"**（R-01 的 300 个 landmark）：每个 landmark 一个小八面体（半径 0.8 mm，一个点 1.6 mm 宽，黄色），中心就是 `scene.json` 的 `landmarks.rest_positions_mm`（导入写在那里，面板不算）；它和五个物体同一个缩放，点选时点不到它。它不算 "the five"（`asrp_asset_objects` 不列它）。面板上 **Show landmarks** 复选框默认开；这些点是静止位置，所以资产上有结果时自动隐藏，复选框的字变成 "Show landmarks (hidden now)"，Asset details 里写 "Landmarks show the rest positions; hidden while a result plays."，结果撤掉后（新运行开始时）恢复。再按 Open asset 时旧的点和旧的五个物体一起换掉。
+- **单位**一行（"Units: mm (1 scene unit = 0.962 mm)"）读 `scene.json` 的 `units`；**导入报告**几行（网格数、嘴唇顶点数、landmark 数、发现的问题）读场景文件夹里的 `import_report.json`，**Open import report** 按钮用 `wm.path_open` 打开它。
+- **材料**一行（"Material: 12 kPa, 0.4 (measured in Ziva)"）是从导入出来的 `scene.json` 里读的杨氏模量和泊松比和它们的来源，不是写死的字；来源是 `lab_setting` 写 "measured in Ziva"，是 `ours` 写 "our own values"。
+- **场景文件在哪里**："Scene files: " 加上场景文件夹相对项目文件夹的路径（在项目外面就写完整路径），写不下会折行，不会被截断；下面的 **Open folder** 按钮用 `wm.path_open` 在文件管理器里打开这个文件夹。
+- 面板上的 "Open: …" 一行列出现有的五个角色（上牙、下牙写成 "upper teeth"、"lower teeth"）；其中一个物体在视口里被删掉时，改成红字提示再按一次 Open asset。
+- 没做的：导入进度条（Open asset 时窗口会等几秒）。
+
+### 3.2 物理设置（Physics setup）
+
+R-02。只读，整节从 `scene.json`（和它指的四面体网格文件）读，面板自己不算：
+
+```
+┌ Physics setup ───────────────────────┐
+│ Soft tissue                            │
+│ lips: 26721 tets, fine mesh      [▢]   │
+│ neo-Hookean: 12 kPa, nu 0.4,           │
+│ 1060 kg/m3 (measured in Ziva)          │
+│ Bones                                  │
+│ jaw: follows jaw01               [▢]   │
+│ skull: follows head              [▢]   │
+│ teeth_upper: display only (follows     │
+│ head)                            [▢]   │
+│ teeth_lower: display only (follows     │
+│ jaw01)                           [▢]   │
+│ Attachments                            │
+│ lips to skull: 74 vertices, hard [▢]   │
+│ lips to jaw: 76 vertices, spring 1.94  │
+│ N/mm (our value)                 [▢]   │
+│ ……                                    │
+│ [ Clear highlight ]                    │
+│ [ Check setup ]                        │
+│ Setup check: No problems found.        │
+│ Read-only in this version. Marking     │
+│ meshes as bone or tissue in Blender    │
+│ comes later.                           │
+└───────────────────────────────────────┘
+```
+（数值是 Open asset 之后真实的样子。）
+
+- **Soft tissue**：每个软组织一行：名字、四面体数、四面体网格的种类（网格文件的 `kind` 字段，没有这个字段就是 fine；lattice 是 `data/tetmesh/lips_lattice.json` 那种，见 ADR-44）；下面一行是材料模型和数值，数值后面标来源，三个数来源相同时写一次，不同时每个数各标：`lab_setting` 写 "measured in Ziva"，`ours` 写 "our value"，`ziva_default` 写 "Ziva default"。
+- **Bones**：每块骨头一行，用的是场景自己的字段，不看名字：`motion` 是 fixed 写 "fixed"，是 prescribed 写 "follows <驱动源>"；场景里没有任何连接用到它（既不是连接的起点也不是终点）的骨头写成 "display only (…)"，意思是它在物理里没有角色，只是显示。
+- **Attachments**：每个连接一行："lips to skull: 74 vertices, hard"，弹簧写成 "lips to jaw: 76 vertices, spring 1.94 N/mm (our value)"。用 `--attachments ziva-soft` 导入的软连接，每单位体积的刚度是 Ziva 的、换成 N/mm 的面积规则是我们的，所以来源写 "(Ziva's stiffness, our area rule)"，不写 measured。同一对物体之间有两个连接时（左右嘴角），用各自名字里不同的那个词分开："lips to lip_corner_anchor (left): …"、"(right)"。
+- **每一行右边一个小按钮**（图标，没有字）在 3D 视图里高亮它：软组织和骨头行是选中那个物体并设为活动物体；连接行是在嘴唇前面画一组小点，每个连接的顶点一个（嘴唇网格的一份拷贝加一个几何节点：只把标了 "ASRP highlight" 的顶点变成点，黄色，`show_in_front`，所以隔着嘴唇也看得见；连接的顶点在嘴唇靠骨头的那一面，从正面看不到）。这份拷贝用和嘴唇同一个点缓存，所以结果在播的时候点跟着嘴唇的顶点走。**嘴唇自己的显示一点不动**（没有颜色属性，视图的着色方式不变），资产上的结果（网格缓存、关键帧、修改器、时间轴、帧）也不动，检查里逐项核对。再点另一个连接换掉前一个。**Clear highlight** 把小点的物体、网格和节点组都删掉。
+- **Check setup**：对资产的场景文件跑 `asrp check <scene.json>`，用一句话说结果（"Setup check: No problems found." 或 "Setup check: 1 errors, 0 warnings."），下面每条消息一行（"Error: …"、"Warning: …"，错误行红色），折行不截断。场景文件不在时按钮灰着。
+- 最后一行："Read-only in this version. Marking meshes as bone or tissue in Blender comes later."。第一阶段不能在面板上改参数；改参数要改场景描述文件，这样每次运行都有据可查。参数和 Ziva 设置的对应见 [03](../../03-asset.md) 第 5 节和 [05](../../05-ziva-to-febio.md)。
+- 还没做：求解设置（动力学、帧率、子步、阻尼）一行；点连接时按权重画渐变；在面板上标记哪个网格是骨头、哪个是组织。
+
+### 3.3 运动（Motion）和运行（Run）
+
+**2  Choose a motion** 小节列出 `data/lab_export/trajectories/*.json`（项目的导出文件夹，和 Open asset 同一个）。列表来自核心程序的 `asrp list-motions <导出文件夹>`：每个文件一行 JSON，写文件名、标题（`title`，运动文件里可选的一项，没有就用文件名，04 第 5.2 节）、帧数、帧率、来源标签（`lab_setting`、`ziva_default`、`ours`，文件没写是 `unstated`）和有没有 landmark 层；面板自己不读轨迹文件。顺序也是核心程序定的，规则不认识任何一个标题：先按标题里第一个冒号前面的部分，同一部分里实验室的运动（`lab_setting`）在前，再按标题；读不了的在最后。读不了的文件也列出来，红字写原因，不能点。
+
+每一条是两行：按钮上是**标题**，下面一行较小的字写细节，例如 "47 frames, 30 fps, lab motion"（来源标签在面板上说成人话：`lab_setting` 是 lab motion，`ours` 是 test motion）。三个提交的运动是：
+
+| 文件 | 标题 |
+|---|---|
+| `jaw_open_12deg.json` | Prototype 1: jaw opens 12 deg |
+| `neutral_to_AA.json` | Prototype 2: neutral to AA |
+| `head_shake.json` | Prototype 2: head shake |
+
+点一条就是选它（压下的那一条是当前的；Open asset 之后默认选的是第一条来源标签为 `lab_setting` 的能用的运动，没有就选第一条能用的；规则里没有任何文件名，对现在的三个文件就是实验室的 "Prototype 2: neutral to AA"，所以第一次看到的结果是实验室自己的运动加默认的粗格子；列表的顺序不变）。标题里不写 "(test motion)" 之类，来源在下面一行写；标题最多 34 个字符，是按钮一行放得下的字数。没打开资产时写 "Open the asset first"。`jaw_open_12deg.json` 是 `tools/placeholder_jaw_motion.py` 对一个新导入的场景写出来的（我们自己的测试运动，不是实验室的运动），`head_shake.json` 是 `tools/head_shake_motion.py` 写的，`neutral_to_AA.json` 是实验室的运动经 `asrp convert-motion` 转出、再用 `asrp set-motion-title` 加了标题；`tests/test_motions.py` 要求前两个和工具的输出逐字节相同。
+
+已做的样子（3  Run 小节；运行中是进度条和 Cancel，运行完成后是 Play / Pause 和运行文件夹）：
+
+```
+┌ 3  Run ──────────────────────────────┐
+│ Computes the whole motion, then        │
+│ replays it. Not frame-by-frame.        │
+│ [ Run ]                               │
+│                                       │
+│ ████████████░░░░░░░░  Frame 23 / 87    │
+│ 40 s elapsed                           │
+│ [ Cancel ]                            │
+│                                       │
+│ ✔ Complete                             │
+│ [ Pause ]                             │
+│ Playing frame 0 to 50. Space bar       │
+│ pauses.                                │
+│ Run files: runs/<运行文件夹名>         │
+│ [ Open folder ]                        │
+└───────────────────────────────────────┘
+```
+（线框里的数字是示例。）
+
+- **Run**（按钮）用打开的资产的 `scene.json` 和选中的运动文件跑 `asrp run`，运行文件夹在项目的 `runs/`，名字是运动文件名（核心程序再加日期和序号）。没打开资产或没选运动时按钮是灰的，下面写原因。**开始新运行的那一刻，资产上上一次的结果被撤掉**（嘴唇没有点缓存、骨头没有关键帧，回到静止形状），旧结果不会被当成这次的留在屏幕上。
+- **运行完成后**，结果放在**打开资产时的那五个物体**上（`asset.apply_result`）：
+  - **嘴唇**：加一个 Mesh Cache 修改器（PC2，按帧），指向这次运行文件夹里的点缓存。显示哪一层有固定规则：运行产生了最终版本（运动有 landmark 层，回放包里有 `playback_final.pc2`）就显示 **Final shape**，否则显示 **Physics only**。所以中性到 AA 默认显示最终形状，甩头默认显示物理层。换层用 Results 里的按钮（3.4）。
+  - **骨头**：每个按运动驱动的骨头，每一帧一个关键帧（位置和旋转，帧之间线性），数字是运行文件夹里 `trajectory.json` 里它跟随的驱动的那一帧的变换，原样写入，不换算（缩放留在物体上）。运动没有给的驱动，如果场景写了 `absent_means_rest`，那块骨头不动（中性到 AA 里颅骨和上牙）；固定骨头不动；跟随派生驱动的骨头面板不播放，写出原因。
+  - **时间轴**：当前帧回到运动的第 0 帧，帧范围是运动的第 0 帧到最后一帧，每一个时间轴 / 摄影表区域缩放到这个范围（View All），然后**自动开始播放**（`screen.animation_play`，在 `temp_override` 里借第一个窗口的上下文启动，已经在播就不再按，免得暂停）。没有窗口的 Blender（`--background`）里没有地方播，只把这次播放请求记下来（`asset.PLAY_REQUESTS`），检查就看它。Run 小节里有 **Play / Pause** 按钮和一行 "Playing frame 0 to 50. Space bar pauses."（没在播时是 "Frame 0 to 50 is ready. Space bar plays."），下面是 "Run files: runs/…"（运行文件夹相对项目文件夹的路径）和 **Open folder** 按钮。帧率等于运动的。插件写的是 `render.fps = int(fps)`，所以不是整数的帧率会被截断；实验室是 30 帧/秒，没有问题（已知的限制，T-11 要么拒绝别的帧率，要么换算）。
+  - 第 N 帧的骨头和嘴唇是同一个场景帧，不会错开。
+  - 完成后加载失败（比如五个物体之一被删了）：状态写 "Complete, but the results could not be loaded" 和原因，资产回到静止形状。
+- **Run other files**（在 Advanced 里，折叠，默认收着）：原来的 Scene、Motion (trajectory.json)、Runs folder、Run name 四个输入和一个 Run 按钮，输入路径，结果加载成新物体放进 Results 列表。进度、Cancel 和结束状态都在上面的 Run 小节里，两条路共用。
+
+- **Run** 在后台启动 `asrp run`（子进程、一个读输出的线程、Blender 的定时器每 0.25 秒取一次输出），界面不卡。进度条和 "Frame N / M" 来自命令行打印的 `progress` 行，下面一行是已用秒数。
+- **状态**：运行中显示进度（Preparing... 或 Frame N / M），结束后是 Complete、Failed、Cancelled、Could not start 之一。后三个不成功的结束状态都带 "No results were loaded."，并给出原因。
+- **Cancel**：在运行文件夹里写一个名为 `cancel` 的文件（04 第 9 节）。运行文件夹要等命令行打印出 `run folder` 那一行才知道；在那之前点 Cancel，会记下来，知道文件夹的那一刻就写。
+- **成功**：自动把这次运行加进 Results 列表（3.4）。运行完成但合理性检查有不通过的，照样加载，同时用红字提示 "A plausibility check failed (see Checks below). The results are loaded."；具体哪一项看 Checks。
+- **完成但加载失败**：状态显示 "Complete, but the results could not be loaded"，并写出原因。
+- **开始新运行时，列表里正显示的结果先被隐藏**（包括用 Load result 加载的），旧结果不会被当成这次运行的结果留在屏幕上（04 第 9 节）。
+- **启动失败**：进程还没建起来就失败（比如找不到 `uv`，或运行文件夹建不了），显示 "Could not start" 和原因，并清掉上一次运行的结果状态。
+- **取消来得太晚**：取消的请求到时运行已经算完，面板说明取消来得太晚，这是一个完整的结果，并把它加载。
+- **`run COMPLETE` 之后退出码不是 0 也不是 1**（0 是完成，1 是有合理性检查不通过）：按失败处理，不加载。
+- **一次运行进行时打开另一个 .blend**：运行继续被跟踪，完成后加载到此刻打开的那个文件的场景里。
+- **运行进行时退出 Blender 或停用插件**：插件卸载时取消这次运行：写 `cancel`，最多等 3 秒，还没停就结束整个进程树（包括 FEBio）；运行文件夹还不知道时直接结束进程树。所以退出 Blender 最多会多等 3 秒。
+- **点了 Cancel 但运行文件夹一直没出现**：等 10 秒后结束进程树，状态记为 Cancelled，面板不会一直停在取消中。
+
+还没做（设计名，做的时候配英文标签）：
+- 失败时的"打开运行文件夹"按钮（成功以后已有 Open folder）。
+
+### 3.4 结果（Results）和检查（Checks）
+
+已做的样子：
+
+```
+┌ Results ─────────────────────────────┐
+│ run_A                                  │
+│ [●] Physics only                  [x]  │
+│ [ ] Final shape                   [x]  │
+│ run_B                                  │
+│ [ ] Final shape                   [x]  │
+└───────────────────────────────────────┘
+┌ Checks ──────────────────────────────┐
+│ Run: run_A                             │
+│ (a) Motion completed            PASS   │
+│ (b) Hard attachments            PASS   │
+│ (b2) Spring anchors             PASS   │
+│ (c) Gravity sag                 FAIL   │
+│     （失败的一项带说明，红色）             │
+│ (d) Tet mesh valid            NOT RUN  │
+│ Landmark layer: applied (……)           │
+│ Surface (final): N flipped faces, ……   │
+│ Settle: tissue moved X mm in the ……    │
+│ ☐ Show every check's message           │
+└───────────────────────────────────────┘
+```
+（线框里的名字和结果是示例；条目本身是 Show，右边的 x 是 Remove。）
+
+- **三步流程的结果**：Results 顶部先有一块 "On the asset: <运行文件夹名>"，下面是 "Physics only" 和（运行有 landmark 层时）"Final shape" 两个按钮，压下的是现在嘴唇显示的那一层。点另一个只换嘴唇的点缓存，骨头不变（骨头的关键帧不分层）。运行没有最终版本时只有 "Physics only"。下面的列表是 Load run folder 和 "Run other files" 的结果，和资产上的结果互不替换；资产上有结果又点列表里的一条时，Checks 读列表里那一条。
+- 列表按运行分组：每个加载过的运行文件夹先有一行小标题（运行名，只写一次），标题下面是它的版本行 "Physics only"；回放包带 landmark 层的最终版本时，再有一行 "Final shape"。运行按加载的先后排列。两种版本的区别见 [04](04-v1-architecture.md) 第 2 节。
+- **Load result**（Advanced 里的老按钮）也走这个列表：它加载的物体同样遵守"同一时刻只显示一条"，开始新运行时同样被隐藏。
+- **同一时刻只显示一条**（视口和渲染都只有它；Show 也会取消物体在视图层里被眼睛图标隐藏的状态），点一条就切换过去，并把时间轴设成它的帧数和帧率。Remove 把这一条从列表里移除并删掉它的物体。
+- **Load run folder**（在 Advanced 里，不在 Results 里）把以前的运行加进来；加载中途出错时，这次已经加进来的条目和物体全部撤回。
+- 在视口里删掉了一条结果的物体，面板不再把它当成"正在显示"，列表里这一条标出 "(object deleted)"。
+- 想比较两次运行，把两次都加载进来，在列表的条目之间切换。
+- **Checks** 读正在显示的那一条所属运行的 `run_report.json`（列表里点中的那一条；没有就是资产上的结果），列出五项各自是 PASS、FAIL 还是 NOT RUN（右对齐），失败和没跑的带说明。每项用面板里固定的短名，不用报告里的长名：(a) "Motion completed"、(b) "Hard attachments"、(b2) "Spring anchors"、(c) "Gravity sag"、(d) "Tet mesh valid"；报告里出现不认识的检查键时，那一行显示报告自己的 `name`。勾上 "Show every check's message" 时，通过的检查也显示说明，并带上报告里的长名。之后是一行 Landmark layer 的情况（叠上了没有、移动了几个 landmark、最大平移多少毫米，或没叠上的原因）。报告读不了（文件不在，或形状不像运行报告）时，面板写出一句说明，不会出错。
+- Landmark layer 下面还有几行**只是报告出来的数，不是检查**：`surface_health` 里最后一帧的表面情况，写成 "Surface (final): N flipped faces, M edges < 0.5x, K edges > 2x"；紧接着一行最差的一帧，写成 "Worst frame (final): frame 21, N flipped faces, M edges < 0.5x, K edges > 2x"（翻转面最多的那一帧是哪一帧、多少张）；`settled_shape.tissue_step_max_mm`，写成 "Settle: tissue moved X mm in the last settle frame"。`settled_shape.tissue_settled` 为 false 时，另有一行红字 "Tissue not settled at the settle frame"。显示哪一版：资产上的结果用嘴唇正在显示的那一层；列表里的条目用最终版本（没有就用 physics）。旧报告没有这些键时，这几行都不出现。`surface_health` 只记最后一帧和最差一帧，所以面板说得出"哪一帧、多少"，说不出每一帧。
+- 运行报告的 `warnings` 里的行（例如显示表面有翻转的面）显示成 "Reported, not a check: …"（取第一句，全文在 `run_report.json`），信息图标；它不是检查，不改变五项的结果。
+- **五项都通过时**，Checks 在五行下面加一句 "All five checks passed. That does not say the surface is fine: the surface lines below are only reported, not checked."（信息图标，不是绿色对勾），然后照常列出上面的 Surface 和 Worst frame 两行，不把全绿的合理性显示成"表面没问题"。外部审计在真实 AA 上量到五项全绿时最终层第 21 帧有 8 张翻转面（T-34 第 3 步）。
+
+还没做（设计名，做的时候配英文标签）：
+- 按运行名挑选的下拉框（现在是列表）；
+- "显示"单选框里的"两者叠加"（现在一次只显示一条，没有叠加）；
+- 单独的"加载"按钮和"用 Blender 时间轴播放"按钮（现在加载后自动设好时间轴，用 Blender 自己的播放键）。
+
+**怎么检查**：`tools/check_panel.py`（命令行下的 Blender，在 `tools/verify.py` 的 full 级里跑）用和面板相同的会话代码，对真实的 `asrp run` 进程和一个打印同样行的替身命令检查运行、取消、加载、回滚和五项检查的显示。它最后走一遍**三步**（`case_three_steps`），在真实的资产和真实的 `asrp run` 上：
+- Open asset 后有颅骨、下颌、上牙、下牙、嘴唇五个网格物体；三个操作符都没有路径属性，面板的路径属性在三步里一直是空的；
+- 先后选甩头和中性到 AA（`data/lab_export/trajectories/` 里的 `head_shake.json` 和 `neutral_to_AA.json`；后者不在时检查**失败**并说明原因，不跳过），各按一次 Run。每次完成后，按物体身份（Blender 的 `session_uid`，删了再建同名物体也会变）确认被更新的就是 Open asset 的那五个，没有别的网格物体；
+- 嘴唇：在运动中间一帧（甩头第 24、AA 第 25；先量过两层在这一帧差 0.05 mm 以上，即 landmark 层不为零）、第 36 帧和最后一帧，Blender 算出的嘴唇顶点（物体本地几何，毫米，不是缩放成米之后）和运行文件夹里同一层的点缓存差小于 1×10⁻⁵ mm；点缓存本身再和 `physics/display.npy` 或 `final/display.npy` 的 float64 数比（差小于 3×10⁻⁵ mm，float32 的舍入），第 0 帧的嘴唇和 Open asset 建的网格一致（顶点顺序）；AA 必须是 Final shape，甩头必须是 Physics only；
+- 骨头：同样几帧，四块骨头的每个取样顶点的位置和运动文件里该骨头所跟驱动的变换一致（差小于 1×10⁻⁴ mm，四元数是 float32）；甩头里颅骨和下颌、AA 里下颌和下牙在中间一帧至少动 0.5 mm（检查必须有可能失败）；AA 里颅骨和上牙确实不动；时间轴的帧数和帧率等于运动的；第二次运行一开始，第一次的结果已经从资产上撤掉；
+- **四个对照**，都通过同一个检查函数 `verify_three_step`，每个让对应的检查失败：结果放到新建的物体上（身份检查）；AA 显示物理层（层检查，嘴唇和另一层的缓存一致）；嘴唇比骨头晚一帧（同帧检查，嘴唇是前一帧的形状）；甩头时颅骨不动（骨头检查）。每个对照之后把结果重新放上去，检查要再通过。
+`tools/check_panel.py -- --three-steps-only` 只跑这一段。`tools/panel_windowed_check.py`（带窗口的 Blender，要有显示器，手动跑，不在验证门里）通过面板的操作和插件自己的定时器跑真实嘴唇；加 `--installed --quit-midrun` 按用户的方式安装插件，运行中途退出 Blender，再手动用进程列表确认整个进程树（含 FEBio）都没了。
+
+### 3.5 对比（Compare with Ziva）
+
+T-11 的 `asrp compare` 在面板上的样子。默认收着，放在 Results 后面。Ziva 的数据是实验室的，在项目外面，所以这是面板里唯一一处让使用者选文件夹的地方，而且只选一次：
+
+```
+┌ Compare with Ziva ───────────────────┐
+│ [ Ziva reference folder ]              │
+│ Reference: neutral_to_AA_export_…      │
+│ [ Compare ]                            │
+│ Final shape, frame 46:                 │
+│ mean 2.12 mm, 95% 4.10 mm, max 6.20 mm │
+│ Worst frame: 40 (mean 2.31 mm)         │
+│ Reported only. There is no pass line.  │
+│ ☑ Show Ziva's lips                     │
+│ ☑ Show difference as colours           │
+│ Blue 0 mm, red 5 mm or more            │
+└───────────────────────────────────────┘
+```
+（数字是示例。）
+
+- **Ziva reference folder**：选一个 Ziva 导出文件夹（例如 `ziva_reference/neutral_to_AA_export_*`），记在插件偏好里（和项目文件夹一样，Preferences > Add-ons > ASRP 里也能改），不写进 .blend，也不写进仓库里的任何文件。
+- **Compare**：有结果在资产上并且选了参考文件夹时才能按。像 Run 一样在后台跑 `asrp compare <运行文件夹> <参考文件夹> --out <运行文件夹>/compare`（输出在被 git 忽略的 `runs/` 下），运行中写 "Comparing... N s"；命令出错时把命令打印的 ERROR 原文放在 "The comparison failed: …" 后面，没有 traceback。
+- **数字**：完成后从 `compare_report.json` 读，不重算：正在显示的那一层（Physics only 或 Final shape）最后一帧的平均、95%、最大差别（毫米）和最差的一帧；下面固定一行 "Reported only. There is no pass line."（ADR-17）。换层时数字跟着换。
+- **Show Ziva's lips**：把 `<输出>/ziva_playback` 用面板自己的回放加载代码加载成第二个物体 "Ziva lips"（灰蓝色，和我们红色的嘴唇区分；同一条时间轴），取消勾选就隐藏；它跟着正在显示的层（物理层读 `playback.pc2`，最终形状读 `playback_final.pc2`）。
+- **Show difference as colours**：我们的嘴唇按当前帧每个顶点和 Ziva 的差别上色，数据是 `heatmap_physics.f32` / `heatmap_final.f32`（格式见 `heatmap.json`：float32，一帧一块）；面板只挑出当前帧那一块，把毫米数按固定刻度（0 mm 蓝色，5 mm 及以上红色，中间线性）换成颜色，写进嘴唇网格的一个叫 "ASRP difference" 的颜色属性，并把 3D 视图设成按顶点颜色显示；一个帧变化的处理函数在帧变时更新颜色，取消勾选（或插件卸载）时移除它，颜色属性、原来的活动颜色属性和视图的显示方式都还原。刻度写在下面一行："Blue 0 mm, red 5 mm or more"。和连接的高亮（3.2）共用嘴唇的颜色显示，同一时刻只有一个。
+- 开始新运行（或换结果）时，旧结果的对比就撤掉：颜色去掉，"Ziva lips" 物体删掉。
+- 不显示"合格 / 不合格"：第一阶段不设数值合格线（ADR-17）。
+- 没做的："写评审"（打开 [07](../../07-validation.md) 第 4.4 节的评审表，存进运行文件夹的 `review.md`）、用 `--target` 给 `asrp compare` 目标姿态文件。
+
+## 4. 状态栏和提示
+
+- 面板最上方一行显示环境状态：FEBio ✔、单位换算 ✔ 或 ⚠。点击可以展开（已经实现的"检查后端"按钮就在这里）。
+- 所有长时间的操作都显示进度，并且可以取消。
+- 所有提示用英文；技术细节（FEBio 原文）收在"详细信息"里，默认折叠。
+
+## 5. 实验室的钢琴界面
+
+实验室在 Maya 里用的"Facial Expression Automator"是一个钢琴式的表情界面：音素按钮、FACS 动作单元选择、键盘上按键组合表情、输入一句话转成一串音素。它是实验室的工具，不是我们要做的功能，我们不在 Blender 里复刻它。它怎么工作见 [14](../../14-ziva-demo-walkthrough.md)。
+
+我们给实验室的工具留两个入口：让训练代码不经过 Maya 读到嘴唇形状的函数（T-31），和"从上一段结束的状态接着算"的能力（T-30，试验）。按源码，实验室的界面按一次键播一整段过渡，逐帧推进物理（[02](../../02-requirements.md) 第 4 节）。
+
+## 6. 验收
+
+界面完成的标准见 [02 需求](../../02-requirements.md) 的 R-01 到 R-05。另外，请一位实验室研究员在没有开发者帮助的情况下，照着一页操作说明完成一次"打开资产 → 选运动 → 运行 → 回放 → 对比"。卡住的地方记录下来，作为界面改进项。
+
+**还没验证的**（每一条的当前状态记在 [09](../../09-roadmap-and-tasks.md) T-13 卡）：
+- 带窗口的 Blender 里默认侧边栏宽度下的样子：2026-11-15 用鼠标走了三遍（1920 × 1080 的窗口）。最后一遍里，打开资产并有结果时，三步、Run、Pause、Results 的按钮不用滚动都看得见，运动标题、项目文件夹的提示、运行名没有被截断；当时检查名 "(b) Attachments follow bones" 在 NOT RUN 旁边被截断，之后改成了 "(b) Hard attachments" 和 "(b2) Spring anchors"，改完以后的这一行没有再在窗口里看过；失败、取消时的样子没见过；
+- 合理性检查不通过的**真实**运行，通过面板显示的样子：验证门里用的是打印同样行的替身命令；
+- 面板在残缺的运行报告上真正画出来的样子，只检查了行构造函数；
+- 存盘再打开：资产和资产上的结果在命令行下的 Blender 里用真实存盘、另一个 Blender 进程验证过（`tools/check_panel.py` 的 case 13）；带着**结果列表**（Load result、Load run folder、Run other files 的结果）的 .blend 没验证；带窗口的 Blender 里没走过；
+- 三步流程在带窗口的 Blender 里用鼠标键盘走过一遍（2026-11-15，原型一、原型二各一遍，发现的问题列在 [09](../../09-roadmap-and-tasks.md) T-35 卡的末尾）。看到的：装好并带着 `ASRP_PROJECT` 启动以后，Open asset 等约 3 秒，五个物体出现在视口正中；Asset、Motion、Run 三个小节在默认侧边栏宽度（280 像素）下放得下，运动列表的第二行和 Checks 的两行被截断；播放是每秒 30 帧。没有请真人试过；
+- 带窗口时：Run 完成以后时间轴区域真的缩放到运动的范围、播放真的自动开始，没见过（没有窗口的 Blender 里只能检查当前帧、帧范围和播放请求）；Open folder 在文件管理器里真的打开，没见过；
+- 装进 Blender 自己的插件目录、不设 `ASRP_PROJECT` 的情形用隔离的用户配置（`BLENDER_USER_RESOURCES` 指向临时文件夹）在命令行下的 Blender 里验证过：从仓库外面加载、没有项目时面板的状态、选了文件夹以后 Open asset 能用、重启以后勾还在、选的文件夹还在（`tools/check_panel.py` 的 case 12）。带窗口、用鼠标点 Install from Disk 和文件夹选择窗口没有走过；
+- 没有真人用过。

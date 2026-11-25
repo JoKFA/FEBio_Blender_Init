@@ -1,140 +1,113 @@
 # ASRP 文档总览
 
-给谁看：每一位新加入的开发者、审查者和实验室成员。读完能知道：先读哪几份、每份回答什么问题、仓库里的文件放在哪。不包括：项目的内容本身，那在 [01](01-overview.md) 以后的各份里。
+给谁看：项目负责人、开发者（含每次从零读起的 AI 开发会话）、审查者与实验室研究员。
+这套文档是项目的**唯一依据**：代码与文档不一致时，先确认并改文档，再改代码（[ADR-12](decisions/ADR-12.md)）。
 
-这套文档是项目的**唯一依据**。文档和代码不一致时，以文档为准，并且先改文档、再改代码。
+## 项目现在在哪（2026-11-24）
 
-任务的状态、顺序和验收标准只写在 [09 路线图与任务](09-roadmap-and-tasks.md)，还开着的问题和风险只写在 [11](11-risks-and-questions.md)，其他文档只链过去。
+- **已交付基线（原型机一、二）**：单嘴唇 + 骨头在 Blender 里三步跑通（下颌张开 12°、实验室中性到 AA、甩头），与 Ziva 逐帧对比完成；操作与数字见 [15 原型机结果页](15-prototype.md)。
+- **当前主线（地基阶段 v2，[T-42](tasks/T-42.md)–[T-52](tasks/T-52.md)）**：把单组织冷启动原型重构为可长期演进的四边界核心（**场景、建造、段、结果**），支撑多组织、皮肤、连续段续算、`asrp_query` 训练查询，同时直接承接实验室演示场景、第二族场景以及在 Blender 里从零搭建的新模型（[T-39](tasks/T-39.md)）。
+- **核心架构**：直接看 **[architecture/README.md](architecture/README.md)**（原型 v1 架构已完整归档至 [archive/prototype/04-v1-architecture.md](archive/prototype/04-v1-architecture.md)）。
 
-## 先读哪几份
+---
 
-| 你是谁 | 按顺序读 |
+## 按角色一步直达
+
+| 你是谁 / 要干什么 | 直接读这几份（不要通读全库） |
 |---|---|
-| 第一次接触项目的任何人 | [01 项目一页纸](01-overview.md) → [术语表](glossary.md) → [15 原型机](15-prototype.md) |
-| 实验室成员 | 01 → [02 需求](02-requirements.md) → [03 资产说明](03-asset.md) → [14 实验室的操作流程](14-ziva-demo-walkthrough.md) → [11 风险与待决问题](11-risks-and-questions.md) → [12 导出清单](12-lab-export-checklist.md)（第三部分是给实验室的问题） |
-| 开发者 | 01 → 02 → 03 → [04 系统设计](04-architecture.md) → [16 完整流程](16-pipeline.md) → [05 Ziva 到 FEBio 的对应](05-ziva-to-febio.md) → [07 验证与验收](07-validation.md) → [08 开发规范](08-engineering-standards.md) → [10 决策记录](10-decisions.md) → [09 路线图与任务](09-roadmap-and-tasks.md) 里分给你的任务卡 |
-| 审查者 | 08 开发规范 → 07 验证与验收 → 被审查任务的任务卡 |
-| 想看原型机动起来、自己跑一遍 | [15](15-prototype.md)，或仓库根目录的 [README](../README.md) |
-| 读的时候有疑问 | 先查 [13 设计解释](13-explanations.md) 的目录；没有的话问出来，答完补进 13 |
+| **第一次了解项目** | [01 项目一页纸](01-overview.md) → [术语表](glossary.md) → [09 路线图与任务](09-roadmap-and-tasks.md)（想看已跑通演示再看 [15](15-prototype.md)） |
+| **查正在生效的参数、门限或实测值** | [00 现行生效设定速查](00-current-settings.md)（全库唯一汇总表，附出处与限定语） |
+| **拿一张任务卡开工（人或 AI 会话）** | 起步只读：[01](01-overview.md) → [术语表](glossary.md) → [08 开发规范](08-engineering-standards.md) → [10 决策记录](10-decisions.md) 顶部“现行铁律”；然后**只读 `docs/tasks/T-xx.md` 和卡里点名的文件** |
+| **了解地基架构（v2）** | [architecture/README.md](architecture/README.md) → 按需点进三份专题页（场景与数据 / 建造与粘连 / 会话与结果） |
+| **做物理建模或查 FEBio 坑** | [05 Ziva 到 FEBio 对应](05-ziva-to-febio.md) + [05 FEBio 踩坑清单](05-febio-pits.md) + [03 资产说明](03-asset.md) |
+| **做验证、写检查或代码审查** | [08 开发规范](08-engineering-standards.md) + [07 验证与验收](07-validation.md) + 对应单张任务卡 |
+| **看风险、拍板项、下次上机要取什么** | [11 风险与待决问题](11-risks-and-questions.md) + [12 导出清单](12-lab-export-checklist.md) |
+| **实验室成员** | [01](01-overview.md) → [15 原型机](15-prototype.md)（[English](15-prototype.en.md)） → [12 导出清单](12-lab-export-checklist.md)（“给实验室的一页”是可直接回复的 3 个问题） |
+| **读文档时遇到“为什么这样定”** | 查 [13 设计解释](13-explanations.md) 目录，只点开对应的 `explanations/E-xx.md` |
 
-## 全部文档
+---
 
-| 编号 | 文档 | 回答什么问题 |
-|---|---|---|
-| 01 | [项目一页纸](01-overview.md) | 项目在换什么、哪些是我们做的、现在到哪了 |
-| 02 | [需求](02-requirements.md) | 做出来的东西要能干什么、怎样算做到了 |
-| 03 | [资产说明](03-asset.md) | 实验室给的 Maya 场景里有什么、Ziva 的设置值是多少、运动文件是什么格式、实验室的代码怎么跑 |
-| 04 | [系统设计](04-architecture.md) | 软件分成哪几块、数据怎么流动、文件长什么样、和实验室的代码怎么分界 |
-| 05 | [Ziva 到 FEBio 的对应](05-ziva-to-febio.md) | Ziva 里的每样设置，到 FEBio 里怎么表达，有哪些坑 |
-| 06 | [界面设计](06-ui.md) | Blender 里的 ASRP 面板长什么样、现在能做什么 |
-| 07 | [验证与验收](07-validation.md) | 怎么证明结果是对的、和 Ziva 比什么 |
-| 08 | [开发规范](08-engineering-standards.md) | 代码放哪、怎么提交、怎么测试、什么叫"完成" |
-| 09 | [路线图与任务](09-roadmap-and-tasks.md) | 分几步走、每一步的任务卡、状态 |
-| 10 | [决策记录](10-decisions.md) | 做过哪些关键决定、为什么、放弃了什么 |
-| 11 | [风险与待决问题](11-risks-and-questions.md) | 还没定的事、要问实验室的事、可能出问题的地方 |
-| 12 | [导出清单](12-lab-export-checklist.md) | 从实验室机器上已经拿到了哪些数据、怎么拿的、下次还要取什么、问实验室什么 |
-| 13 | [设计解释（问答）](13-explanations.md) | 看文档、做任务时冒出的"为什么要这样""这一步从哪来"，包括 Ziva 机器上实测的结果（E-11） |
-| 14 | [实验室的操作流程](14-ziva-demo-walkthrough.md) | 实验室在 Maya + Ziva 里怎么工作、钢琴界面怎么用（2026-11-10 演示录像） |
-| 15 | [原型机](15-prototype.md)（[English](15-prototype.en.md)） | 原型机长什么样、怎么自己跑、跑出的数字说明什么、不说明什么 |
-| 16 | [从 Maya 到 Blender 的完整流程](16-pipeline.md)（[English](16-pipeline.en.md)） | 从 Maya 导出到 Blender 播放、和 Ziva 对比，一共哪几步、每一步用哪条命令和哪些 `.py` 文件 |
-| 17 | [系统论文大纲（草稿）](17-paper-outline.md) | 把原型机写成系统论文：贡献点、形式化、结构、投稿前要先解决的问题（待和项目负责人讨论） |
-| — | [术语表](glossary.md) | 文档里出现的专业词是什么意思 |
-| — | [templates/](templates/) | 任务卡和合并请求的模板 |
+## 文档结构（三层分明）
 
-旧文档 `spec-v0.1.md`、`lab-questions.md` 的内容已经并入上面这套文档，只保留跳转说明。
+### 第一层：现行主线（地基阶段与长期产品）
+
+| 文档 / 目录 | 回答什么问题 |
+|---|---|
+| [00-current-settings.md](00-current-settings.md) | 现行线程、FEBio 运行、材料、单位、网格、粘连、门限、实测基线与环境版本一页查全 |
+| [01-overview.md](01-overview.md) | 项目一页纸：换什么、原型已交付什么、现在地基做什么、接下来怎么演进 |
+| [02-requirements.md](02-requirements.md) | 替代目标（ADR-45）、产品能力需求、通用硬约束（N-01..07）与论文用法对照 |
+| **[architecture/](architecture/README.md)** | **主系统架构（地基 v2）**：四处边界、模块与 CLI、场景版本、建造与粘连、会话与结果、`asrp_query`、实验室代码分界 |
+| [03-asset.md](03-asset.md) / [03-lab-source.md](03-lab-source.md) | 实验室两族全脸场景事实（41 组织/2 皮肤/10 骨/140 粘连边/84 运动）、单位与轴、只读源码笔记 |
+| [05-ziva-to-febio.md](05-ziva-to-febio.md) / [05-febio-pits.md](05-febio-pits.md) | Ziva 到 FEBio 物理映射、单位与物理尺度、求解与阻尼设置；以及 27 条实测踩坑速查 |
+| [06-ui.md](06-ui.md) | Blender 宿主约定、地基新面板待补设计缺口，以及已交付原型面板精简规格 |
+| [07-validation.md](07-validation.md) | 地基四项研究员签收与裁判分工、管线与合理性检查、下颌直线廉价对照、Ziva 对比口径与排查 |
+| [08-engineering-standards.md](08-engineering-standards.md) | 仓库边界、环境、分支/提交、代码与测试规矩、验证门分级、文档维护规矩 |
+| [09-roadmap-and-tasks.md](09-roadmap-and-tasks.md) + `tasks/` | 地基主线（`T-42..T-52`）、地基之上五组演进方向，以及活跃任务卡索引 |
+| [10-decisions.md](10-decisions.md) + `decisions/` | 按主题浓缩的现行铁律总览，以及 43 条生效中独立决策文件（`ADR-xx.md`） |
+| [11-risks-and-questions.md](11-risks-and-questions.md) | 负责人待拍板项、地基 13 项不定项总表、实验室待答/待取清单、活跃风险与假设台账 |
+| [12-lab-export-checklist.md](12-lab-export-checklist.md) | 下次上 Ziva 机器要取的清单（`D12–D22`）与发给实验室的 3 个问题 |
+| [13-explanations.md](13-explanations.md) + `explanations/` | 长期有效的设计解释（`E-11/13/20/22/24`）、T-34 逐帧基线（`E-19`）及归档解释索引 |
+| [glossary.md](glossary.md) | 全项目统一术语表（含 15 个地基核心术语与旧分法说明） |
+| [templates/](templates/) | 任务卡和合并请求模板 |
+
+### 第二层：已交付原型与实验室操作参考（非当前开发主线）
+
+| 文档 | 说明 |
+|---|---|
+| [15-prototype.md](15-prototype.md)（[English](15-prototype.en.md)） | 已交付原型机一、二的实测结果页（数字自动绑定 `data/preview/` 存档） |
+| [16-pipeline.md](16-pipeline.md)（[English](16-pipeline.en.md)） | 当前原型已跑通的 12 步实操命令流（地基新命令见 `architecture/README.md`，待 `T-47` 切换后更新） |
+| [14-ziva-demo-walkthrough.md](14-ziva-demo-walkthrough.md) | 2026-11-10 实验室 Maya + Ziva 与钢琴界面操作录像记录 |
+| [17-paper-outline.md](17-paper-outline.md) | 系统论文大纲（草稿）：把原型机写成系统论文的贡献点、形式化、结构、投稿前要先解决的问题（待和项目负责人讨论） |
+
+### 第三层：归档（`archive/` — 原样保存历史事实，平时不用读）
+
+- `archive/prototype/`：已交付原型 v1 架构（原 `04` §1–12）、原型粘连试验流水账、原型面板完整规格、原型验收步骤、原型 M0–M5 里程碑、首次上机详细日志。
+- `archive/tasks/`（30 张）：已完成、取消或已并入地基的任务卡。
+- `archive/decisions/`（11 条）：被取代或已完成历史使命的旧决策。
+- `archive/explanations/`（18 篇）：历次审计记录、2026-11-24 证据与实测台账（[E-23](archive/explanations/E-23.md)）和阶段性旧解释。
+- [archive/11-resolved-issues.md](archive/11-resolved-issues.md)：已关闭的拍板项、问题、数据、风险与假设。
+
+---
 
 ## 仓库目录
 
-✅ 提交进仓库；🚫 被 git 忽略，只在本机。**仓库放项目本身，不放开发过程**：一次性的脚本和带日期的工作计划不进仓库（08 第 1 节）。新功能按 [04](04-architecture.md) 第 3 节放，不要自己新建顶层目录。
+✅ 提交进私有仓库；🚫 被 git 忽略，只在本机。仓库只放项目本身，不放一次性脚本和带日期的工作计划（[08](08-engineering-standards.md) 第 1 节）。
 
-```
+```text
 asrp/
-├─ README.md                  GitHub 首页：原型机动图、运行命令、安装、自动检查、Blender 插件、回放
-├─ pyproject.toml  uv.lock    Python 依赖（Python 3.13）
+├─ README.md                  仓库首页：原型动图、安装、运行、自动检查与插件回放
+├─ pyproject.toml  uv.lock    Python 3.13 依赖与工具配置
+├─ .gitattributes             data/、tests/fixtures/ 按字节检出，避免换行符破坏哈希
 ├─ .github/                   合并请求模板
-├─ AGENTS.md  CLAUDE.md  .claude/   🚫  本机 AI 开发用的文件，每台机器自己的，不进仓库（验证门拒绝被跟踪）；自动检查的命令是 `uv run python tools/verify.py --level auto`
-├─ .gitattributes             data/、tests/fixtures/ 按字节检出，哈希在任何电脑上都对得上（08 第 10 节）
+├─ AGENTS.md  CLAUDE.md  .claude/   🚫 本机开发工具配置，每机自管（验证门拒绝被跟踪）
+├─ .local/                    🚫 本机路径指针（如 ziva_trip_pointer.json 指向仓库外 Ziva 数据）
 │
 ├─ docs/                      设计文档（本目录），唯一依据
-│  ├─ 01 … 17、glossary.md    见上面的"全部文档"
-│  └─ templates/              任务卡、合并请求模板
-│
-├─ src/
-│  ├─ asrp_core/              核心程序，不能 import bpy
-│  │  ├─ cli.py               命令行 asrp（doctor、check、import-asset、convert-motion、list-motions、run）
-│  │  ├─ doctor.py            找 FEBio、Blender，查路径
-│  │  ├─ febio.py             调用 FEBio、读日志
-│  │  ├─ playback.py          回放包（表面网格 + PC2 点缓存）
-│  │  ├─ tetmesh.py           四面体网格的检查和读写（ADR-20）
-│  │  ├─ scene.py             场景描述 scene.json 的格式和校验（asrp check）
-│  │  ├─ trajectory.py        运动 trajectory.json 的格式、铰链运动生成；实验室运动文件的受限读取和转换（asrp convert-motion）
-│  │  ├─ motions.py           导出文件夹里有哪些运动（asrp list-motions，面板的运动列表）
-│  │  ├─ compare.py           两份结果差多少：逐帧的平均、P95、最大，下垂，晃动，翻转的面（T-34）
-│  │  ├─ generate.py          生成器：scene + trajectory → FEBio 输入 .feb（真实大小、× k，粘连）
-│  │  ├─ embed.py             把显示网格嵌进四面体网格，算出每帧显示顶点位置
-│  │  ├─ simulate.py          asrp run 的整条流程：生成 → FEBio → ÷ k → 嵌入 → 检查 → 回放包
-│  │  ├─ skinning.py          landmark 层：deform = base + weights @ translations，读 skin_mm.json
-│  │  ├─ final_shape.py       给实验室训练代码的接口：final_shape(model, 下颌转动, landmark 位置)，model 由 rest_model(scene.json) 得到，不经过 Maya（T-31）
-│  │  ├─ plausibility.py      合理性检查 (a)(b)(b2)(c)(d)
-│  │  ├─ run.py               运行外壳：运行文件夹、进度、取消、出错处理
-│  │  ├─ provenance.py        溯源记录 provenance.json
-│  │  └─ asset/               资产导入（asrp import-asset）
-│  │     ├─ lab.py            读实验室导出，写 scene.json 和检查报告
-│  │     ├─ coords.py         唯一的一份坐标换算
-│  │     └─ skin.py           把 landmark 蒙皮换算成毫米、Z 轴朝上，写 landmarks/skin_mm.json
-│
-├─ blender_addon/asrp_blender/  Blender 插件，只管界面，不用第三方库
-│  ├─ __init__.py             面板（英文）：Load result、Check backend、Run、Results、Checks
-│  ├─ asset.py                三步流程：Open asset 建五个物体，把一次运行的结果放回这五个物体上（T-35）
-│  └─ session.py              一次 asrp run 的子进程：读输出、进度、取消（不含 bpy）
-│
-├─ tests/                     自动测试（pytest）
-│  ├─ fixtures/s1/            示例 scene.json、trajectory.json，由同目录的 build.py 生成
-│  ├─ test_prototype.py       真实嘴唇整条运行（约 2 分钟；只有验证门的 full 级设 ASRP_SLOW=1 跑它，docs、core 级不跑；单独跑 pytest 时要自己设）
-│  ├─ test_docs_references.py 文档里的相对链接和图片都指向存在、而且 git 收着的文件（大小写也要一致）；引用的 T-、ADR-、E- 编号都有定义；英文译文的数字和链接和中文原文一致
-│  ├─ test_no_lab_files.py    不许实验室和厂商文件进 git 的检查的测试
-│  ├─ test_verify_gate.py     验证门本身
-│  ├─ test_one_off_files_gone.py  一次性开发文件（13 E-12 的清单）和本机 AI 开发文件一个都不能被跟踪
-│  ├─ s1_dynamic_jaw.py  s2_lips_febio.py  s3_attachment.py  landmark_layer_check.py   原来的试验脚本，现在是被验证门和测试运行、导入的检查（不是 test_*.py）
-│  ├─ test_line_endings.py    被跟踪的文本文件一律 LF
-│  └─ test_*.py               其余是各模块的测试，文件名对应模块名
-│
-├─ tools/                     检查、导出、分析、渲染工具，不是产品代码
-│  ├─ verify.py               "完成"的定义，分 docs / core / full 三级（08 第 6 节）
-│  ├─ check_no_lab_files.py   不许实验室和厂商文件进 git 的检查（验证门每级都跑）
-│  ├─ build_tetmesh.py        生成嘴唇四面体网格 data/tetmesh/lips.json，只显式跑一次（ADR-20）
-│  ├─ lip_attachments.py      导出嘴唇的四组粘连顶点集 data/lab_export/lip_attachments.json（T-03）
-│  ├─ placeholder_jaw_motion.py   写测试用的下颌铰链运动 trajectory.json（张开 12°）。它只是测试输入，实验室的真实运动由 T-10 转换
-│  ├─ ziva_comparison.py      我们的嘴唇对 Ziva 的两次运行：导入、转换、运行、逐帧比，写 data/preview/ziva_comparison.json（T-34；需要仓库外的数据）
-│  ├─ render_prototype.py     在 Blender 里加载回放包、逐帧核对、渲染
-│  ├─ check_blender_addon.py  check_playback.py  check_panel.py   插件、回放、面板的检查（验证门会跑）
-│  ├─ panel_windowed_check.py 面板的定时器路径，带窗口的 Blender，手动跑，不在验证门里
-│  ├─ mb_inventory.py  asset_report.py     不开 Maya 读 .mb，打印 03 里的数字
-│  ├─ maya_export.py  check_lab_export.py  本机 Maya 导出网格、权重、关节并逐点核对（12 第一部分）
-│  ├─ blender_import_preview.py            导出结果进 Blender，渲染预览
-│  ├─ ziva_machine_export.py               在 Ziva 机器上采集（12 第一部分）
-│  └─ lab_trip_manifest.py                 给一趟上机取回的数据写清单和指向它的 `.local/ziva_trip_pointer.json`
-│
-├─ data/                      导出和派生数据（ADR-19）
-│  ├─ lab_export/        ✅   网格 OBJ、mesh_report.json、skin_skinCluster7.json、joints.json、
-│  │                          lip_attachments.json；T-10 转换后的运动放 trajectories/；
-│  │                          ziva_trip_pointer.json 指向仓库外的 Ziva 机器数据
-│  ├─ preview/           ✅   Blender 预览图和归档的运行报告，15 的数字来源；README 顶上的动图 prototype_aa_front.gif 和更早一次运行的 prototype_motion.gif
-│  ├─ tetmesh/           ✅   嘴唇四面体网格 lips.json，由 tools/build_tetmesh.py 生成一次（ADR-20）
-│  └─ asset_inventory*.json  🚫  .mb 的完整清单，约 40 MB，能重新生成
-│
-├─ assets/               🚫   实验室原始 .mb，绝不提交（N-06）
-└─ runs/                 🚫   每次求解一个文件夹（结构见 04 第 4 节）
+├─ src/asrp_core/             核心程序（严禁 import bpy）：
+│  ├─ cli.py                  命令行：doctor、check、import-asset、convert-motion、set-motion-title、list-motions、run、compare
+│  ├─ asset/                  实验室导出导入、唯一单位与轴换算（coords.py）、蒙皮换算（skin.py）
+│  ├─ scene.py / trajectory.py / motions.py   场景描述、运动格式与运动列表
+│  ├─ tetmesh.py / embed.py   四面体校验加载与表面嵌入
+│  ├─ generate.py / febio.py / run.py / simulate.py   .feb 生成、FEBio 调用、运行外壳与全流程编排
+│  ├─ plausibility.py / compare.py / ziva_compare.py  合理性检查与 Ziva 对比
+│  ├─ skinning.py / final_shape.py / playback.py / provenance.py / doctor.py
+├─ blender_addon/asrp_blender/  Blender 5.2 插件（只管界面，无第三方依赖）
+├─ tests/                     自动化测试（含 docs 级、core 级和真实嘴唇慢测试）
+├─ tools/                     verify.py、check_no_lab_files.py、build_tetmesh.py、prototype_numbers.py、导出与渲染工具
+├─ data/                      导出与派生数据（ADR-19）：
+│  ├─ lab_export/        ✅   网格 OBJ、mesh_report、skinCluster7、joints、lip_attachments、trajectories/
+│  ├─ preview/           ✅   归档运行报告、对比 JSON、预览图与动图（15 的数字来源）
+│  ├─ tetmesh/           ✅   离线生成一次并锁哈希的 lips.json（细）与 lips_lattice.json（粗）
+│  └─ asset_inventory*.json  🚫 .mb 清单（约 40 MB，可重生成）
+├─ assets/                    🚫 实验室原始 .mb 场景（绝不提交，N-06）
+└─ runs/                      🚫 每次运行的输出目录（绝不提交）
 ```
 
-## 文档怎么维护
+---
 
-- **谁都可以提修改**，但要走和代码一样的流程：开分支、提合并请求、至少一人审过再合并（见 08）。
-- **改设计先改文档。** 任务做到一半发现设计不对，先停下来改 04/05 并说明原因，审过后再继续写代码。
-- **每份文档说现在什么是真的。** 过程、历史和被推翻的判断写进 13，决定写进 10，还没定的事写进 11，任务状态写进 09。
-- **一个事实只在一处写。** 需求在 02，设计在 04，Ziva 到 FEBio 的对应和坑在 05，资产在 03，验证在 07。别处链过去。
-- **每个数字都要能复现。** 文档里写的实测数字，要注明是哪个脚本或命令得出的，或指向 13 里的条目。
-- **解释写进 13。** 回答"为什么要这样"这类问题时，如果答案要翻好几份文档才拼得出来，就整理成 13 里的一条，并在相关文档的对应位置链过去。
-- 文档用中文写，代码、文件名、命令保持英文。专业词第一次出现时解释，并收进术语表。
-- **英文译文跟着中文走。** 15、16 各有一份英文译文（`15-prototype.en.md`、`16-pipeline.en.md`），给不读中文的人看。中文那份是原文：先改中文，再照着改译文。译文里的数字或链接和原文对不上时，`tests/test_docs_references.py` 失败并指出是哪一个。
-- 每份文档开头用两三句话写清：给谁看、读完能做什么、不包括什么。
+## 文档怎么维护（精要，细则见 [08 第 7 节](08-engineering-standards.md)）
+
+1. **主线永远写“现在什么是真的”**：原型或历史过程不再占主文档篇幅，原样移进 `docs/archive/`，不删除数字和证据。
+2. **一处权威、别处链接**：生效参数只改 [00](00-current-settings.md) 与原设计页；任务状态只改 [09](09-roadmap-and-tasks.md) 与 `tasks/T-xx.md`；未决项只改 [11](11-risks-and-questions.md)。
+3. **代码出处用稳定符号，不写裸行号**：文档引用代码时写 `模块路径 + 函数/常量/命令行选项名`，不写易随编辑漂移的 `file.py:<行号>`。
+4. **洁净与可核查**：本机绝对路径与证据目录只写在 [E-23](archive/explanations/E-23.md)；文档和 git 提交中不写 AI 模型和厂商名（`CLAUDE.md` / `.claude/` 作为被仓库忽略的字面文件名规则除外）；中英对照页（`15-prototype.en.md`、`16-pipeline.en.md`）随中文同步；改完必跑 `uv run python tools/verify.py --level docs`（合并前跑完整 `verify.py`）。

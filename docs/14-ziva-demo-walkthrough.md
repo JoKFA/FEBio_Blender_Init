@@ -1,12 +1,19 @@
 # 14 实验室的 Ziva 和钢琴界面是怎么操作的（2026-11-10 演示录像）
 
-给谁看：想知道实验室在 Maya + Ziva 里怎么工作的开发者。读完能知道：实验室打开场景、加物理、渲染、用"钢琴界面"做 AA 音的操作顺序，和演示时画面上的数据。不包括：Ziva 的设置值和速度（实测值在 [13](13-explanations.md) E-11）；我们上机取数据的做法（[12](12-lab-export-checklist.md) 第一部分）。这里描述的都是实验室的工具，我们不复刻它们。
+- **给谁看**：想知道实验室在 Maya + Ziva 里怎么工作的开发者。读完能知道：实验室打开场景、加物理、渲染、用"钢琴界面"做 AA 音的操作顺序，和演示时画面上的数据。
+- **当前状态**：本文是 2026-11-10 演示录像的观察记录，描述的都是实验室自己的工具，我们不复刻它们；先看第 4 节了解 2026-11-12 上机后已核实与更正的结论，再按需查第 1 至 3 节。
+- **不包括**：Ziva 的设置值和速度（实测值在 [E-11](explanations/E-11.md)、[E-15](archive/explanations/E-15.md)）；我们上机取数据的做法（[12 归档](archive/prototype/12-v1-completed-exports.md)）。
 
-2026-11-10 的 Zoom 会议里，研究员 Zhiyun (Richard) Peng 在 Ziva 机器上演示了 Maya 2023.3.1 + Ziva：打开场景、给骨头和软组织加上或去掉 Ziva 物理、渲染几帧看重力下坠、用"钢琴界面"（Facial Expression Automator）做 AA 音。录像只有 19 分 30 秒。**没有演示**：读 zSolver、zMaterial、zAttachment 的数值，清 Ziva 缓存，加载 `.pkl` 运动文件，甩头。这些数值后来在 Ziva 机器上直接取到了（E-11）。
+**录像背景与未演示内容**：
+- 2026-11-10 的 Zoom 会议里，研究员 Zhiyun (Richard) Peng 在 Ziva 机器上演示了 Maya 2023.3.1 + Ziva：打开场景、给骨头和软组织加上或去掉 Ziva 物理、渲染几帧看重力下坠、用"钢琴界面"（Facial Expression Automator）做 AA 音。录像只有 19 分 30 秒。
+- **没有演示**：读 zSolver、zMaterial、zAttachment 的数值，清 Ziva 缓存，加载 `.pkl` 运动文件，甩头。这些数值后来在 Ziva 机器上直接取到了（[E-11](explanations/E-11.md)）。
 
 > 本文只转述录像里的操作、画面上的文字和研究员的意思，不逐字引用录像里的话（AGENTS.md 的保密规则）。录像和转写稿留在仓库外，由项目负责人保管。
 
-**怎么读本文的标记**：时间点是视频 mm:ss；来源"画面"或"语音"；把握：高 / 中 / 低。转写质量：前 12 分钟和 14 分钟之后基本可信，约 12:00 到 13:00 是语音识别失败，那一段只信画面。语音里的专有名词（Ziva、Solver、LBS、FEBio）有错字，已按画面和上下文改过。说话人没有标，换人时只能从摄像头小窗判断。
+**怎么读本文的标记**：
+- 时间点是视频 mm:ss；来源标为"画面"或"语音"；把握分高 / 中 / 低。
+- 转写质量：前 12 分钟和 14 分钟之后基本可信，约 12:00 到 13:00 是语音识别失败，那一段只信画面。
+- 语音里的专有名词（Ziva、Solver、LBS、FEBio）有错字，已按画面和上下文改过。说话人没有标，换人时只能从摄像头小窗判断。
 
 ---
 
@@ -17,11 +24,11 @@
 | 1 | 通过远程桌面进入 Ziva 机器。进去时上一位同学的 Maya 还开着（`g10-10 rest pose 1200 landmarks v9.mb`，标题带 `*`，未保存） | 0:08–0:23 | 语音+画面 | 高 |
 | 2 | 别人留下没关的东西，先帮他保存再关 | 0:20–0:54 | 语音+画面 | 高 |
 | 3 | 从任务栏启动 Maya（启动界面写 Autodesk Maya 2023），在 Recent 里点场景，或点 Open 在对话框里选 | 1:00–1:43 | 画面 | 高 |
-| 4 | 第一个打开的是简化演示场景 `v36 dev_proxy_jaw_oor V3 more aggressive delete done.mb`，目录 `C:\keyLabLocal_D\c99-maya-ziva-workshop\different pose as rest pose\`。研究员介绍它是带 Ziva 的简化静止姿态模型 | 1:06–2:14 | 语音+画面 | 高 |
+| 4 | 第一个打开简化演示场景 `v36 dev_proxy_jaw_oor V3 more aggressive delete done.mb`（目录见下），研究员介绍为带 Ziva 的简化静止姿态模型 | 1:06–2:14 | 语音+画面 | 高 |
 | 5 | 场景载入后，他先把 Ziva 的 playback 关掉。他的说法：打开它，Ziva 会在后台把全部 50 帧一次算出来，所以慢，他一般关掉 | 2:02–2:25 | 语音 | 中 |
 | 6 | 场景里一层是皮肤 surface mesh，一层是头骨，层（Layer Editor）里点 V 就能隐藏 | 2:28–2:49 | 语音+画面 | 高 |
 | 7 | 去掉物理：选中网格，点 Ziva 菜单里的 `Remove tissue or bone`，它就变回纯几何网格 | 2:56–3:07 | 语音 | 高 |
-| 8 | 加骨头物理：选中网格，Ziva 菜单里点 `bone`。研究员的说法是它就有重力、刚体性质，能被别的组织粘连；"有重力"没有和厂商对骨头（按给定运动走的物体）的定义核对过 | 3:14–3:40 | 语音+画面 | 高（操作）／低（"有重力"） |
+| 8 | 加骨头物理：选中网格，Ziva 菜单里点 `bone`。他说它就有重力、刚体性质，能被别的组织粘连；"有重力"未和厂商定义（给定运动物体）核对 | 3:14–3:40 | 语音+画面 | 高（操作）／低（"有重力"） |
 | 9 | 加软组织物理：同样的方式点 `tissue`（肌肉） | 4:53–4:58 | 语音+画面 | 中 |
 | 10 | 点完加物理，求解器在后台算前几帧；从第 1 帧开始算重力和周围组织的拉力 | 3:49–4:13 | 语音 | 中 |
 | 11 | 这个简化场景算崩了：研究员说他把肌肉剪得太多，只剩几块，不适合拿来演示 | 4:16–4:29 | 语音 | 高 |
@@ -31,37 +38,42 @@
 | 15 | 渲染连续帧：Frame Range 设 0 到 2，再开 playback，第 2 帧嘴唇会往下掉，但没掉很多，因为骨头拖着它 | 7:00–8:07 | 语音+画面 | 中 |
 | 16 | 找渲染出来的图：用 Everything 搜文件名（`test_new_neutral_V14`），10 张这样的图连起来就是动画 | 7:43–8:24 | 语音+画面 | 高 |
 | 17 | 在时间轴上拖动，直接看肌肉往下掉 | 10:00–10:13 | 语音+画面 | 高 |
-| 18 | 钢琴界面（`h99-UI-mayascipt-V1.py`，在实验室仓库里，启动方式写在文件开头的注释里）出现：窗口标题 `Facial Expression Automator`，初始显示 `Current Pose: Neutral \| Frame: 14` | 12:17–13:31 | 画面 | 高 |
-| 19 | 选 `Phoneme AA (pot)`，界面调用预先算好的运动（他说是把几千步压缩成几十步，即 `combined_checkpoints.pkl`，E-11 已读到），每步自己推进、算出下一步 | 13:06–13:35 | 语音 | 高 |
-| 20 | 渲染到第 20 步就停（不用看满 36 步）：landmark 拖着嘴唇往下拉，下巴也在转，这就是音素 AA。他说完整的 AA 要 36 步；运动文件实测是 22 步，运动到第 36 帧结束（第 4 节） | 15:22–16:16 | 语音 | 高 |
-| 21 | 键盘模式（钢琴式）：展开 `Keyboard Mode (piano-style)`，勾 `Enable keyboard mode`，按键盘上的键切换表情，可以同时按多个键（低音加高音，相当于同时做表情和说话）。第一次用前点 `Precompute All Keyboard Transitions (Fix First-Time Lag)` | 14:26–14:47 | 语音+画面 | 高 |
+| 18 | 钢琴界面（`h99-UI-mayascipt-V1.py`，在实验室仓库里，启动方式见开头注释）出现：标题 `Facial Expression Automator`，初始 `Current Pose: Neutral \| Frame: 14` | 12:17–13:31 | 画面 | 高 |
+| 19 | 选 `Phoneme AA (pot)`，界面调用预先算好的运动（他说是把几千步压缩成几十步，即 `combined_checkpoints.pkl`，[E-11](explanations/E-11.md) 已读到），每步自己推进、算出下一步 | 13:06–13:35 | 语音 | 高 |
+| 20 | 渲染到第 20 步就停（不用看满 36 步）：landmark 拖着嘴唇往下拉，下巴也在转，即音素 AA。他说完整 AA 要 36 步；实测 22 步，运动到第 36 帧结束（第 4 节） | 15:22–16:16 | 语音 | 高 |
+| 21 | 键盘模式（钢琴式）：展开 `Keyboard Mode (piano-style)` 并勾 `Enable keyboard mode`，按键切换/组合表情（详情见下） | 14:26–14:47 | 语音+画面 | 高 |
 | 22 | 回到初始：按钮 `Reset to Neutral (Reopen Rest Pose)`，字面意思是重新打开静止姿态的场景 | 14:46 | 画面 | 高（按钮字）／中（实际做法） |
 | 23 | 研究员答应：可以把我们的脚本放到这台机器上运行取数据；建议在共享文件夹里新建一个 project（名字以 `b5` 开头，没听清） | 16:43–17:12 | 语音 | 高 |
 
-结果怎么看、怎么存：演示里只看了视口和渲染出来的 PNG（`test_new_neutral_V14*.png`）。没有演示导出顶点或存缓存。
+- **第 4 步目录**：`C:\keyLabLocal_D\c99-maya-ziva-workshop\different pose as rest pose\`。
+- **第 21 步细节**：按键盘上的键切换表情，可以同时按多个键（低音加高音，相当于同时做表情和说话）；第一次用前点 `Precompute All Keyboard Transitions (Fix First-Time Lag)`。
+- **结果怎么看、怎么存**：演示里只看了视口和渲染出来的 PNG（`test_new_neutral_V14*.png`）。没有演示导出顶点或存缓存。
 
 ---
 
 ## 2. 演示时读到的设置和数值
 
-Ziva 的设置值（材料、求解器、粘连）和速度，当时没有读到，后来在 Ziva 机器上直接取到了，见 [13](13-explanations.md) E-11、E-15：整张脸求解每帧约 1.5 秒（当晚各次运行平均 1.47 到 1.60 秒）。下面是画面上看到的。
+Ziva 的设置值（材料、求解器、粘连）和速度，当时没有读到，后来在 Ziva 机器上直接取到了，见 [E-11](explanations/E-11.md)、[E-15](archive/explanations/E-15.md)：整张脸求解每帧约 1.5 秒（当晚各次运行平均 1.47 到 1.60 秒）。下面是画面上看到的。
 
 | 项 | 值 | 时间点 | 来源 | 把握 |
 |---|---|---|---|---|
 | Maya 版本 | **Autodesk Maya 2023.3.1**（标题栏）。Python 3 | 0:23 起 | 画面 | 高 |
-| Ziva 版本 | 画面上没读到。菜单栏有 `Ziva`、`Ziva Tools`、`Ziva Transfer`。后来在机器上确认是 2.2.0-hotfix2（E-11） | 12:55 | 画面 | 高（菜单名） |
+| Ziva 版本 | 画面上没读到。菜单栏有 `Ziva`、`Ziva Tools`、`Ziva Transfer`。后来在机器上确认是 2.2.0-hotfix2（[E-11](explanations/E-11.md)） | 12:55 | 画面 | 高（菜单名） |
 | 其他插件可见 | Arnold、MASH、TURTLE、XGen、Motion Graphics | 12:55 | 画面 | 高 |
 | 演示场景 1 | `v36 dev_proxy_jaw_oor V3 more aggressive delete done.mb`（简化，算崩） | 2:14 | 画面 | 高 |
 | 演示场景 2（完整） | 同目录 `neutral 260825 v15 made the teeth MESH.mb` | 6:32 | 画面 | 高 |
-| 钢琴界面注释里的场景 | `C:\keyLabLocal_D\c99-maya-ziva-workshop\experiment_files\g10-10 rest pose 1200 landmarks …`（后面被截断，应是 v9.mb） | 12:40 | 画面 | 高（前半）／中（后半） |
-| 大纲里的节点 | `middleres_skull`、`middleres_Jaw`、`middleres_Node`、`middleres_OrbicularisOculi`、`middleres_OrbicularisOris`、`middleres_TeethDown`、`middleres_TeethUp`、`zSolver1`、`head`，以及三组相机和 Omni 灯 | 4:33、5:02 | 画面 | 高 |
+| 钢琴界面注释里的场景 | `C:\keyLabLocal_D\c99-maya-ziva-workshop\experiment_files\g10-10 rest pose 1200 landmarks …`（被截断，应是 v9.mb） | 12:40 | 画面 | 高（前半）／中（后半） |
+| 大纲里的节点 | 多组 middleres 节点、`zSolver1`、`head`，以及三组相机和 Omni 灯（完整节点名见下） | 4:33、5:02 | 画面 | 高 |
 | 图层 | `skin_ziva`、`skin_render`、`the_hand`、`ziva_mesh_muscles`、`back_eye_hider_board`、`three_point_lightV1`、`muscle_view_mode`、`skin_view_mode` | 12:55 | 画面 | 高 |
 | 帧率 | 30 fps（时间轴右下） | 12:55、14:46 | 画面 | 高 |
-| 时间轴 | 动画范围 0 到 50；播放范围随操作变（演示时 0–20，AA 运行后 1–36）；AA 运行后显示 `Current Pose: phoneme AA \| Frame: 36` | 5:12、12:55、14:46 | 语音+画面 | 高 |
+| 时间轴 | 动画范围 0 到 50；播放范围随操作变（演示时 0–20，AA 运行后 1–36）；AA 后显示 `Current Pose: phoneme AA \| Frame: 36` | 5:12、12:55、14:46 | 语音+画面 | 高 |
 | 重力沉降 | 前面留一段缓冲，运动从第 15 帧开始；钢琴界面起始显示 Frame 14 | 11:07–11:28、13:31 | 语音+画面 | 高（语音）／中（Frame 14） |
 | 渲染设置 | Arnold Renderer，图 160 × 121，相机 `muscle_closeup` | 6:32、12:55 | 画面 | 高 |
-| 钢琴界面的按键 | 键位：`[f] Frown [b] Brow [q] Squint`；`[0] Neu [s] Smile [m] Mouth [c] Cheek [p] Pucker [1] Happy [2] Sad [3] Surpr`；`[n] N [a] AA [i] IY [t] T [e] EH [u] UW [v] V [y] Y` | 14:46 | 画面 | 高 |
+| 钢琴界面的按键 | `[f] Frown [b] Brow [q] Squint`；`[0] Neu [s] Smile [m] Mouth [c] Cheek [p] Pucker [1] Happy [2] Sad [3] Surpr`；`[n] N [a] AA [i] IY [t] T [e] EH [u] UW [v] V [y] Y` | 14:46 | 画面 | 高 |
 | 相机按钮 | Front、L 3/4、R 3/4、Mouth、Frame、Orbit UP/DOWN/LEFT/RIGHT | 14:46 | 画面 | 高 |
+
+- **大纲里的完整节点名**（4:33、5:02，画面，高）：
+  `middleres_skull`、`middleres_Jaw`、`middleres_Node`、`middleres_OrbicularisOculi`、`middleres_OrbicularisOris`、`middleres_TeethDown`、`middleres_TeethUp`、`zSolver1`、`head`，以及三组相机和 Omni 灯。
 
 ---
 
@@ -81,17 +93,20 @@ Ziva 的设置值（材料、求解器、粘连）和速度，当时没有读到
 
 ## 4. 后来核实的
 
-2026-11-12 上机（[12](12-lab-export-checklist.md) 第一部分，E-11）核实了录像里没拍到的几处：
+2026-11-12 上机（[12](12-lab-export-checklist.md)“已完成采集摘要”，[E-11](explanations/E-11.md)）核实了录像里没拍到的几处：
 
 | 录像里的情况 | 核实结果 |
 |---|---|
 | Ziva 版本没读到 | 2.2.0-hotfix2 |
-| 每帧耗时：Script Editor 里相邻两行间隔约 2.3–2.5 秒，状态栏一行 1.519 秒 | 求解器日志：整张脸当晚各次运行平均每帧约 1.47 到 1.60 秒，有单步超过 3 秒（E-15；原来写的"当天上午 696 步平均 1.65 秒"没有能重算的原始日志，🔍）。Script Editor 的行间隔不是求解时间 |
+| 每帧耗时：Script Editor 相邻两行间隔约 2.3–2.5 秒，状态栏 1.519 秒 | 求解器日志：整张脸当晚各次平均每帧约 1.47 到 1.60 秒，有单步超 3 秒（[E-15](archive/explanations/E-15.md)；详情见下） |
 | 提问方复述的管线顺序是 landmark 先、物理后 | 实测：物理在前，landmark 蒙皮叠在物理结果上；复述是错的 |
-| 钢琴界面读的是不是 `combined_checkpoints.pkl` | 是（读界面源码得到的）。过渡表里 97 个条目有这个文件，对应 84 个文件、82 份不同内容，全部读通（[13](13-explanations.md) E-14 第 1 条） |
-| AA 要 36 步 | AA 的运动文件是 22 步，运动从第 15 帧开始，到第 36 帧结束；界面源码对从中性出发的过渡要求 22 个检查点（E-15 第 4 条、E-14 第 2 条）。🔍 推断：他说的 36 是运动结束的帧号，不是步数 |
-| 求解器、材料、粘连的数值 | 43 个材料全部相同，求解器每帧 1 个子步，140 个粘连全是软约束（E-11 的清单） |
-| 渲染出来的画面里嘴唇和牙齿是什么 | 没有核实。按界面源码（`h99-UI-mayascipt-V1.py` 第 1330 到 1371、197、277 行，读源码得出 🔍）：每个检查点先跳到目标帧，再绕世界 X 轴转、打关键帧；可以给牙齿和舌头的 `_RENDER` 网格额外加转动；反馈和牙齿两个开关默认是开的。我们上机的回放没有做这些，所以从我们导出的两路嘴唇，推不出研究员看到的完整画面（[09](09-roadmap-and-tasks.md) T-10） |
-| 研究员关掉的"playback"是哪个开关 | 没有确认它是不是 Cached Playback。机器上要关的是 Cached Playback：开着时求解器一步都不走（E-11） |
+| 钢琴界面读的是不是 `combined_checkpoints.pkl` | 是（读源码得出）。过渡表 97 条目有该文件，对应 84 个文件、82 份不同内容，全部读通（[E-14](archive/explanations/E-14.md) 第 1 条） |
+| AA 要 36 步 | AA 运动文件是 22 步，第 15 帧开始、第 36 帧结束；源码要求 22 个检查点（[E-15](archive/explanations/E-15.md) 第 4 条、[E-14](archive/explanations/E-14.md) 第 2 条）。🔍 推断：36 是结束帧号，不是步数 |
+| 求解器、材料、粘连的数值 | 43 个材料全部相同，求解器每帧 1 个子步，140 个粘连全是软约束（[E-11](explanations/E-11.md) 的清单） |
+| 渲染出来的画面里嘴唇和牙齿是什么 | 没有核实（读源码细节见下，[T-10](tasks/T-10.md)） |
+| 研究员关掉的"playback"是哪个开关 | 没有确认它是不是 Cached Playback。机器上要关的是 Cached Playback：开着时求解器一步都不走（[E-11](explanations/E-11.md)） |
 
-录像里没有涉及、也没有回答的：Q18（粘连怎么生成）和 Q19（实验改了哪些场景参数）仍要直接问实验室（[12](12-lab-export-checklist.md) 第三部分）。
+- **每帧耗时补充**：原来写的"当天上午 696 步平均 1.65 秒"没有能重算的原始日志（🔍）；Script Editor 的行间隔不是求解时间。
+- **渲染画面补充**：按界面源码（`h99-UI-mayascipt-V1.py` 第 1330 到 1371、197、277 行，读源码得出 🔍）：每个检查点先跳到目标帧，再绕世界 X 轴转、打关键帧；可给牙齿和舌头的 `_RENDER` 网格额外加转动；反馈和牙齿两个开关默认是开的。
+  我们上机的回放没有做这些，所以从我们导出的两路嘴唇，推不出研究员看到的完整画面（[T-10](tasks/T-10.md)，总览见 [09](09-roadmap-and-tasks.md)）。
+- **录像里没有涉及、也没有回答的**：[Q18](11-risks-and-questions.md)（粘连怎么生成）和 [Q19](11-risks-and-questions.md)（实验改了哪些场景参数）仍要直接问实验室（[12](12-lab-export-checklist.md)“给实验室的一页”）。
