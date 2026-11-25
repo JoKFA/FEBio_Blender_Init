@@ -4,7 +4,7 @@
 |---|---|
 | **状态** | ✅ 已定（2026-11-13；2026-11-24 由 [ADR-50](ADR-50.md) 纳入独立模块 `checks`） |
 | **关联决策** | 配合 [ADR-17](ADR-17.md)（不变）；由 [ADR-50](ADR-50.md) 补充 |
-| **相关文档** | [09 任务](../09-roadmap-and-tasks.md)（第 1 节）、[11 风险与问题](../11-risks-and-questions.md)（`P-11`）、[E-17](../archive/explanations/E-17.md) |
+| **相关文档** | [09 归档](../archive/prototype/09-v1-milestones.md)（第 1 节）、[11 风险与问题](../11-risks-and-questions.md)（`P-11`）、[E-17](../archive/explanations/E-17.md) |
 
 ---
 
@@ -25,7 +25,7 @@
   - 中性到 AA 上，Ziva 物理层两次运行都是 0 个翻转面、0 条短边；Ziva 最终形状最多 4 个翻转面（第 20 帧）、最后一帧 3 个、短边 37 条（只留嘴唇 39 条）。
   - 实验室训练程序存下的 AA 结果有 5 个翻转面、121 条短边；翻转来自 landmark 层，是实验室运动本身带的。
   - 外部审计用真实 AA 跑我们的产品（默认材料）：最终形状最多 8 个（第 21 帧）、最后一帧 3 个、短边 108 条（**引自审计，没有重跑**）。
-- **影响**：[09](../09-roadmap-and-tasks.md) 第 1 节“怎么算做成了”、[T-34](../archive/tasks/T-34.md) 输出和验收、[T-35](../archive/tasks/T-35.md) 的 Checks 小节、[T-36](../archive/tasks/T-36.md) 结果页。
+- **影响**：[09 归档](../archive/prototype/09-v1-milestones.md) 第 1 节“怎么算做成了”、[T-34](../archive/tasks/T-34.md) 输出和验收、[T-35](../archive/tasks/T-35.md) 的 Checks 小节、[T-36](../archive/tasks/T-36.md) 结果页。
   - 另见 [11](../11-risks-and-questions.md) 的 `P-11`；[ADR-17](ADR-17.md) 不变。
 
 ---

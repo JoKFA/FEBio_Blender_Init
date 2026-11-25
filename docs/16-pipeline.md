@@ -69,7 +69,7 @@ Blender 在这条流程里是播放器和遥控器：面板上的按钮只是调
 | 粗格子 | `uv run python tools/build_tetmesh.py --method lattice` | `data/tetmesh/lips_lattice.json` | 规则立方格子，格边等于 Ziva 四面体尺寸，126 个四面体；上下唇连成一块，和 Ziva 一样被下颌带着走；生成结果确定，算得快（[ADR-44](decisions/ADR-44.md)） | Blender 面板 |
 
 两个都由 `src/asrp_core/tetmesh.py` 检查和读取，读取时校验内容哈希。**运行时从不重新生成**，只有显式运行 `tools/build_tetmesh.py` 才会改这两个文件。
-文件里记着嘴唇 OBJ 的 sha256；OBJ 的字节变了（比如行尾被转换），③ 就会报错。这时应把 `data/` 按字节重新检出（[08](08-engineering-standards.md) 第 10 节，`.gitattributes`），不要重新生成网格。
+文件里记着嘴唇 OBJ 的 sha256；OBJ 的字节变了（比如行尾被转换），③ 就会报错。这时应把 `data/` 按字节重新检出（[08](08-engineering-standards.md) 第 8 节，`.gitattributes`），不要重新生成网格。
 
 ## 4. ③ 生成场景描述 `scene.json`
 
@@ -120,7 +120,8 @@ uv run asrp convert-motion <实验室的运动文件> <scene.json> <输出的 tr
 - `tools/placeholder_jaw_motion.py`、`tools/head_shake_motion.py`：我们自己造的两条运动。
 
 `asrp set-motion-title <文件> "<标题>"` 可以改面板显示的名字。
-现在的转换只处理“从中性出发的一段过渡”；实验室一般的运动文件怎么转，还在 [T-10](tasks/T-10.md) 里。格式信息见 [04](archive/prototype/04-v1-architecture.md) 第 5.2 节，字段写法见 `trajectory.py` 开头说明。
+现在的转换只处理“从中性出发的一段过渡”；实验室一般的运动文件怎么转，还在 [T-10](tasks/T-10.md) 里。
+`--starts-at-rest` 现在只是一句声明，程序不检查起点：不从中性出发的文件带上它也会转出错的结果而不报错。用之前自己确认这一段确实从中性出发（[T-42](tasks/T-42.md) 修）。格式信息见 [04](archive/prototype/04-v1-architecture.md) 第 5.2 节，字段写法见 `trajectory.py` 开头说明。
 
 ## 6. ⑤–⑩ 一次运行：`asrp run`
 
@@ -156,6 +157,7 @@ Run 算完后，嘴唇挂 Mesh Cache 修改器读 PC2，骨头按 `trajectory.js
 ## 8. ⑫ 和 Ziva 对比
 
 **做什么**：把我们一次运行的嘴唇（直接读运行文件夹里的物理层和最终形状），和 Ziva 同一段运动、同一帧的嘴唇逐个顶点比，物理层（蒙皮前）和最终形状（蒙皮后）分开报告，每帧给平均、95%、最大三个数（[07](07-validation.md) 第 4.2 节）。差多少只作参考，不设合格线（[ADR-17](decisions/ADR-17.md)）。
+命令现在只核对帧率、帧范围和顶点数，不核对两边是不是同一段运动。用之前自己确认（[T-42](tasks/T-42.md) 修）。
 
 完整命令：`uv run asrp compare <运行文件夹> <Ziva 导出文件夹> --out <输出文件夹>`（也可以写 `<我们的运行文件夹>`）：
 

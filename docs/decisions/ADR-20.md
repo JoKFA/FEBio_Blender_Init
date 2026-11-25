@@ -71,7 +71,7 @@
 - **2026-11-15（[ADR-44](ADR-44.md)）**：新增粗格子 `lips_lattice.json` 并行。
 - **2026-11-24（[ADR-47](ADR-47.md)）**：细网格离线加载、运行时禁调 fTetWild 的规矩固化为建造边界。
 - **后续批次背景（原接续注记）**：后续 [ADR-21](ADR-21.md) 至 [ADR-27](../archive/decisions/ADR-27.md) 来自 2026-11-09 对照实验室论文（*Beneath the Skin*）的审计，项目负责人已全部接受；
-  - 每条的论文证据都写了小节号，整体梳理见 [02](../02-requirements.md) 第 4 节的对照表和 [13](../13-explanations.md) 的 [E-04](../archive/explanations/E-04.md)。
+  - 每条的论文证据都写了小节号，整体梳理见 [02](../02-requirements.md) 第 5 节的对照表和 [13](../13-explanations.md) 的 [E-04](../archive/explanations/E-04.md)。
 
 ---
 

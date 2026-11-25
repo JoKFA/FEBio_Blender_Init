@@ -99,7 +99,7 @@ only an explicit run of `tools/build_tetmesh.py` changes
 these two files.
 The files record the sha256 of the lips OBJ. If the bytes of the OBJ change (for example, line endings get converted), ③ reports an error. When
 that happens, check `data/` out again byte for byte
-([08](08-engineering-standards.md) section 10, `.gitattributes`) and do not regenerate the meshes.
+([08](08-engineering-standards.md) section 8, `.gitattributes`) and do not regenerate the meshes.
 
 ## 4. ③ Build the scene description `scene.json`
 
@@ -162,6 +162,8 @@ uv run asrp convert-motion <the lab's motion file> <scene.json> <output trajecto
 `asrp set-motion-title <file> "<title>"` changes the name shown on the panel.
 The conversion today handles only "one transition starting from neutral". How to convert the lab's motion files in general is still open under
 [T-10](tasks/T-10.md) .
+`--starts-at-rest` is only a declaration today, and the program does not check the start: a file that does not start from neutral converts with
+no error and gives a wrong result. Confirm yourself that the segment starts from neutral before using it (fixed by [T-42](tasks/T-42.md)).
 For what the format must contain, see [04](archive/prototype/04-v1-architecture.md) section 5.2, and for how the fields are written, see the notes at the top of
 `trajectory.py` .
 
@@ -236,6 +238,8 @@ lips for the same motion and the same frame, vertex by vertex.
 The physics layer (before skinning) and the final shape (after skinning) are reported separately, and each frame gives three numbers: mean, 95%
 and max ([07](07-validation.md) section 4.2).
 The difference from Ziva is for reference only, with no pass line ([ADR-17](decisions/ADR-17.md)).
+The command today checks only the frame rate, the frame range and the vertex count, not whether the two sides are the same motion. Confirm that
+yourself before using it (fixed by [T-42](tasks/T-42.md)).
 
 ```bash
 uv run asrp compare <our run folder> <Ziva's export folder> --out <output folder>

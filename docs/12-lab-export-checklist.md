@@ -4,7 +4,7 @@
 读完能知道：① 下次上 Ziva 机器必须取的清单与做法（`D12`–`D22`）；② 可直接转发给实验室的 3 个问题；③ 已经拿到哪些数据。
 数据中的实测数值见 [E-11](explanations/E-11.md)，资产细节见 [03](03-asset.md)；2026-10-30 与 2026-11-12 已完成导出的完整操作日志归档在 [archive/prototype/12-v1-completed-exports.md](archive/prototype/12-v1-completed-exports.md)。
 
-> **仓库外数据位置**：`.local/ziva_trip_pointer.json` 指向已取回的数据根目录（不进 git）；仓库内仅保留 `tools/ziva_machine_export.py` 与普通 Maya 排练脚本 `tools/rehearse_ziva_export.py`。
+> **仓库外数据位置**：`.local/ziva_trip_pointer.json` 指向已取回的数据根目录（不进 git）；仓库内仅保留导出工具 `tools/ziva_machine_export.py`；它在普通 Maya 上的排练脚本已移出仓库（`tests/test_one_off_files_gone.py` 查它不回来），上机用的一次性脚本在数据文件夹的 `scripts/` 里。
 
 ---
 

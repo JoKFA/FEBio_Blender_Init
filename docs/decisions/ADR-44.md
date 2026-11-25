@@ -4,7 +4,7 @@
 |---|---|
 | **状态** | ✅ 已定（2026-11-15，[T-20](../tasks/T-20.md) 延伸；2026-11-24 由 [ADR-47](ADR-47.md)、[ADR-48](ADR-48.md) 补充建造封存边界） |
 | **关联决策** | 并存补充 [ADR-20](ADR-20.md)；由 [ADR-47](ADR-47.md)、[ADR-48](ADR-48.md) 补充 |
-| **相关文档** | [03 资产分析](../03-asset.md)（第 5 节）、[05 Ziva→FEBio](../05-ziva-to-febio.md)（第 3 节）、[E-20](../explanations/E-20.md)、[T-20](../tasks/T-20.md) |
+| **相关文档** | [03 资产分析](../03-asset.md)（第 2 节）、[05 Ziva→FEBio](../05-ziva-to-febio.md)（第 3 节）、[E-20](../explanations/E-20.md)、[T-20](../tasks/T-20.md) |
 
 ---
 
@@ -12,10 +12,10 @@
 
 1. **双网格并存与默认选择**：
    - 产品多一个可选四面体网格 `data/tetmesh/lips_lattice.json`，与细网格 `lips.json`（[ADR-20](ADR-20.md)，一字节未动）并存。
-   - **导入命令默认仍是细网格**，通过 `--tetmesh` 选用；**Blender 面板默认是粗格子**（2026-11-15 定，[E-20](../explanations/E-20.md)），因实验室的参照是 Ziva，粗格子在实验室运动上离它更近且约一秒算完，细网格在面板上可选。
+   - **导入命令默认仍是细网格**，通过 `--tetmesh` 选用；**Blender 面板默认是粗格子**（2026-11-15 定，[E-20](../explanations/E-20.md)），因实验室的参照是 Ziva，粗格子在实验室运动上离它更近且几秒就算完（实测单次 3.3–3.6 s，[T-42](../tasks/T-42.md) 第 5 项），细网格在面板上可选。
    - 粗格子不能用硬粘连（会连带固定上下唇共用节点），须配软约束（`asrp import-asset --attachments ziva-soft`，[05](../05-ziva-to-febio.md) 第 3 节）。
 2. **生成方法（轴对齐立方格子 + 6 Kuhn 四面体）**：每格沿 (0,0,0)–(1,1,1) 对角线切 6 个四面体（邻格面自动对上），节点焊接，全正体积。留格规则：表面采样点（每顶点 + 每三角形上间距 ≤ 格边 1/4 的重心网格点）落在格里，或从该格走不到外面（6 邻接空格，填充封闭壳内部）；规则写入 `params.cube_rule`。
-3. **格边来自 Ziva 换算**：格边 = Ziva `tetSz` 26.37 场景单位 × 0.962 = 25.368 mm（[03](../03-asset.md) 第 5 节），非调参得出，来历写入 `params.cell_mm_source`。
+3. **格边来自 Ziva 换算**：格边 = Ziva `tetSz` 26.37 场景单位 × 0.962 = 25.368 mm（[03](../03-asset.md) 第 2 节），非调参得出，来历写入 `params.cell_mm_source`。
 4. **原点事先规则化**：原点 = 嘴唇表面包围盒最小角，不按离 Ziva 距离挑选；位置敏感性只报告（见平移半格实测）。
 5. **上下唇不分开**：同格含上下唇时不沿嘴缝切开，复现 Ziva 整体运动行为；文件显式记录 `upper_and_lower_lip_separated: false` 与 `warning`。
 6. **格式区分与独立检查**：用 `kind` 字段区分（缺省为细网格，不改旧 `lips.json`；`"lattice"` 为格子），由 `tetmesh.mesh_kind(meta)` 读取，`load` 遇未知 `kind` 报错；格子走 `tetmesh.check_lattice`，细网格 `tetmesh.check`（分开宽度、边界流形、亏格）不放松（焊接的格子本来就没有这些性质，对它们问这些没有意义）。

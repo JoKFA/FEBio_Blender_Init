@@ -6,7 +6,7 @@
 > **怎么读这页**：
 > - 本页只收**项目级生效设定、物理/几何/验证参数与实测基线**，不堆代码内部实现常数，也不写会随改代码失效的裸行号（代码出处统一写 `模块 + 稳定符号/选项名`）。
 > - 状态标记：**`[现行]`** = 已在当前代码运行生效；**`[地基]`** = 2026-11-24 已定设计，随 `T-43`–`T-52` 落地。
-> - 改任何一个生效数值，必须同步更新本页与对应权威设计页（[08](08-engineering-standards.md) 第 9 节）。
+> - 改任何一个生效数值，必须同步更新本页与对应权威设计页（[08](08-engineering-standards.md) 第 7 节）。
 
 ## 目录
 
@@ -30,9 +30,9 @@
 
 | 项目 | 生效值 | 限定语与说明 | 出处 |
 |---|---|---|---|
-| FEBio 版本与定位 `[现行]` | **FEBio `4.13.0`**（随 FEBio Studio 安装） | 查找顺序 `ASRP_FEBIO` → `PATH` → `Program Files`；显式配错报 error，未安装仅 warn；不入仓不转发 | [08](08-engineering-standards.md) §2 · `doctor.py` `find_febio` |
+| FEBio 版本与定位 `[现行]` | **FEBio `4.13.0`**（随 FEBio Studio 安装） | 查找顺序 `ASRP_FEBIO` → `PATH` → `Program Files`；显式配错报 error，未安装仅 warn；不入仓不转发 | [08](08-engineering-standards.md) §2 · `doctor.py` `febio_exe` |
 | 启动选项 `[现行]` | **`-noconfig -silent`**（必加 `-noconfig`），`-i/-o/-p`、cwd 设 `.feb` 目录 | 防止用户个人配置文件污染结果；取消时终止整个进程树；路径须纯 ASCII | [ADR-11](decisions/ADR-11.md) · [05 坑 3/4](05-febio-pits.md) · `febio.py` |
-| 成败判定 `[现行]` | 退出码 `0` **且**日志含带空格的 `N O R M A L   T E R M I N A T I O N` | 日志出现 `E R R O R   T E R M I N A T I O N` 或 `failed to converge` 判失败 | `febio.py` · `run.py` |
+| 成败判定 `[现行]` | 退出码 `0` **且**日志含带空格的 `N O R M A L   T E R M I N A T I O N` | 还要算到结束时间；三条缺一条就判失败，这时用日志里的 `E R R O R   T E R M I N A T I O N` 或 `failed to converge` 说明原因（中途报不收敛、缩步重算成功不算失败） | `febio.py` `read_failure` · `run.py` `execute` |
 | 超时默认值 `[现行]` | `asrp run --timeout` **`3600` 秒**；`febio.run` 函数默认 **`600` 秒** | 防止细网格长运行被误杀，也防止求解器死锁挂起 | `cli.py` `--timeout` · `febio.py` `run` |
 | 隐式动力学与数值阻尼 `[现行]` | `DYNAMIC`、广义 α；`solver.numerical_damping_rhoi` = **`0`**（默认，最强数值阻尼） | 无物理阻尼时调小 `rhoi` 易算崩；含离散弹簧且 `0 < rhoi < 1` 会额外衰减；`rhoi = −2` 为无数值阻尼 Newmark | [ADR-05](decisions/ADR-05.md) · [05](05-ziva-to-febio.md) §4 · [05 坑 2/19/20](05-febio-pits.md) |
 | 物理阻尼 `[现行]` | `solver.damping` = **`0`** s⁻¹（默认），非零写 `mass damping` 体载荷 `f = −Cρv` | 归场景物理声明（与 `k` 无关）；FEBio 无 Rayleigh 刚度阻尼，**不建 Ziva 刚度阻尼 `0.001`** | [05](05-ziva-to-febio.md) §4 · [ADR-41](decisions/ADR-41.md) |
@@ -48,7 +48,7 @@
 
 | 参数 | 我们当前默认（`--tissue-settings lab`） | 实验室 Ziva 实测（2026-11-12，43 个 zMaterial 全部相同） | 出处与限定语  |
 |---|---|---|---|
-| 本构模型 | **`neo-Hookean`** | **`StVK`**，抗压参数 `compressionResistance = 20000` | 已知差异，受压反应不同（[03](03-asset.md) §5 · [05](05-ziva-to-febio.md) §4）  |
+| 本构模型 | **`neo-Hookean`** | **`StVK`**，抗压参数 `compressionResistance = 20000` | 已知差异，受压反应不同（[03](03-asset.md) §1.3 · [05](05-ziva-to-febio.md) §4）  |
 | 杨氏模量 `E` | **`12 kPa`**（`0.012 MPa`） | **`12 kPa`**（`youngsModulus = 12`，`Exp = 3`） | 来源标 `lab_setting`（[05](05-ziva-to-febio.md) §1）  |
 | 泊松比 `ν` | **`0.4`** | **`0.4`** | 来源标 `lab_setting`  |
 | 密度 `ρ` | **`1060 kg/m³`**（`1.06×10⁻⁹ t/mm³`） | **`1060`**（体积保持项 `0`） | 来源标 `lab_setting`  |
@@ -64,9 +64,9 @@
 | 内部统一单位 `[现行]` | **`mm – N – MPa – s`**（质量单位 `t`，密度 `t/mm³`） | 仅在导入边界 `asset/coords.py` 换算一次；格式标记 `mm-N-MPa-s` | [ADR-04](decisions/ADR-04.md) · [02](02-requirements.md) N-01 |
 | 几何换算 `mm_per_scene_unit` | **`0.962 mm / 场景单位`** | 与实验室控制器 `9.62×10⁻⁴ m/单位` 一致；固定顺序：先场景变换（已由导出器完成）→ 换单位 → 转轴 `(x,y,z)→(x,-z,y)` | [03](03-asset.md) §4 · [ADR-16](decisions/ADR-16.md) · [ADR-31](decisions/ADR-31.md) |
 | 物理长度尺度 `k` (`physics_length_scale`) | **`0.67`**（来源：我们定的） | FEBio 坐标 `= 几何毫米 × k`，读回 `÷ k`；按真人大小（颅骨 `216.6→145 mm`）设定；**只缩放长度，物理参数不缩放** | [ADR-22](decisions/ADR-22.md) · [ADR-31](decisions/ADR-31.md) · [ADR-36](decisions/ADR-36.md) |
-| Ziva 求解器缩放（第三种尺度） | 三轴均为 **`100`**（`zSolverTransform`） | 🔍 **推断未核实**：100 Maya 单位 ≈ 1 m；与 `0.962` 及 `k = 0.67` 均不同，待 [D18](11-risks-and-questions.md) 校准 | [03](03-asset.md) §5 · [05](05-ziva-to-febio.md) §2 |
+| Ziva 求解器缩放（第三种尺度） | 三轴均为 **`100`**（`zSolverTransform`） | 🔍 **推断未核实**：100 Maya 单位 ≈ 1 m；与 `0.962` 及 `k = 0.67` 均不同，待 [D18](11-risks-and-questions.md) 校准 | [03](03-asset.md) §4 · [05](05-ziva-to-febio.md) §2 |
 | 重力加速度与符号 `[现行]` | **`9810 mm/s²`**，物理方向 `-z`；**写入 FEBio 必反号** | 常量加载（`t = 0` 立即施加，无斜坡）；Ziva 设 `−9.8`（单位未核实 🔍） | [ADR-10](decisions/ADR-10.md) · [05 坑 1](05-febio-pits.md) |
-| 帧率与沉降帧 `[现行]` | **`30 fps`**；实验室与代用运动默认 `settle_until_frame = 14` | 第 `0–14` 帧纯重力沉降，运动从第 `15` 帧起；第 14 帧仅用于回放对照，**不是**控制器训练底 | [03](03-asset.md) §1 · [ADR-30](decisions/ADR-30.md) · [ADR-38](decisions/ADR-38.md) |
+| 帧率与沉降帧 `[现行]` | **`30 fps`**；实验室与代用运动默认 `settle_until_frame = 14` | 第 `0–14` 帧纯重力沉降，运动从第 `15` 帧起；第 14 帧仅用于回放对照，**不是**控制器训练底 | [03](03-asset.md) §3 · [ADR-30](decisions/ADR-30.md) · [ADR-38](decisions/ADR-38.md) |
 
 ---
 
@@ -80,7 +80,7 @@
 | 生成方式与关键参数 | 确定性规则格子，步长 **`25.368 mm`**（对应 Ziva `tetSz = 26.37` × `0.962`），`kind = lattice` | fTetWild（`ATTEMPTS = 6`），包络 **`0.12 mm`**、目标边长 **`25.4 mm`** |
 | 规模与质量 | **`224` 节点 / `126` 四面体**；不沿唇缝切开（上下唇共用节点） | **`6,747` 节点 / `26,721` 四面体**；最小二面角 `10.4°`、最小体积 `0.0043 mm³`、总体积 `64,752.8 mm³`；单连通流形、亏格 `3`、上下唇分离 `99%`、左右对称差 `0` |
 | 显示点嵌入情况 | 规则格子包裹显示网格 | `10,240` 顶点中 `65%`（`6,674`）在四面体外，`95%` 距 `< 0.07 mm`，最远 `0.93 mm`；静止重建误差 `7×10⁻¹⁴ mm` |
-| 原型运行特点 | 单次约 `1–2 s`；嘴只张一条缝，上唇跟动 `4.8–5.6 mm`；检查 (b) 为 `NOT RUN` | 单次约 `30 s`；上下唇分开运动，上唇中点仅动 `0.15 mm` |
+| 原型运行特点 | 单次实测 `3.3–3.6 s`（[T-42](tasks/T-42.md) 第 5 项）；嘴只张一条缝，上唇跟动 `4.8–5.6 mm`；检查 (b) 为 `NOT RUN` | 单次约 `30 s`；上下唇分开运动，上唇中点仅动 `0.15 mm` |
 
 ---
 
@@ -148,7 +148,7 @@
 | Ziva 实际求解的规模（估算） | 41 块组织按各自 `tetSize` 估约 **`2,143` 点 / `4,452` 四面体**；两层皮肤 **`63,047`** 个顶点 | 按我们的实测规律：软组织约 `0.2–0.3 s/步`；皮肤照 Ziva 分辨率约 `7–8 s/步`（外推）；用粗的计算网格则合计 `1 s` 以内（推算，没有实测） | [E-22](explanations/E-22.md) |
 | AA 第 36 帧对 Ziva 整张脸（物理层） | **粗格子：平均 `1.88` / 最大 `5.12 mm`**；**细网格：平均 `2.21` / 最大 `7.64 mm`** | 全部 `10,240` 嘴唇顶点；物理尺度未对齐前只报差别不解释原因（[15](15-prototype.md) 为绑定源） | [15](15-prototype.md) · [E-19](13-explanations.md) · [E-20](explanations/E-20.md) |
 | Ziva 整张脸 vs Ziva 只留嘴唇 | 第 36 帧平均 `1.98` / 最大 `7.98 mm`（第 14 帧平均 `1.51` / 最大 `5.09 mm`） | 关掉其余 42 个物体的整体影响（边界条件不同，不代表求解器差异） | [07](07-validation.md) §4 · [E-15](archive/explanations/E-15.md) |
-| 前 14 帧重力下垂（全部顶点平均 / 最大） | Ziva 整张脸 `0.29 / 1.2 mm`；Ziva 只留嘴唇 `1.78 / 5.39 mm`（未停稳）；我方原型细网格 `0.093 / 0.387 mm` | Ziva 只留嘴唇第 14 帧仍在下落（相邻帧差 `0.365 mm`），停稳值待 [D17](11-risks-and-questions.md) | [07](07-validation.md) §4 · [11](11-risks-and-questions.md) §4 |
+| 前 14 帧重力下垂（全部顶点平均 / 最大） | Ziva 整张脸 `0.29 / 1.2 mm`；Ziva 只留嘴唇 `1.78 / 5.39 mm`（未停稳）；我方原型细网格 `0.122 / 0.497 mm`（12 kPa，[15](15-prototype.md) 第 3.3 节的表） | Ziva 只留嘴唇第 14 帧仍在下落（相邻帧差 `0.365 mm`），停稳值待 [D17](11-risks-and-questions.md) | [07](07-validation.md) §4 · [11](11-risks-and-questions.md) §4 |
 | 甩头晃动幅度（全部顶点最大） | Ziva 整张脸 **`2.731 mm`**（停后第 14 帧首次 `<0.04 mm`，第 28 帧持续）；我方单嘴唇 `0.121 mm`（原默认 `0.094 mm`） | 跨范围（Ziva 仅动颅骨与下颌、另 8 块骨未动）；我方到 16 子步仍未收敛（[T-33](tasks/T-33.md)），仅并排不作幅度结论 | [09](09-roadmap-and-tasks.md) · [E-19](13-explanations.md) |
 | 来回 10 次（Ziva 整张脸） | 物理层每次回中性 `≤ 0.049 mm`（不累积）；蒙皮后每圈多偏 `0.524 mm`（第 10 圈 `5.238 mm`） | 蒙皮漂移来自运动文件去回程开环相加不为零，非物理层问题 | [02](02-requirements.md) · [E-11](explanations/E-11.md) |
 | 训练查询计时（本机 Python 3.13） | 内存热查询 **`3.1–3.6 ms`**，载入 **`219–272 ms`**，起空 CLI 子进程约 **`275 ms`** | 仅测本机 3.13 + 嘴唇 `10,240` 点；实验室 Maya Python 3.9 与 5 输出耗时待 [D22](11-risks-and-questions.md) | [architecture/sessions-and-results.md](architecture/sessions-and-results.md) · [E-23](archive/explanations/E-23.md) |
@@ -162,8 +162,8 @@
 | 操作系统 / 路径 | **Windows 11**；求解器看到的路径**必须纯 ASCII** | FEBio 对非 ASCII 路径可能失败（[08](08-engineering-standards.md) §2） |
 | Python / 依赖管理 | 核心 **Python `3.13`**（匹配 Blender 5.2），用 **`uv`** 管理；`asrp_query` 独立包守 **Python `3.9`** 兼容线（仅标准库 + 兼容 NumPy，禁导 `asrp_core`） | `pyproject.toml` · [ADR-53](decisions/ADR-53.md) |
 | Blender / FEBio | **Blender `5.2.x LTS`**（插件 manifest 最低写 `4.2.0`，未在 4.2 实测）；**FEBio `4.13.0`** | [08](08-engineering-standards.md) §2 · `blender_manifest.toml` |
-| 版本号同步位置 | `pyproject.toml`、`blender_manifest.toml`、`src/asrp_core/__init__.py` 三处保持一致（现 `0.0.1`） | [08](08-engineering-standards.md) §12 |
-| 验证门分级 | `--level docs`（~10 s，不跑 `test_lab_facts.py`）→ `--level core`（~3 min）→ `full` 不带参（6 min+，合并前唯一定义）；`--level auto` 仅用于开发过程 | `tools/verify.py` · [08](08-engineering-standards.md) §6 |
+| 版本号同步位置 | `pyproject.toml`、`blender_manifest.toml`、`src/asrp_core/__init__.py` 三处保持一致（现 `0.0.1`） | [08](08-engineering-standards.md) §8 |
+| 验证门分级 | `--level docs`（~10 s，不跑 `test_lab_facts.py`）→ `--level core`（~3 min）→ `full` 不带参（6 min+，合并前唯一定义）；`--level auto` 仅用于开发过程 | `tools/verify.py` · [08](08-engineering-standards.md) §5 |
 
 ---
 
@@ -172,6 +172,6 @@
 | 类别 | 策略 | 范围与出处 |
 |---|---|---|
 | 产品、测试、文档与派生数据 | ✅ **提交私有仓库**（`JoKFA/FEBio_Blender_Init`） | `src/`、`blender_addon/`、`tests/`、`tools/`、`docs/`、`data/lab_export/`、`data/preview/`、`data/tetmesh/`（`data/briefing/` 已在 `T-38` 移出，[ADR-19](decisions/ADR-19.md)） |
-| 哈希文件检出保护 | ✅ **`.gitattributes` `-text`** | `data/` 与 `tests/fixtures/` 按字节检出，防 `core.autocrlf` 破坏哈希（[08](08-engineering-standards.md) §10） |
+| 哈希文件检出保护 | ✅ **`.gitattributes` `-text`** | `data/` 与 `tests/fixtures/` 按字节检出，防 `core.autocrlf` 破坏哈希（[08](08-engineering-standards.md) §8） |
 | 实验室原始材料与保密件 | ❌ **绝不提交，不外发** | `assets/`（`.mb`/`.ma`）、`runs/`、`.pkl`/`.abc`/`.f32`/`.zbuilder`/`.mll`/`.lic`、实验室论文与录像、实验室控制器源码（只读不拷，[ADR-28](decisions/ADR-28.md)）、FEBio 安装包 |
-| 本机配置与过程文件 | ❌ **绝不提交** | `.local/`、`ziva_trip_pointer.json`、`AGENTS.md`、`CLAUDE.md`、`.claude/`、`spikes/`、一次性脚本与带日期工作计划（由 `tools/check_no_lab_files.py` 强制拦截） |
+| 本机配置与过程文件 | ❌ **绝不提交** | `.local/`、`ziva_trip_pointer.json`、`AGENTS.md`、`CLAUDE.md`、`.claude/`（由 `tools/check_no_lab_files.py` 拦）；`spikes/` 与已移出的一次性文件（由 `tests/test_one_off_files_gone.py` 拦）；带日期工作计划（靠规矩，没有检查） |

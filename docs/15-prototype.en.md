@@ -98,7 +98,7 @@ Close the preferences, press N in the 3D viewport, and open the **ASRP** tab. Th
 ### 2.2 The steps on the panel
 
 Go from top to bottom. While a step is not done, the next step's button is greyed out, and the reason is written under it. The full description
-is in [06](06-ui.md) sections 2 and 3.
+is in [06 archive](archive/prototype/06-v1-panel-details.md) sections 2 and 3.
 
 - **1  Open the asset**: choose Coarse lattice (Ziva's tet size) or Fine (lips move separately), and press **Open asset**.
   - The import takes a few seconds, there is no progress bar, and Blender does not respond meanwhile. If `uv sync` has not been run before, the

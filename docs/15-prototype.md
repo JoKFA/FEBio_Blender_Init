@@ -66,7 +66,7 @@
 
 ### 2.2 面板上的步骤
 
-按从上到下的顺序，每一步没做完，下一步的按钮是灰的，下面写原因。完整说明在 [06](06-ui.md) 第 2、3 节。
+按从上到下的顺序，每一步没做完，下一步的按钮是灰的，下面写原因。完整说明在 [06 归档](archive/prototype/06-v1-panel-details.md) 第 2、3 节。
 
 - **1  Open the asset**：选 Coarse lattice (Ziva's tet size) 或 Fine (lips move separately)，按 **Open asset**。
   - 导入要等几秒，没有进度条，Blender 这期间不响应；如果没先做过 `uv sync`，第一次会先建 Python 环境，可能要几分钟。

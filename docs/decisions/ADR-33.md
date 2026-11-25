@@ -27,7 +27,7 @@
 
 - **原因**：实验室负责人希望顶层设计考虑 Hill 肌肉力（论文附录 C；源码实现在 `evaluator.py`，做了很多简化，只作参考）。按代码，它对应控制器目标里那一项的输入更真实，而物理层最直接能给的是应变能。
 - **为什么替换不了优化项**：按现有架构，landmark 在物理之后起作用；下颌固定时，改变 landmark 会改变最终形状，但不会改变 FEBio 算出的应变能，因此给不出对 landmark 的梯度。要把它用进优化，须另建“优化变量 → 组织变形 → 能量 → 梯度”链路，属第二阶段与纤维、激活一起做。
-- **影响**：[02](../02-requirements.md) 第 4 节对照表加一行、[01](../01-overview.md) 回应一句、[04](../archive/prototype/04-v1-architecture.md) 第 2 节、[05](../05-ziva-to-febio.md) zFiber 一行。
+- **影响**：[02](../02-requirements.md) 第 5 节对照表加一行、[01](../01-overview.md) 回应一句、[04](../archive/prototype/04-v1-architecture.md) 第 2 节、[05](../05-ziva-to-febio.md) zFiber 一行。
   - 关联任务：[T-06b](../tasks/T-06b.md)、[T-32](../tasks/T-32.md)。
 
 ---

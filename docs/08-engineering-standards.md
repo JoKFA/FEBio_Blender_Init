@@ -83,6 +83,7 @@ asrp/
 | 完成试验或踩到新的 FEBio 坑 | [05-febio-pits.md](05-febio-pits.md)（补坑并加测试）+ [11](11-risks-and-questions.md) |
 | 解决待决问题或定下不定项 | [11](11-risks-and-questions.md) 移出至 [archive/11-resolved-issues.md](archive/11-resolved-issues.md)，结论落回对应文档 |
 | 新增、修改或完成任务卡 | 维护 `docs/tasks/T-xx.md` + [09](09-roadmap-and-tasks.md)；完成/取消/闭环的卡原样移入 `docs/archive/tasks/` |
+| 给一页重排、重编节号，或把一节搬到别处 | 搜全库指向这一页的“第 N 节”“§N”“第 X 部分”和页内锚点，逐处改对。`tests/test_docs_references.py` 只抓得到节号或锚点已经不存在的，抓不到节号还在但内容换了的 |
 | 新增设计解释或审计记录 | 长期解释建 `docs/explanations/E-xx.md`，审计/证据台账进 `docs/archive/explanations/E-xx.md`，同步 [13](13-explanations.md) 目录 |
 
 **五条硬约束**：

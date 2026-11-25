@@ -9,7 +9,7 @@
 |---|---|---|
 | **E-11** | [2026-11-12 上 Ziva 机器拿到了什么，哪些问题有了答案？](explanations/E-11.md) | [03](03-asset.md) · [12](12-lab-export-checklist.md) |
 | **E-13** | [目标姿态、训练和回放是什么关系？为什么回放的嘴唇不在目标上？](explanations/E-13.md) | [01](01-overview.md) · [ADR-30](decisions/ADR-30.md) |
-| **E-19** | [原型机二正式对比：我们和 Ziva 逐帧差多少？](#e-19-原型机二真实中性到-aa-和甩头我们的嘴唇和-ziva-差多少)（正文留在本页下方，绑定自动校验） | [15](15-prototype.md) · [T-34](archive/tasks/T-34.md) |
+| **E-19** | [原型机二正式对比：我们和 Ziva 逐帧差多少？](#e-19-用实验室的真实运动重跑以后我们的嘴唇和-ziva-差多少t-34-的基线)（正文留在本页下方，绑定自动校验） | [15](15-prototype.md) · [T-34](archive/tasks/T-34.md) |
 | **E-20** | [同一段 AA，为什么我们的嘴张得比 Ziva 大？](explanations/E-20.md)（细网格上唇中间仅动 0.15 mm，Ziva 4.80 mm，差在粗细网格与嘴缝） | [ADR-44](decisions/ADR-44.md) · [15](15-prototype.md) |
 | **E-22** | [放大到 8 块组织 + ANS 壳，整段算与续算还一致吗？](explanations/E-22.md)（粘连默认已由 [ADR-51](decisions/ADR-51.md) 更新） | [09](09-roadmap-and-tasks.md) · [05 坑 21](05-febio-pits.md) |
 | **E-24** | [地基为什么要分成场景、建造、段、结果四处？长间距粘连为什么要这样算？](explanations/E-24.md) | [architecture/](architecture/README.md) · [ADR-46](decisions/ADR-46.md)–[ADR-54](decisions/ADR-54.md) |

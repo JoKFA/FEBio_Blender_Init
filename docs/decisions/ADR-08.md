@@ -4,7 +4,7 @@
 |---|---|
 | **状态** | ✅ 已定（2026-10-29；2026-11-10 由 [ADR-29](ADR-29.md) 用实验室源码确认；2026-11-13 实测证实） |
 | **关联决策** | [ADR-29](ADR-29.md) |
-| **相关文档** | [03](../03-asset.md) 第 4 节、[13](../13-explanations.md)（[E-11](../explanations/E-11.md)、[E-15](../archive/explanations/E-15.md) 第 3 条） |
+| **相关文档** | [03](../03-asset.md) 第 3 节、[13](../13-explanations.md)（[E-11](../explanations/E-11.md)、[E-15](../archive/explanations/E-15.md) 第 3 条） |
 
 ## 当前生效结论
 
@@ -17,7 +17,7 @@
 
 ## 依据与边界
 
-- **原因**：资产里的连接关系显示，Ziva 的输出进入 skinCluster7，再由 300 个 landmark 关节变形（[03](../03-asset.md) 第 4 节）；论文公式 22 也是纯蒙皮公式。
+- **原因**：资产里的连接关系显示，Ziva 的输出进入 skinCluster7，再由 300 个 landmark 关节变形（[03](../03-asset.md) 第 3 节）；论文公式 22 也是纯蒙皮公式。
 
 ## 历史与修订
 
